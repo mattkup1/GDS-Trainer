@@ -156,7 +156,18 @@ This saves the PNR and gives you a **6-character record locator** — your confi
 
 ---
 
-### 13. Look up the booking again later
+### 13. Issue the ticket (optional)
+
+```
+TKTT
+```
+This is the step people often assume `ER` already did — it doesn't. Saving a PNR (`ER`/`ET`) and **ticketing** it are two different things in real Sabre, exactly like here: the "ticketing arrangement" you added in step 10 just sets a deadline (or "ticket at will"), it doesn't issue anything. `TKTT` is the actual ticketing entry — it requires the PNR to already be saved (has a record locator) and to have a fare quote, ticketing arrangement, and form of payment on file, and it generates a real-format ticket number (airline numeric code + serial) per passenger, including infants.
+
+If you change the itinerary after ticketing (sell or cancel a segment), the ticket(s) are automatically voided along with the fare quote — you'll need to `WP` and `TKTT` again before saving.
+
+---
+
+### 14. Look up the booking again later
 
 ```
 *ABC123
@@ -194,6 +205,7 @@ To see the full chronological history of everything that's been added, changed, 
 | Add ticketing | `7TAW/` | `7TAW/` |
 | Add form of payment | `FPCASH`, `FPCHECK`, `FPCC{TYPE}{NUM}/{MMYY}` | `FPCASH` |
 | Save booking | `ER` or `ET` | `ER` |
+| Issue ticket | `TKTT` | `TKTT` |
 | Redisplay PNR | `*R` or `*` | `*R` |
 | Show PNR activity history | `*H` | `*H` |
 | Retrieve saved PNR | `*{LOCATOR}` | `*ABC123` |
@@ -216,4 +228,5 @@ WP
 7TAW/
 FPCASH
 ER
+TKTT
 ```

@@ -41,6 +41,7 @@
   const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   const WEEKDAYS = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
   const AIRLINES = ['AA','UA','DL','WN','B6','AS','NK','F9'];
+  const AIRLINE_NUMERIC_CODES = { AA:'001', UA:'016', DL:'006', WN:'526', B6:'279', AS:'027', NK:'487', F9:'351' };
   const EQUIP = ['738','73G','320','321','32N','E75','CR9','777','788','319'];
   const CLASSES = ['F','J','C','Y','B','M'];
 
@@ -93,7 +94,7 @@
 
   function freshPNR(){
     return { locator:null, names:[], segments:[], phones:[], receivedFrom:null, ticketing:null, pricing:null,
-              infants:[], ssrs:[], osis:[], seats:[], formOfPayment:null, activityLog:[] };
+              infants:[], ssrs:[], osis:[], seats:[], formOfPayment:null, activityLog:[], tickets:[] };
   }
 
   function nowStamp(){
@@ -186,6 +187,11 @@
       state.pnr.pricing = null;
       print('FARE QUOTE INVALIDATED - ITINERARY CHANGED, RE-PRICE WITH WP', 'dim');
       logActivity('FARE QUOTE INVALIDATED - ITINERARY CHANGED');
+    }
+    if(state.pnr.tickets.length){
+      state.pnr.tickets = [];
+      print('TICKETS VOIDED - ITINERARY CHANGED, REISSUE WITH TKTT AFTER RE-PRICING', 'dim');
+      logActivity('TICKETS VOIDED - ITINERARY CHANGED');
     }
   }
 
@@ -353,6 +359,7 @@
     if(state.pnr.receivedFrom) els.push({ kind:'rf', idx:0, label:'RF', text: state.pnr.receivedFrom });
     if(state.pnr.formOfPayment) els.push({ kind:'fp', idx:0, label:'FP', text: state.pnr.formOfPayment.display });
     if(state.pnr.ticketing) els.push({ kind:'tk', idx:0, label:'TK', text: state.pnr.ticketing });
+    state.pnr.tickets.forEach((t, i) => els.push({ kind:'tkt', idx:i, label:'TKT', text: `${t.passenger}${t.isInfant ? ' (INF)' : ''}  ${t.ticketNum}` }));
     els.forEach((e, i) => e.num = i+1);
     return els;
   }
@@ -376,6 +383,7 @@
     else if(e.kind === 'segment'){
       state.pnr.segments.splice(e.idx, 1);
       state.pnr.pricing = null;
+      state.pnr.tickets = [];
       state.pnr.seats = state.pnr.seats
         .filter(st => st.segIdx !== e.idx)
         .map(st => st.segIdx > e.idx ? { segIdx: st.segIdx - 1, seat: st.seat } : st);
@@ -383,11 +391,12 @@
     else if(e.kind === 'seat') state.pnr.seats.splice(e.idx, 1);
     else if(e.kind === 'ssr') state.pnr.ssrs.splice(e.idx, 1);
     else if(e.kind === 'osi') state.pnr.osis.splice(e.idx, 1);
-    else if(e.kind === 'fq') state.pnr.pricing = null;
+    else if(e.kind === 'fq'){ state.pnr.pricing = null; state.pnr.tickets = []; }
     else if(e.kind === 'phone') state.pnr.phones.splice(e.idx, 1);
     else if(e.kind === 'rf') state.pnr.receivedFrom = null;
     else if(e.kind === 'fp') state.pnr.formOfPayment = null;
     else if(e.kind === 'tk') state.pnr.ticketing = null;
+    else if(e.kind === 'tkt') state.pnr.tickets.splice(e.idx, 1);
   }
 
   function cancelElements(nums){
@@ -410,6 +419,7 @@
     if(state.pnr.segments.length === 0){ printErr('NO ITINERARY SEGMENTS TO CANCEL'); return; }
     state.pnr.segments = [];
     state.pnr.pricing = null;
+    state.pnr.tickets = [];
     state.pnr.seats = [];
     print('ITINERARY CANCELLED');
     logActivity('ITINERARY CANCELLED');
@@ -464,6 +474,44 @@
     refreshAndPrintPNR();
   }
 
+  // ---------- ticketing (TKTT) ----------
+  function genTicketNumber(locator, identifier){
+    const seed = hashStr(`${locator}${identifier}TKT`);
+    const rng = mulberry32(seed);
+    const serial = String(Math.floor(rng()*10000000000)).padStart(10,'0');
+    return serial;
+  }
+
+  function issueTickets(){
+    const p = state.pnr;
+    if(!p.locator){ printErr('UNABLE TO TICKET - END TRANSACT (ER OR ET) BEFORE TICKETING'); return; }
+    if(!p.pricing){ printErr('UNABLE TO TICKET - NO FARE QUOTE ON FILE (ENTRY: WP)'); return; }
+    if(!p.ticketing){ printErr('UNABLE TO TICKET - NO TICKETING ARRANGEMENT ON FILE'); return; }
+    if(!p.formOfPayment){ printErr('UNABLE TO TICKET - NO FORM OF PAYMENT ON FILE'); return; }
+    if(p.tickets.length){ printErr('PNR ALREADY TICKETED - TICKET NUMBERS ON FILE (SEE *R)'); return; }
+
+    const validatingCarrier = p.segments[0].airline;
+    const numericCode = AIRLINE_NUMERIC_CODES[validatingCarrier] || '000';
+
+    for(const name of p.names){
+      const serial = genTicketNumber(p.locator, name);
+      p.tickets.push({ passenger: name, ticketNum: `${numericCode}-${serial}`, isInfant:false });
+    }
+    for(const inf of p.infants){
+      const identifier = `${inf.surname}/${inf.given}`;
+      const serial = genTicketNumber(p.locator, identifier);
+      p.tickets.push({ passenger: identifier, ticketNum: `${numericCode}-${serial}`, isInfant:true });
+    }
+
+    print('** ELECTRONIC TICKET ISSUED **', 'hd');
+    for(const t of p.tickets){
+      print(`  ${pad(t.passenger + (t.isInfant ? ' (INF)' : ''), 28)} ${t.ticketNum}`);
+    }
+    print(`VALIDATING CARRIER: ${validatingCarrier}   FORM OF PAYMENT: ${p.formOfPayment.display}`, 'dim');
+    logActivity(`TICKETED - ${p.tickets.length} TICKET(S) ISSUED, VALIDATING CARRIER ${validatingCarrier}`);
+    refreshAndPrintPNR();
+  }
+
   function showHistory(){
     const log = state.pnr.activityLog || [];
     if(log.length === 0){ print('NO HISTORY AVAILABLE FOR THIS PNR', 'dim'); return; }
@@ -509,6 +557,13 @@
     print('  FPCASH  /  FPCHECK                  Form of payment - cash / check');
     print('  FPCC{TYPE}{CARDNUM}/{MMYY}          Form of payment - credit card   e.g. FPCCVI4111111111111111/1225');
     print('                                       Card types: VI CA AX DC DS JC');
+    printBlank();
+    print('TICKETING', 'hd');
+    print('  TKTT     Issue ticket(s) - requires a saved PNR (ER/ET) with fare quote,');
+    print('           ticketing arrangement, and form of payment already on file.');
+    print('           Distinct from the ticketing ARRANGEMENT above: TAW/TAX just sets');
+    print('           a deadline, TKTT actually issues ticket numbers. Changing the');
+    print('           itinerary after ticketing voids the ticket(s) - reissue with WP then TKTT.');
     printBlank();
     print('SPECIAL SERVICE / OTHER SERVICE INFO', 'hd');
     print('  3{SSRCODE}[-{PAX#}][/{TEXT}]   Special service request   e.g. 3VGML  or  3WCHR-1/AISLE SEAT');
@@ -715,6 +770,7 @@
       refreshAndPrintPNR();
       return;
     }
+    if(U === 'TKTT'){ issueTickets(); return; }
     if((m = U.match(/^3FQTV([A-Z]{2})(\d{5,12})$/))){
       const airline = m[1], num = m[2];
       const entry = { code:'FQTV', text: `FQTV ${airline} FREQUENT FLYER NUMBER  ${airline}${num}` };

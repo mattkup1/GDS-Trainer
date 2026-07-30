@@ -40,23 +40,15 @@
   // ---------- reference data ----------
   const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   const WEEKDAYS = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
-  const CITY_NAMES = {
-    DFW:'DALLAS/FT WORTH', ORD:"CHICAGO O'HARE", JFK:'NEW YORK JFK', LAX:'LOS ANGELES',
-    ATL:'ATLANTA', SFO:'SAN FRANCISCO', SEA:'SEATTLE/TACOMA', MIA:'MIAMI',
-    BOS:'BOSTON LOGAN', DEN:'DENVER', LAS:'LAS VEGAS', PHX:'PHOENIX',
-    IAH:'HOUSTON INTERCONTINENTAL', EWR:'NEWARK', MCO:'ORLANDO', CLT:'CHARLOTTE',
-    MSP:'MINNEAPOLIS/ST PAUL', DTW:'DETROIT', PHL:'PHILADELPHIA', LGA:'NEW YORK LAGUARDIA',
-    BWI:'BALTIMORE/WASHINGTON', SAN:'SAN DIEGO', TPA:'TAMPA', PDX:'PORTLAND',
-    STL:'ST LOUIS', HOU:'HOUSTON HOBBY', AUS:'AUSTIN', DCA:'WASHINGTON REAGAN',
-    SLC:'SALT LAKE CITY', RDU:'RALEIGH/DURHAM', BNA:'NASHVILLE', SJC:'SAN JOSE',
-    OAK:'OAKLAND', FLL:'FT LAUDERDALE', MDW:'CHICAGO MIDWAY', LHR:'LONDON HEATHROW',
-    CDG:'PARIS CHARLES DE GAULLE', NRT:'TOKYO NARITA', DXB:'DUBAI', SYD:'SYDNEY'
-  };
   const AIRLINES = ['AA','UA','DL','WN','B6','AS','NK','F9'];
   const EQUIP = ['738','73G','320','321','32N','E75','CR9','777','788','319'];
   const CLASSES = ['F','J','C','Y','B','M'];
 
-  function cityName(code){ return CITY_NAMES[code] ? CITY_NAMES[code]+' '+code : 'CITY '+code; }
+  // AIRPORTS (code -> [name, city, country]) is loaded globally from airports.js
+  function cityName(code){
+    const a = typeof AIRPORTS !== 'undefined' ? AIRPORTS[code] : null;
+    return a ? a[1].toUpperCase()+' '+code : 'CITY '+code;
+  }
 
   // ---------- date helpers ----------
   function parseDate(dayStr, monStr){

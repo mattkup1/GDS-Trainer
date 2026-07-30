@@ -59,9 +59,40 @@ To add **more than one passenger with the same surname** in a single entry, pref
 
 For passengers with different surnames, add a separate `-` entry for each.
 
+To add a **lap infant** traveling with a passenger, append `(INF{SURNAME}/{GIVEN}/{DOB})` to that passenger's name entry (`DOB` is `DDMONYY`):
+
+```
+-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)
+```
+
 ---
 
-### 5. Price the itinerary
+### 5. Add special service requests / other service info (optional)
+
+Format: `3{SSRCODE}` for a service request (meals, wheelchair, etc.), optionally with a passenger number and free text: `3{SSRCODE}-{PAX#}/{TEXT}`. Format: `3OSI{AIRLINE}{TEXT}` for other-service-info free text to a carrier.
+
+```
+3VGML
+3WCHR-1/AISLE SEAT PREFERRED
+3OSIAA VIP PASSENGER
+```
+
+Common SSR codes: `WCHR`/`WCHS`/`WCHC` (wheelchair), `VGML`/`BBML`/`CHML`/`KSML`/`MOML`/`DBML`/`SPML` (meals), `BLND`/`DEAF` (accessibility), `UMNR` (unaccompanied minor), `PETC` (pet in cabin), `BSCT` (bassinet), `XBAG` (extra baggage).
+
+---
+
+### 6. Assign a seat (optional)
+
+Format: `4{N}` to display the seat map for itinerary segment N, then `4{N}-{SEAT}` to assign one.
+
+```
+41
+41-14A
+```
+
+---
+
+### 7. Price the itinerary
 
 Format: `WP` (once segments and at least one name are on the PNR)
 
@@ -72,7 +103,7 @@ Prices the itinerary and shows a base fare, itemized taxes, and total — this i
 
 ---
 
-### 6. Add a contact phone number
+### 8. Add a contact phone number
 
 Format: `9` + phone number + `-` + location code (`A`=Agency, `H`=Home, `B`=Business, `C`/`M`=Cell, `F`=Fax, `HTL`=Hotel)
 
@@ -82,7 +113,7 @@ Format: `9` + phone number + `-` + location code (`A`=Agency, `H`=Home, `B`=Busi
 
 ---
 
-### 7. Add "received from" (who the booking request came from)
+### 9. Add "received from" (who the booking request came from)
 
 Format: `6` + text
 
@@ -92,7 +123,7 @@ Format: `6` + text
 
 ---
 
-### 8. Add a ticketing arrangement
+### 10. Add a ticketing arrangement
 
 ```
 7TAW/
@@ -101,7 +132,7 @@ This means "ticket at will" (no ticketing deadline). There's also `7TAX16AUG/180
 
 ---
 
-### 9. End the transaction (save the booking)
+### 11. End the transaction (save the booking)
 
 ```
 ER
@@ -110,7 +141,7 @@ This saves the PNR and gives you a **6-character record locator** — your confi
 
 ---
 
-### 10. Look up the booking again later
+### 12. Look up the booking again later
 
 ```
 *ABC123
@@ -129,6 +160,12 @@ This saves the PNR and gives you a **6-character record locator** — your confi
 | Long/direct sell | `0{AL}{FLT}{CLASS}{DD}{MON}{ORIG}{DEST}{STATUS}{SEATS}` | `0AA100Y15AUGDFWORDNN1` |
 | Add name | `-{SURNAME}/{GIVEN} {TITLE}` | `-SMITH/JOHN MR` |
 | Add multiple passengers | `-{N}{SURNAME}/{G1} {T1}/{G2} {T2}` | `-2SMITH/JOHN MR/JANE MRS` |
+| Add lap infant | `-...(INF{SURNAME}/{GIVEN}/{DOB})` | `-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)` |
+| Add SSR | `3{SSRCODE}[-{PAX#}][/{TEXT}]` | `3VGML` |
+| Add OSI | `3OSI{AL}{TEXT}` | `3OSIAA VIP PASSENGER` |
+| Seat map / assign seat | `4{N}` / `4{N}-{SEAT}` | `41` / `41-14A` |
+| Decode airport code | `DC{CODE}` | `DCORD` |
+| Search airports by name | `DAN{TEXT}` | `DANCHICAGO` |
 | Price itinerary | `WP` | `WP` |
 | Add phone | `9{NUMBER}-{LOC}` | `9214555-1234-A` |
 | Add received-from | `6{TEXT}` | `6JSMITH` |
@@ -147,6 +184,8 @@ SI
 A15AUGDFWORD
 04Y1
 -SMITH/JOHN MR
+3VGML
+41-14A
 WP
 9214555-1234-A
 6JSMITH

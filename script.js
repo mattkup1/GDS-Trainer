@@ -92,7 +92,8 @@
   };
 
   function freshPNR(){
-    return { locator:null, names:[], segments:[], phones:[], receivedFrom:null, ticketing:null, pricing:null };
+    return { locator:null, names:[], segments:[], phones:[], receivedFrom:null, ticketing:null, pricing:null,
+              infants:[], ssrs:[], osis:[], seats:[] };
   }
 
   // ---------- availability ----------
@@ -143,7 +144,7 @@
     const seg = {
       airline: f.airline, flightNum: f.flightNum, cls: cls.toUpperCase(), seats,
       dinfo: state.lastAvail.dinfo, orig: state.lastAvail.orig, dest: state.lastAvail.dest,
-      dep: f.dep, arr: f.arr, status: 'HK'
+      dep: f.dep, arr: f.arr, status: 'HK', equip: f.equip
     };
     state.pnr.segments.push(seg);
     print(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
@@ -159,9 +160,10 @@
     const rng = mulberry32(seed);
     const dep = 300 + Math.floor(rng()*900);
     const arr = dep + 65 + Math.floor(rng()*220);
+    const equip = EQUIP[Math.floor(rng()*EQUIP.length)];
     const seg = {
       airline: airline.toUpperCase(), flightNum: parseInt(flightNum,10), cls: cls.toUpperCase(), seats,
-      dinfo, orig, dest, dep, arr, status: (statusCode||'HK').toUpperCase()
+      dinfo, orig, dest, dep, arr, status: (statusCode||'HK').toUpperCase(), equip
     };
     state.pnr.segments.push(seg);
     print(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
@@ -238,11 +240,86 @@
     return `${pr.mode}  ${pr.fareBasis}  BASE USD${pr.baseFare.toFixed(2)}  TAX USD${pr.taxTotal.toFixed(2)}  TTL USD${pr.total.toFixed(2)}`;
   }
 
+  // ---------- special service requests / other service info ----------
+  const SSR_CODES = {
+    WCHR: 'WHEELCHAIR - CAN WALK TO/FROM SEAT',
+    WCHS: 'WHEELCHAIR - MUST BE CARRIED SHORT DISTANCE',
+    WCHC: 'WHEELCHAIR - IMMOBILE, CARRIED TO SEAT',
+    VGML: 'VEGETARIAN MEAL',
+    BBML: 'BABY MEAL',
+    CHML: 'CHILD MEAL',
+    KSML: 'KOSHER MEAL',
+    MOML: 'MUSLIM MEAL',
+    DBML: 'DIABETIC MEAL',
+    BLND: 'BLIND PASSENGER',
+    DEAF: 'DEAF PASSENGER',
+    UMNR: 'UNACCOMPANIED MINOR',
+    PETC: 'PET IN CABIN',
+    BSCT: 'BASSINET REQUEST',
+    SPML: 'SPECIAL MEAL - SEE FREE TEXT',
+    XBAG: 'EXTRA BAGGAGE'
+  };
+
+  // ---------- seat maps ----------
+  function getSeatMap(seg){
+    const seed = hashStr(`${seg.airline}${seg.flightNum}${seg.dinfo.day}${seg.dinfo.mon}${seg.orig}${seg.dest}SEATMAP`);
+    const rng = mulberry32(seed);
+    const rows = [];
+    const occupied = new Set();
+    for(let r=1; r<=30; r++){
+      const seats = 'ABCDEF'.split('').map(col => {
+        const occ = rng() < 0.4;
+        if(occ) occupied.add(`${r}${col}`);
+        return occ;
+      });
+      rows.push({ num:r, seats });
+    }
+    return { rows, occupied };
+  }
+
+  function showSeatMap(n){
+    const seg = state.pnr.segments[n-1];
+    if(!seg){ printErr('INVALID SEGMENT NUMBER - CHECK ITINERARY'); return; }
+    const map = getSeatMap(seg);
+    const mine = new Set(state.pnr.seats.filter(s => s.segIdx === n-1).map(s => s.seat));
+    print(`SEAT MAP - ${seg.airline}${seg.flightNum}  ${seg.equip || ''}  ${seg.dinfo.day}${seg.dinfo.mon}  ${seg.orig}-${seg.dest}`, 'hd');
+    printBlank();
+    print('      A  B  C     D  E  F', 'dim');
+    for(const row of map.rows){
+      const cols = row.seats.map((occ, i) => {
+        const seatId = `${row.num}${'ABCDEF'[i]}`;
+        return mine.has(seatId) ? ' * ' : (occ ? ' X ' : ' . ');
+      });
+      print(` ${pad(row.num,3)}  ${cols.slice(0,3).join('')}   ${cols.slice(3).join('')}`);
+    }
+    printBlank();
+    print('. OPEN   X OCCUPIED   * YOUR ASSIGNMENT', 'dim');
+    print(`ASSIGN WITH: 4${n}-{SEAT}   e.g. 4${n}-14A`, 'dim');
+  }
+
+  function assignSeat(n, seatStr){
+    const seg = state.pnr.segments[n-1];
+    if(!seg){ printErr('INVALID SEGMENT NUMBER - CHECK ITINERARY'); return; }
+    const rowMatch = seatStr.match(/^(\d{1,2})([A-F])$/);
+    const row = parseInt(rowMatch[1],10);
+    if(row < 1 || row > 30){ printErr('INVALID SEAT ROW - VALID RANGE 1-30'); return; }
+    const map = getSeatMap(seg);
+    if(map.occupied.has(seatStr)){ printErr(`SEAT ${seatStr} NOT AVAILABLE - SELECT ANOTHER (SEE SEAT MAP: 4${n})`); return; }
+    if(state.pnr.seats.some(s => s.segIdx === n-1 && s.seat === seatStr)){ printErr(`SEAT ${seatStr} ALREADY ASSIGNED ON THIS SEGMENT`); return; }
+    state.pnr.seats.push({ segIdx: n-1, seat: seatStr });
+    print(`SEAT ASSIGNED - SEG${n} ${seatStr}`);
+    refreshAndPrintPNR();
+  }
+
   // ---------- PNR element display / cancel ----------
   function buildElements(){
     const els = [];
     state.pnr.names.forEach((n, i) => els.push({ kind:'name', idx:i, label:`NM${i+1}`, text:n }));
+    state.pnr.infants.forEach((inf, i) => els.push({ kind:'infant', idx:i, label:'IN', text:`${inf.surname}/${inf.given}  DOB ${inf.dob}  (INFANT - TRAVELS WITH ${inf.adult})` }));
     state.pnr.segments.forEach((s, i) => els.push({ kind:'segment', idx:i, label:`SEG${i+1}`, text: formatSegmentShort(s) + `  ${s.dinfo.weekday}` }));
+    state.pnr.seats.forEach((st, i) => els.push({ kind:'seat', idx:i, label:'SEAT', text:`SEG${st.segIdx+1} - SEAT ${st.seat}` }));
+    state.pnr.ssrs.forEach((r, i) => els.push({ kind:'ssr', idx:i, label:'SSR', text: r.text }));
+    state.pnr.osis.forEach((o, i) => els.push({ kind:'osi', idx:i, label:'OSI', text: o.text }));
     if(state.pnr.pricing) els.push({ kind:'fq', idx:0, label:'FQ', text: formatPricingShort(state.pnr.pricing) });
     state.pnr.phones.forEach((p, i) => els.push({ kind:'phone', idx:i, label:'CTC', text:p }));
     if(state.pnr.receivedFrom) els.push({ kind:'rf', idx:0, label:'RF', text: state.pnr.receivedFrom });
@@ -266,7 +343,17 @@
 
   function removeElement(e){
     if(e.kind === 'name') state.pnr.names.splice(e.idx, 1);
-    else if(e.kind === 'segment'){ state.pnr.segments.splice(e.idx, 1); state.pnr.pricing = null; }
+    else if(e.kind === 'infant') state.pnr.infants.splice(e.idx, 1);
+    else if(e.kind === 'segment'){
+      state.pnr.segments.splice(e.idx, 1);
+      state.pnr.pricing = null;
+      state.pnr.seats = state.pnr.seats
+        .filter(st => st.segIdx !== e.idx)
+        .map(st => st.segIdx > e.idx ? { segIdx: st.segIdx - 1, seat: st.seat } : st);
+    }
+    else if(e.kind === 'seat') state.pnr.seats.splice(e.idx, 1);
+    else if(e.kind === 'ssr') state.pnr.ssrs.splice(e.idx, 1);
+    else if(e.kind === 'osi') state.pnr.osis.splice(e.idx, 1);
     else if(e.kind === 'fq') state.pnr.pricing = null;
     else if(e.kind === 'phone') state.pnr.phones.splice(e.idx, 1);
     else if(e.kind === 'rf') state.pnr.receivedFrom = null;
@@ -292,6 +379,7 @@
     if(state.pnr.segments.length === 0){ printErr('NO ITINERARY SEGMENTS TO CANCEL'); return; }
     state.pnr.segments = [];
     state.pnr.pricing = null;
+    state.pnr.seats = [];
     print('ITINERARY CANCELLED');
     refreshAndPrintPNR();
   }
@@ -362,6 +450,9 @@
     print('  -{SURNAME}/{GIVEN} {TITLE}          Name field   e.g. -SMITH/JOHN MR');
     print('  -{N}{SURNAME}/{G1} {T1}/{G2} {T2}   Multiple passengers, same surname');
     print('                                       e.g. -2SMITH/JOHN MR/JANE MRS');
+    print('  -{SURNAME}/{GIVEN} {TITLE}(INF{ISURNAME}/{IGIVEN}/{DOB})');
+    print('                                       Name with an associated lap infant');
+    print('                                       e.g. -SMITH/JOHN MR(INFSMITH/BABY/12JAN26)');
     print('  9{NUMBER}-{LOC}                     Phone field   e.g. 9214555-1234-A');
     print('  9/{CTY}{NUMBER}-{LOC}               Phone field, out-of-area   e.g. 9/BOS617-555-1234-A');
     print('  6{TEXT}                             Received from   e.g. 6JSMITH');
@@ -370,6 +461,19 @@
     print('  7TAW/                               Ticketing: at will (ticket on/before departure)');
     print('  7TAW{DD}{MMM}/{HHMM}                Ticketing at will, queued to date/time');
     print('  7TAX{DD}{MMM}/{HHMM}                Ticketing time limit   e.g. 7TAX16AUG/1800');
+    printBlank();
+    print('SPECIAL SERVICE / OTHER SERVICE INFO', 'hd');
+    print('  3{SSRCODE}[-{PAX#}][/{TEXT}]   Special service request   e.g. 3VGML  or  3WCHR-1/AISLE SEAT');
+    print('  3OSI{AL}{TEXT}                 Other service info   e.g. 3OSIAA VIP PASSENGER');
+    print('  SSR codes: WCHR WCHS WCHC VGML BBML CHML KSML MOML DBML BLND DEAF UMNR PETC BSCT SPML XBAG', 'dim');
+    printBlank();
+    print('SEATS', 'hd');
+    print('  4{N}            Display seat map for itinerary segment N   e.g. 41');
+    print('  4{N}-{SEAT}     Assign a seat on segment N   e.g. 41-14A');
+    printBlank();
+    print('ENCODE / DECODE', 'hd');
+    print('  DC{CODE}        Decode a 3-letter airport/city code   e.g. DCORD');
+    print('  DAN{TEXT}       Search airports/cities by name   e.g. DANCHICAGO');
     printBlank();
     print('PNR MANAGEMENT', 'hd');
     print('  *R  or  *              Display current PNR');
@@ -451,19 +555,36 @@
       directSell(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], parseInt(m[9],10)); return;
     }
     if(U.startsWith('-')){
-      const text = cmd.slice(1).trim();
-      if(!text.includes('/')){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
-      const parts = text.split('/').map(s => s.trim()).filter(s => s.length);
-      const headMatch = parts.length >= 2 ? parts[0].match(/^(\d{1,2})?([A-Z][A-Z\-' ]*)$/i) : null;
+      let workingText = U.slice(1).trim();
+      const infMatch = workingText.match(/\(INF([A-Z][A-Z\-' ]*)\/([A-Z][A-Z\-' ]*)\/(\d{1,2}[A-Z]{3}\d{2})\)\s*$/);
+      let infantData = null;
+      if(infMatch){
+        infantData = { surname: infMatch[1].trim(), given: infMatch[2].trim(), dob: infMatch[3] };
+        workingText = workingText.slice(0, infMatch.index).trim();
+      }
+      if(!workingText.includes('/')){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
+      const parts = workingText.split('/').map(s => s.trim()).filter(s => s.length);
+      const headMatch = parts.length >= 2 ? parts[0].match(/^(\d{1,2})?([A-Z][A-Z\-' ]*)$/) : null;
       if(!headMatch){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
-      const surname = headMatch[2].toUpperCase();
+      const surname = headMatch[2];
       const added = [];
       for(const g of parts.slice(1)){
-        const full = `${surname}/${g.toUpperCase()}`;
+        const full = `${surname}/${g}`;
         state.pnr.names.push(full);
         added.push(full);
       }
       print(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${added.join('  ')}`);
+      if(infantData){
+        const dv = infantData.dob.match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);
+        const day = dv ? parseInt(dv[1],10) : 0;
+        if(!dv || MONTHS.indexOf(dv[2]) < 0 || day < 1 || day > 31){
+          printErr('FORMAT - INVALID INFANT DOB, USE DDMONYY e.g. 12JAN26');
+        } else {
+          const adultRef = added[added.length-1];
+          state.pnr.infants.push({ adult: adultRef, surname: infantData.surname, given: infantData.given, dob: infantData.dob });
+          print(`INFANT ADDED - ${infantData.surname}/${infantData.given}  DOB ${infantData.dob}  (TRAVELS WITH ${adultRef})`);
+        }
+      }
       refreshAndPrintPNR();
       return;
     }
@@ -510,6 +631,63 @@
       state.pnr.ticketing = `7TAX${dinfo.day}${dinfo.mon}/${m[3]} (TIME LIMIT - TICKET BY ${dinfo.day}${dinfo.mon} ${m[3]})`;
       print(`TICKETING ARRANGEMENT ADDED - 7TAX${dinfo.day}${dinfo.mon}/${m[3]}`);
       refreshAndPrintPNR();
+      return;
+    }
+    if((m = U.match(/^3OSI([A-Z]{2})\s*(.+)$/))){
+      const text = m[2].trim();
+      if(!text){ printErr('FORMAT - OSI REQUIRES FREE TEXT, e.g. 3OSIAA VIP PASSENGER'); return; }
+      const entry = { airline: m[1], text: `${m[1]} ${text}` };
+      state.pnr.osis.push(entry);
+      print(`OSI ADDED - ${entry.text}`);
+      refreshAndPrintPNR();
+      return;
+    }
+    if((m = U.match(/^3([A-Z]{4})(?:-(\d{1,2}))?(?:\/(.+))?$/))){
+      const code = m[1];
+      const desc = SSR_CODES[code];
+      if(!desc){ printErr(`UNKNOWN SSR CODE ${code} - TYPE HELP FOR LIST`); return; }
+      const paxNum = m[2] ? parseInt(m[2],10) : null;
+      if(paxNum && (paxNum < 1 || paxNum > state.pnr.names.length)){ printErr('INVALID PASSENGER NUMBER - CHECK NAME FIELD'); return; }
+      const freeText = m[3] ? m[3].trim() : '';
+      let text = `${code} ${desc}`;
+      if(paxNum) text += `  PAX ${paxNum} (${state.pnr.names[paxNum-1]})`;
+      if(freeText) text += `  /${freeText}`;
+      state.pnr.ssrs.push({ code, text });
+      print(`SSR ADDED - ${text}`);
+      refreshAndPrintPNR();
+      return;
+    }
+    if((m = U.match(/^4(\d{1,2})$/))){
+      showSeatMap(parseInt(m[1],10)); return;
+    }
+    if((m = U.match(/^4(\d{1,2})-(\d{1,2}[A-F])$/))){
+      assignSeat(parseInt(m[1],10), m[2]); return;
+    }
+    if((m = U.match(/^DC([A-Z]{3})$/))){
+      const code = m[1];
+      const a = typeof AIRPORTS !== 'undefined' ? AIRPORTS[code] : null;
+      if(!a){ printErr(`UNABLE TO DECODE - ${code} NOT FOUND`); return; }
+      print(`${code}  ${a[0].toUpperCase()}`, 'hd');
+      print(`  ${a[1].toUpperCase()}, ${a[2].toUpperCase()}`, 'dim');
+      return;
+    }
+    if((m = U.match(/^DAN(.+)$/))){
+      const term = m[1].trim();
+      if(term.length < 2){ printErr('FORMAT - ENTER AT LEAST 2 CHARACTERS TO SEARCH'); return; }
+      const results = [];
+      for(const code in AIRPORTS){
+        const a = AIRPORTS[code];
+        if(a[0].toUpperCase().includes(term) || a[1].toUpperCase().includes(term)){
+          results.push({ code, name:a[0], city:a[1], country:a[2] });
+          if(results.length >= 25) break;
+        }
+      }
+      if(results.length === 0){ printErr(`NO MATCH FOUND FOR "${term}"`); return; }
+      print(`CITY/AIRPORT NAME SEARCH - "${term}"  (${results.length}${results.length===25?'+':''} MATCH${results.length===1?'':'ES'})`, 'hd');
+      printBlank();
+      for(const r of results){
+        print(` ${pad(r.code,4)} ${pad(r.name.toUpperCase(),34)} ${pad(r.city.toUpperCase(),20)} ${r.country.toUpperCase()}`);
+      }
       return;
     }
     if(U === '*R' || U === '*'){ refreshAndPrintPNR(); return; }

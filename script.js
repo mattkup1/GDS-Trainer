@@ -443,7 +443,11 @@
   });
 
   // ---------- toolbar ----------
-  document.getElementById('btnAmber').addEventListener('click', () => crtEl.classList.toggle('amber'));
+  const btnAmberEl = document.getElementById('btnAmber');
+  btnAmberEl.addEventListener('click', () => {
+    crtEl.classList.toggle('amber');
+    btnAmberEl.classList.toggle('active', crtEl.classList.contains('amber'));
+  });
   document.getElementById('btnClear').addEventListener('click', () => { outputEl.innerHTML = ''; });
   document.getElementById('btnReset').addEventListener('click', () => {
     outputEl.innerHTML = '';

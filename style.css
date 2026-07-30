@@ -28,6 +28,11 @@ html,body{
   font-family:inherit;
 }
 #bar button:hover{background:#1a1a1a;}
+#bar button.active{
+  background:#ffb000; color:#000; border-color:#ffb000;
+  box-shadow:0 0 6px rgba(255,176,0,.7);
+}
+#bar button.active:hover{background:#ffb000;}
 #crt{
   width:100%; max-width:var(--panel-w); height:min(78vh, 860px); min-height:420px;
   background: var(--bg);

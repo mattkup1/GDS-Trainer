@@ -93,7 +93,15 @@
 
   function freshPNR(){
     return { locator:null, names:[], segments:[], phones:[], receivedFrom:null, ticketing:null, pricing:null,
-              infants:[], ssrs:[], osis:[], seats:[] };
+              infants:[], ssrs:[], osis:[], seats:[], formOfPayment:null, activityLog:[] };
+  }
+
+  function nowStamp(){
+    const now = new Date();
+    return `${pad(now.getDate(),2).trim()}${MONTHS[now.getMonth()]}/${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+  }
+  function logActivity(text){
+    state.pnr.activityLog.push({ stamp: nowStamp(), sine: state.sine || '----', text });
   }
 
   // ---------- availability ----------
@@ -148,6 +156,7 @@
     };
     state.pnr.segments.push(seg);
     print(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
+    logActivity(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
     invalidatePricing();
     refreshAndPrintPNR();
   }
@@ -167,6 +176,7 @@
     };
     state.pnr.segments.push(seg);
     print(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
+    logActivity(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
     invalidatePricing();
     refreshAndPrintPNR();
   }
@@ -175,6 +185,7 @@
     if(state.pnr.pricing){
       state.pnr.pricing = null;
       print('FARE QUOTE INVALIDATED - ITINERARY CHANGED, RE-PRICE WITH WP', 'dim');
+      logActivity('FARE QUOTE INVALIDATED - ITINERARY CHANGED');
     }
   }
 
@@ -233,6 +244,7 @@
     print(`TOTAL          USD ${total.toFixed(2)}`, 'hd');
     printBlank();
     print('FARE QUOTE STORED - REQUIRED PRIOR TO TICKETING', 'dim');
+    logActivity(`PRICED - ${formatPricingShort(p.pricing)}`);
     refreshAndPrintPNR();
   }
 
@@ -308,7 +320,15 @@
     if(state.pnr.seats.some(s => s.segIdx === n-1 && s.seat === seatStr)){ printErr(`SEAT ${seatStr} ALREADY ASSIGNED ON THIS SEGMENT`); return; }
     state.pnr.seats.push({ segIdx: n-1, seat: seatStr });
     print(`SEAT ASSIGNED - SEG${n} ${seatStr}`);
+    logActivity(`SEAT ASSIGNED - SEG${n} ${seatStr}`);
     refreshAndPrintPNR();
+  }
+
+  // ---------- form of payment ----------
+  const CARD_TYPES = { VI:'VISA', CA:'MASTERCARD', AX:'AMERICAN EXPRESS', DC:'DINERS CLUB', DS:'DISCOVER', JC:'JCB' };
+
+  function maskCard(num){
+    return 'X'.repeat(Math.max(0, num.length-4)) + num.slice(-4);
   }
 
   // ---------- PNR element display / cancel ----------
@@ -323,6 +343,7 @@
     if(state.pnr.pricing) els.push({ kind:'fq', idx:0, label:'FQ', text: formatPricingShort(state.pnr.pricing) });
     state.pnr.phones.forEach((p, i) => els.push({ kind:'phone', idx:i, label:'CTC', text:p }));
     if(state.pnr.receivedFrom) els.push({ kind:'rf', idx:0, label:'RF', text: state.pnr.receivedFrom });
+    if(state.pnr.formOfPayment) els.push({ kind:'fp', idx:0, label:'FP', text: state.pnr.formOfPayment.display });
     if(state.pnr.ticketing) els.push({ kind:'tk', idx:0, label:'TK', text: state.pnr.ticketing });
     els.forEach((e, i) => e.num = i+1);
     return els;
@@ -357,6 +378,7 @@
     else if(e.kind === 'fq') state.pnr.pricing = null;
     else if(e.kind === 'phone') state.pnr.phones.splice(e.idx, 1);
     else if(e.kind === 'rf') state.pnr.receivedFrom = null;
+    else if(e.kind === 'fp') state.pnr.formOfPayment = null;
     else if(e.kind === 'tk') state.pnr.ticketing = null;
   }
 
@@ -372,6 +394,7 @@
     if(cancelled.length === 0){ printErr('INVALID ELEMENT NUMBER - REDISPLAY WITH *R'); return; }
     cancelled.sort((a,b) => a-b);
     print(`ELEMENT${cancelled.length > 1 ? 'S' : ''} ${cancelled.join(',')} CANCELLED`);
+    logActivity(`ELEMENT${cancelled.length > 1 ? 'S' : ''} ${cancelled.join(',')} CANCELLED`);
     refreshAndPrintPNR();
   }
 
@@ -381,6 +404,7 @@
     state.pnr.pricing = null;
     state.pnr.seats = [];
     print('ITINERARY CANCELLED');
+    logActivity('ITINERARY CANCELLED');
     refreshAndPrintPNR();
   }
 
@@ -402,9 +426,11 @@
     if(!p.pricing){ printErr('PNR INCOMPLETE - NEED FARE QUOTE (ENTRY: WP)'); return; }
     if(p.phones.length === 0){ printErr('PNR INCOMPLETE - NEED PHONE FIELD (ENTRY: 9...)'); return; }
     if(!p.receivedFrom){ printErr('PNR INCOMPLETE - NEED RECEIVED FROM (ENTRY: 6...)'); return; }
+    if(!p.formOfPayment){ printErr('PNR INCOMPLETE - NEED FORM OF PAYMENT (ENTRY: FPCASH, FPCHECK, OR FPCC...)'); return; }
     if(!p.ticketing){ printErr('PNR INCOMPLETE - NEED TICKETING ARRANGEMENT (ENTRY: 7TAW/)'); return; }
 
     if(!p.locator) p.locator = genLocator();
+    logActivity(`PNR SAVED (${mode}) - RLOC ${p.locator}`);
     state.history[p.locator] = JSON.parse(JSON.stringify(p));
 
     const now = new Date();
@@ -426,7 +452,18 @@
     if(!rec){ printErr('RECORD LOCATOR NOT FOUND'); return; }
     state.pnr = JSON.parse(JSON.stringify(rec));
     print(`PNR ${loc} RETRIEVED`);
+    logActivity(`PNR RETRIEVED - RLOC ${loc}`);
     refreshAndPrintPNR();
+  }
+
+  function showHistory(){
+    const log = state.pnr.activityLog || [];
+    if(log.length === 0){ print('NO HISTORY AVAILABLE FOR THIS PNR', 'dim'); return; }
+    print(`PNR ACTIVITY HISTORY${state.pnr.locator ? '  RLOC: '+state.pnr.locator : ''}`, 'hd');
+    printBlank();
+    for(const entry of log){
+      print(` ${entry.stamp}  ${pad(entry.sine,6)} ${entry.text}`);
+    }
   }
 
   // ---------- help ----------
@@ -461,10 +498,14 @@
     print('  7TAW/                               Ticketing: at will (ticket on/before departure)');
     print('  7TAW{DD}{MMM}/{HHMM}                Ticketing at will, queued to date/time');
     print('  7TAX{DD}{MMM}/{HHMM}                Ticketing time limit   e.g. 7TAX16AUG/1800');
+    print('  FPCASH  /  FPCHECK                  Form of payment - cash / check');
+    print('  FPCC{TYPE}{CARDNUM}/{MMYY}          Form of payment - credit card   e.g. FPCCVI4111111111111111/1225');
+    print('                                       Card types: VI CA AX DC DS JC');
     printBlank();
     print('SPECIAL SERVICE / OTHER SERVICE INFO', 'hd');
     print('  3{SSRCODE}[-{PAX#}][/{TEXT}]   Special service request   e.g. 3VGML  or  3WCHR-1/AISLE SEAT');
     print('  3OSI{AL}{TEXT}                 Other service info   e.g. 3OSIAA VIP PASSENGER');
+    print('  3FQTV{AL}{NUMBER}              Frequent flyer number   e.g. 3FQTVAA1234567');
     print('  SSR codes: WCHR WCHS WCHC VGML BBML CHML KSML MOML DBML BLND DEAF UMNR PETC BSCT SPML XBAG', 'dim');
     printBlank();
     print('SEATS', 'hd');
@@ -477,6 +518,7 @@
     printBlank();
     print('PNR MANAGEMENT', 'hd');
     print('  *R  or  *              Display current PNR');
+    print('  *H                     Display PNR activity history (chronological log)');
     print('  *{LOCATOR}             Retrieve PNR by record locator');
     print('  X{N}                   Cancel numbered element N');
     print('  X{N}-{M}, X{N},{M}     Cancel a range or list of elements');
@@ -574,6 +616,7 @@
         added.push(full);
       }
       print(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${added.join('  ')}`);
+      logActivity(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${added.join('  ')}`);
       if(infantData){
         const dv = infantData.dob.match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);
         const day = dv ? parseInt(dv[1],10) : 0;
@@ -583,6 +626,7 @@
           const adultRef = added[added.length-1];
           state.pnr.infants.push({ adult: adultRef, surname: infantData.surname, given: infantData.given, dob: infantData.dob });
           print(`INFANT ADDED - ${infantData.surname}/${infantData.given}  DOB ${infantData.dob}  (TRAVELS WITH ${adultRef})`);
+          logActivity(`INFANT ADDED - ${infantData.surname}/${infantData.given}  DOB ${infantData.dob}`);
         }
       }
       refreshAndPrintPNR();
@@ -598,6 +642,7 @@
       const formatted = `${pm[1] ? '/'+pm[1].toUpperCase() : ''}${pm[2]}-${pm[3].toUpperCase()}`;
       state.pnr.phones.push(formatted);
       print(`PHONE ADDED - 9${formatted}`);
+      logActivity(`PHONE ADDED - 9${formatted}`);
       refreshAndPrintPNR();
       return;
     }
@@ -606,6 +651,7 @@
       if(!text){ printErr('FORMAT - RECEIVED FROM TEXT REQUIRED'); return; }
       state.pnr.receivedFrom = text.toUpperCase();
       print(`RECEIVED FROM ADDED - ${text.toUpperCase()}`);
+      logActivity(`RECEIVED FROM ADDED - ${text.toUpperCase()}`);
       refreshAndPrintPNR();
       return;
     }
@@ -613,6 +659,7 @@
     if(U === '7TAW/' || U === '7TAW'){
       state.pnr.ticketing = '7TAW/ (TICKETING AT WILL - TICKET ON OR BEFORE DEPARTURE)';
       print('TICKETING ARRANGEMENT ADDED - 7TAW/');
+      logActivity('TICKETING ARRANGEMENT ADDED - 7TAW/');
       refreshAndPrintPNR();
       return;
     }
@@ -622,6 +669,7 @@
       const timeSuffix = m[3] ? '/'+m[3] : '/';
       state.pnr.ticketing = `7TAW${dinfo.day}${dinfo.mon}${timeSuffix} (TICKETING AT WILL - QUEUED ${dinfo.day}${dinfo.mon}${m[3] ? ' '+m[3] : ''})`;
       print(`TICKETING ARRANGEMENT ADDED - 7TAW${dinfo.day}${dinfo.mon}${timeSuffix}`);
+      logActivity(`TICKETING ARRANGEMENT ADDED - 7TAW${dinfo.day}${dinfo.mon}${timeSuffix}`);
       refreshAndPrintPNR();
       return;
     }
@@ -630,6 +678,41 @@
       if(!dinfo){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
       state.pnr.ticketing = `7TAX${dinfo.day}${dinfo.mon}/${m[3]} (TIME LIMIT - TICKET BY ${dinfo.day}${dinfo.mon} ${m[3]})`;
       print(`TICKETING ARRANGEMENT ADDED - 7TAX${dinfo.day}${dinfo.mon}/${m[3]}`);
+      logActivity(`TICKETING ARRANGEMENT ADDED - 7TAX${dinfo.day}${dinfo.mon}/${m[3]}`);
+      refreshAndPrintPNR();
+      return;
+    }
+    if(U === 'FPCASH'){
+      state.pnr.formOfPayment = { type:'CASH', display:'CASH' };
+      print('FORM OF PAYMENT ADDED - CASH');
+      logActivity('FORM OF PAYMENT ADDED - CASH');
+      refreshAndPrintPNR();
+      return;
+    }
+    if(U === 'FPCHECK'){
+      state.pnr.formOfPayment = { type:'CHECK', display:'CHECK' };
+      print('FORM OF PAYMENT ADDED - CHECK');
+      logActivity('FORM OF PAYMENT ADDED - CHECK');
+      refreshAndPrintPNR();
+      return;
+    }
+    if((m = U.match(/^FPCC([A-Z]{2})(\d{13,19})\/(\d{2})(\d{2})$/))){
+      const type = m[1], num = m[2], mm = parseInt(m[3],10), yy = m[4];
+      if(!CARD_TYPES[type]){ printErr(`UNKNOWN CARD TYPE ${type} - VALID: ${Object.keys(CARD_TYPES).join(' ')}`); return; }
+      if(mm < 1 || mm > 12){ printErr('INVALID EXPIRY MONTH - USE MMYY'); return; }
+      const display = `CC ${type} ${maskCard(num)}  EXP ${m[3]}/${yy}  (${CARD_TYPES[type]})`;
+      state.pnr.formOfPayment = { type:'CC', display };
+      print(`FORM OF PAYMENT ADDED - ${display}`);
+      logActivity(`FORM OF PAYMENT ADDED - ${display}`);
+      refreshAndPrintPNR();
+      return;
+    }
+    if((m = U.match(/^3FQTV([A-Z]{2})(\d{5,12})$/))){
+      const airline = m[1], num = m[2];
+      const entry = { code:'FQTV', text: `FQTV ${airline} FREQUENT FLYER NUMBER  ${airline}${num}` };
+      state.pnr.ssrs.push(entry);
+      print(`SSR ADDED - ${entry.text}`);
+      logActivity(`SSR ADDED - ${entry.text}`);
       refreshAndPrintPNR();
       return;
     }
@@ -639,6 +722,7 @@
       const entry = { airline: m[1], text: `${m[1]} ${text}` };
       state.pnr.osis.push(entry);
       print(`OSI ADDED - ${entry.text}`);
+      logActivity(`OSI ADDED - ${entry.text}`);
       refreshAndPrintPNR();
       return;
     }
@@ -654,6 +738,7 @@
       if(freeText) text += `  /${freeText}`;
       state.pnr.ssrs.push({ code, text });
       print(`SSR ADDED - ${text}`);
+      logActivity(`SSR ADDED - ${text}`);
       refreshAndPrintPNR();
       return;
     }
@@ -691,6 +776,7 @@
       return;
     }
     if(U === '*R' || U === '*'){ refreshAndPrintPNR(); return; }
+    if(U === '*H'){ showHistory(); return; }
     if((m = U.match(/^\*([A-Z0-9]{6})$/))){ retrieveByLocator(m[1]); return; }
     if(U === 'XI'){ cancelItinerary(); return; }
     if((m = U.match(/^X([\d,\-]+)$/))){

@@ -132,7 +132,22 @@ This means "ticket at will" (no ticketing deadline). There's also `7TAX16AUG/180
 
 ---
 
-### 11. End the transaction (save the booking)
+### 11. Add a form of payment
+
+Format: `FPCASH`, `FPCHECK`, or `FPCC{TYPE}{CARDNUMBER}/{MMYY}` for a credit card (`TYPE` is `VI`=Visa, `CA`=MasterCard, `AX`=Amex, `DC`=Diners Club, `DS`=Discover, `JC`=JCB).
+
+```
+FPCASH
+```
+or
+```
+FPCCVI4111111111111111/1225
+```
+Just like real Sabre, the PNR can't be saved without a form of payment on file. Card numbers are masked to the last 4 digits once stored.
+
+---
+
+### 12. End the transaction (save the booking)
 
 ```
 ER
@@ -141,12 +156,18 @@ This saves the PNR and gives you a **6-character record locator** — your confi
 
 ---
 
-### 12. Look up the booking again later
+### 13. Look up the booking again later
 
 ```
 *ABC123
 ```
 (using the actual locator you were given)
+
+To see the full chronological history of everything that's been added, changed, or cancelled on the PNR:
+
+```
+*H
+```
 
 ---
 
@@ -163,6 +184,7 @@ This saves the PNR and gives you a **6-character record locator** — your confi
 | Add lap infant | `-...(INF{SURNAME}/{GIVEN}/{DOB})` | `-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)` |
 | Add SSR | `3{SSRCODE}[-{PAX#}][/{TEXT}]` | `3VGML` |
 | Add OSI | `3OSI{AL}{TEXT}` | `3OSIAA VIP PASSENGER` |
+| Add frequent flyer number | `3FQTV{AL}{NUMBER}` | `3FQTVAA1234567` |
 | Seat map / assign seat | `4{N}` / `4{N}-{SEAT}` | `41` / `41-14A` |
 | Decode airport code | `DC{CODE}` | `DCORD` |
 | Search airports by name | `DAN{TEXT}` | `DANCHICAGO` |
@@ -170,8 +192,10 @@ This saves the PNR and gives you a **6-character record locator** — your confi
 | Add phone | `9{NUMBER}-{LOC}` | `9214555-1234-A` |
 | Add received-from | `6{TEXT}` | `6JSMITH` |
 | Add ticketing | `7TAW/` | `7TAW/` |
+| Add form of payment | `FPCASH`, `FPCHECK`, `FPCC{TYPE}{NUM}/{MMYY}` | `FPCASH` |
 | Save booking | `ER` or `ET` | `ER` |
 | Redisplay PNR | `*R` or `*` | `*R` |
+| Show PNR activity history | `*H` | `*H` |
 | Retrieve saved PNR | `*{LOCATOR}` | `*ABC123` |
 | Cancel an item | `X{N}`, `X{N}-{M}`, `X{N},{M}` | `X2` |
 | Cancel entire itinerary | `XI` | `XI` |
@@ -190,5 +214,6 @@ WP
 9214555-1234-A
 6JSMITH
 7TAW/
+FPCASH
 ER
 ```

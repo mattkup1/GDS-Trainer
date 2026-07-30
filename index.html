@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SABRE GDS Terminal Simulator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="shell">
+  <div id="bar">
+    <span class="title">◆ SABRE GDS TERMINAL SIMULATOR</span>
+    <span>
+      <button id="btnAmber">AMBER/GREEN</button>
+      <button id="btnClear">CLEAR SCREEN</button>
+      <button id="btnReset">RESET SESSION</button>
+    </span>
+  </div>
+  <div id="crt">
+    <div id="screen">
+      <div id="output"></div>
+      <div id="inputrow">
+        <span id="prompt">&gt;</span>
+        <input id="cmdline" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      </div>
+    </div>
+  </div>
+  <div id="hint">Type <b>HELP</b> for command reference · This is an educational simulation, not connected to the real Sabre network.</div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

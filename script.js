@@ -5,7 +5,6 @@
   const outputEl = document.getElementById('output');
   const screenEl = document.getElementById('screen');
   const inputEl  = document.getElementById('cmdline');
-  const crtEl    = document.getElementById('crt');
 
   function print(text, cls){
     const lines = String(text).split('\n');
@@ -443,11 +442,6 @@
   });
 
   // ---------- toolbar ----------
-  const btnAmberEl = document.getElementById('btnAmber');
-  btnAmberEl.addEventListener('click', () => {
-    crtEl.classList.toggle('amber');
-    btnAmberEl.classList.toggle('active', crtEl.classList.contains('amber'));
-  });
   document.getElementById('btnClear').addEventListener('click', () => { outputEl.innerHTML = ''; });
   document.getElementById('btnReset').addEventListener('click', () => {
     outputEl.innerHTML = '';
@@ -457,5 +451,107 @@
     boot();
     inputEl.focus();
   });
+
+  // ---------- settings panel ----------
+  const shellEl = document.getElementById('shell');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const btnSettings = document.getElementById('btnSettings');
+  const SETTINGS_KEY = 'sabreSimSettings';
+  const DEFAULT_SETTINGS = { theme:'green', scanlines:true, glow:'med', vignette:true, fontSize:'md' };
+
+  function loadSettings(){
+    try{
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if(raw) return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(raw));
+    }catch(e){}
+    return Object.assign({}, DEFAULT_SETTINGS);
+  }
+  function saveSettings(){
+    try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }catch(e){}
+  }
+
+  const settings = loadSettings();
+
+  function applySettings(){
+    shellEl.dataset.theme = settings.theme;
+    shellEl.dataset.glow = settings.glow;
+    shellEl.dataset.fontsize = settings.fontSize;
+    shellEl.classList.toggle('scanlines-off', !settings.scanlines);
+    shellEl.classList.toggle('vignette-off', !settings.vignette);
+    syncPanelUI();
+  }
+
+  function syncPanelUI(){
+    settingsPanel.querySelectorAll('.swatch').forEach(b => {
+      b.classList.toggle('active', b.dataset.theme === settings.theme);
+    });
+    settingsPanel.querySelectorAll('.segmented').forEach(seg => {
+      const key = seg.dataset.setting;
+      seg.querySelectorAll('button').forEach(b => {
+        const val = b.dataset.value;
+        let active;
+        if(key === 'scanlines') active = settings.scanlines === (val === 'on');
+        else if(key === 'vignette') active = settings.vignette === (val === 'on');
+        else active = settings[key] === val;
+        b.classList.toggle('active', active);
+      });
+    });
+  }
+
+  settingsPanel.querySelectorAll('.swatch').forEach(b => {
+    b.addEventListener('click', () => {
+      settings.theme = b.dataset.theme;
+      applySettings(); saveSettings();
+    });
+  });
+  settingsPanel.querySelectorAll('.segmented').forEach(seg => {
+    const key = seg.dataset.setting;
+    seg.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        const val = b.dataset.value;
+        if(key === 'scanlines') settings.scanlines = (val === 'on');
+        else if(key === 'vignette') settings.vignette = (val === 'on');
+        else settings[key] = val;
+        applySettings(); saveSettings();
+      });
+    });
+  });
+
+  function positionPanel(){
+    const r = btnSettings.getBoundingClientRect();
+    const panelW = settingsPanel.offsetWidth || 280;
+    let left = r.right - panelW;
+    left = Math.max(12, Math.min(left, window.innerWidth - panelW - 12));
+    settingsPanel.style.left = left + 'px';
+    settingsPanel.style.top = (r.bottom + 8) + 'px';
+  }
+
+  btnSettings.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isHidden = settingsPanel.classList.contains('hidden');
+    if(isHidden){
+      settingsPanel.classList.remove('hidden');
+      positionPanel();
+    } else {
+      settingsPanel.classList.add('hidden');
+    }
+  });
+  document.getElementById('btnCloseSettings').addEventListener('click', () => {
+    settingsPanel.classList.add('hidden');
+  });
+  document.addEventListener('click', (e) => {
+    if(!settingsPanel.classList.contains('hidden') &&
+       !settingsPanel.contains(e.target) && e.target !== btnSettings){
+      settingsPanel.classList.add('hidden');
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') settingsPanel.classList.add('hidden');
+  });
+  window.addEventListener('resize', () => {
+    if(!settingsPanel.classList.contains('hidden')) positionPanel();
+  });
+
+  applySettings();
 
 })();

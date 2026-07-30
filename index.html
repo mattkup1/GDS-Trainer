@@ -6,25 +6,76 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="shell">
-  <div id="bar">
-    <span class="title">◆ SABRE GDS TERMINAL SIMULATOR</span>
-    <span>
-      <button id="btnAmber">AMBER/GREEN</button>
-      <button id="btnClear">CLEAR SCREEN</button>
-      <button id="btnReset">RESET SESSION</button>
-    </span>
-  </div>
-  <div id="crt">
-    <div id="screen">
-      <div id="output"></div>
-      <div id="inputrow">
-        <span id="prompt">&gt;</span>
-        <input id="cmdline" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" />
+<div id="shell" data-theme="green" data-glow="med" data-fontsize="md">
+  <div id="housing">
+    <div id="bar">
+      <span class="title"><span class="led"></span> SABRE GDS TERMINAL SIMULATOR</span>
+      <span class="toolbtns">
+        <button id="btnSettings" title="Display settings">&#9881; SETTINGS</button>
+        <button id="btnClear">CLEAR SCREEN</button>
+        <button id="btnReset">RESET SESSION</button>
+      </span>
+    </div>
+    <div id="crt">
+      <div id="screen">
+        <div id="output"></div>
+        <div id="inputrow">
+          <span id="prompt">&gt;</span>
+          <input id="cmdline" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        </div>
       </div>
     </div>
   </div>
-  <div id="hint">Type <b>HELP</b> for command reference · This is an educational simulation, not connected to the real Sabre network.</div>
+  <div id="hint">Type <b>HELP</b> for command reference &middot; This is an educational simulation, not connected to the real Sabre network.</div>
+</div>
+
+<div id="settingsPanel" class="panel hidden" role="dialog" aria-label="Display settings">
+  <div class="panel-head">
+    <span>DISPLAY SETTINGS</span>
+    <button id="btnCloseSettings" class="iconbtn" aria-label="Close settings">&#10005;</button>
+  </div>
+  <div class="panel-body">
+    <div class="setting-group">
+      <label>COLOR THEME</label>
+      <div class="swatches" id="themeSwatches">
+        <button class="swatch" data-theme="green" style="--sw:#33ff66">GREEN</button>
+        <button class="swatch" data-theme="amber" style="--sw:#ffb000">AMBER</button>
+        <button class="swatch" data-theme="ice" style="--sw:#5fe1ff">ICE</button>
+        <button class="swatch" data-theme="paper" style="--sw:#e8e8e8">PAPER</button>
+      </div>
+    </div>
+    <div class="setting-group">
+      <label>SCANLINES</label>
+      <div class="segmented" data-setting="scanlines">
+        <button data-value="on">ON</button>
+        <button data-value="off">OFF</button>
+      </div>
+    </div>
+    <div class="setting-group">
+      <label>SCREEN GLOW</label>
+      <div class="segmented" data-setting="glow">
+        <button data-value="off">OFF</button>
+        <button data-value="low">LOW</button>
+        <button data-value="med">MED</button>
+        <button data-value="high">HIGH</button>
+      </div>
+    </div>
+    <div class="setting-group">
+      <label>SCREEN CURVATURE</label>
+      <div class="segmented" data-setting="vignette">
+        <button data-value="on">ON</button>
+        <button data-value="off">OFF</button>
+      </div>
+    </div>
+    <div class="setting-group">
+      <label>TEXT SIZE</label>
+      <div class="segmented" data-setting="fontSize">
+        <button data-value="sm">S</button>
+        <button data-value="md">M</button>
+        <button data-value="lg">L</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="script.js"></script>

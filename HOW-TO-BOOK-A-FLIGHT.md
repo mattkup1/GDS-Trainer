@@ -15,14 +15,14 @@ Confirms sign-in with a demo agent sine and pseudo city code (PCC). Nothing else
 
 ### 2. Search flight availability
 
-Format: `A` + day + month + origin + destination
+Format: `A` + day + month + origin + destination (or `1` in place of `A` — both are real Sabre entries)
 
 ```
 A15AUGDFWORD
 ```
 This requests flights from **DFW** (Dallas/Ft Worth) to **ORD** (Chicago O'Hare) on **August 15**. You'll get back a numbered list of flights, each with airline, flight number, seats open per class (F/J/C/Y/B/M), departure/arrival times.
 
-> Any 3-letter code works as an airport — it doesn't have to be a real one.
+> Any real-world IATA airport code works — the simulator ships with data for ~6,000 airports worldwide.
 
 ---
 
@@ -35,6 +35,12 @@ Format: `0` + line number + class letter + number of seats
 ```
 Sells **1 seat in Y class from line 4** of the availability display you just pulled up. The simulator confirms the segment and shows your PNR so far (currently just that flight segment).
 
+You can also sell a specific flight directly, without pulling up availability first (a "long sell"). Format: `0` + airline + flight number + class + date + origin/destination + status code + party size:
+
+```
+0AA100Y15AUGDFWORDNN1
+```
+
 ---
 
 ### 4. Add the passenger's name
@@ -45,38 +51,57 @@ Format: `-` + SURNAME + `/` + GIVEN NAME + TITLE
 -SMITH/JOHN MR
 ```
 
----
-
-### 5. Add a contact phone number
-
-Format: `9` + any phone text
+To add **more than one passenger with the same surname** in a single entry, prefix the surname with a count and chain additional given-name/title pairs with `/`:
 
 ```
-9DFW555-1234-A
+-2SMITH/JOHN MR/JANE MRS
 ```
 
----
-
-### 6. Add "received from" (who the booking request came from)
-
-Format: `P` + text
-
-```
-PJSMITH
-```
+For passengers with different surnames, add a separate `-` entry for each.
 
 ---
 
-### 7. Add a ticketing arrangement
+### 5. Price the itinerary
+
+Format: `WP` (once segments and at least one name are on the PNR)
 
 ```
-TAW/
+WP
 ```
-This means "ticket at will" (no ticketing deadline). There's also `TAU16AUG/1800` to set a ticketing deadline of Aug 16 at 6:00 PM.
+Prices the itinerary and shows a base fare, itemized taxes, and total — this is stored on the PNR as a fare quote and is **required before ticketing**. `WPNCS` prices the lowest fare regardless of seat availability (informational only).
 
 ---
 
-### 8. End the transaction (save the booking)
+### 6. Add a contact phone number
+
+Format: `9` + phone number + `-` + location code (`A`=Agency, `H`=Home, `B`=Business, `C`/`M`=Cell, `F`=Fax, `HTL`=Hotel)
+
+```
+9214555-1234-A
+```
+
+---
+
+### 7. Add "received from" (who the booking request came from)
+
+Format: `6` + text
+
+```
+6JSMITH
+```
+
+---
+
+### 8. Add a ticketing arrangement
+
+```
+7TAW/
+```
+This means "ticket at will" (no ticketing deadline). There's also `7TAX16AUG/1800` to set a ticketing time limit of Aug 16 at 6:00 PM.
+
+---
+
+### 9. End the transaction (save the booking)
 
 ```
 ER
@@ -85,7 +110,7 @@ This saves the PNR and gives you a **6-character record locator** — your confi
 
 ---
 
-### 9. Look up the booking again later
+### 10. Look up the booking again later
 
 ```
 *ABC123
@@ -101,14 +126,18 @@ This saves the PNR and gives you a **6-character record locator** — your confi
 | Sign in | `SI` | `SI` |
 | Search flights | `A{DD}{MON}{ORIG}{DEST}` | `A15AUGDFWORD` |
 | Sell from list | `0{LINE}{CLASS}{SEATS}` | `04Y1` |
+| Long/direct sell | `0{AL}{FLT}{CLASS}{DD}{MON}{ORIG}{DEST}{STATUS}{SEATS}` | `0AA100Y15AUGDFWORDNN1` |
 | Add name | `-{SURNAME}/{GIVEN} {TITLE}` | `-SMITH/JOHN MR` |
-| Add phone | `9{TEXT}` | `9DFW555-1234-A` |
-| Add received-from | `P{TEXT}` | `PJSMITH` |
-| Add ticketing | `TAW/` | `TAW/` |
+| Add multiple passengers | `-{N}{SURNAME}/{G1} {T1}/{G2} {T2}` | `-2SMITH/JOHN MR/JANE MRS` |
+| Price itinerary | `WP` | `WP` |
+| Add phone | `9{NUMBER}-{LOC}` | `9214555-1234-A` |
+| Add received-from | `6{TEXT}` | `6JSMITH` |
+| Add ticketing | `7TAW/` | `7TAW/` |
 | Save booking | `ER` or `ET` | `ER` |
 | Redisplay PNR | `*R` or `*` | `*R` |
 | Retrieve saved PNR | `*{LOCATOR}` | `*ABC123` |
-| Cancel an item | `X{N}` | `X2` |
+| Cancel an item | `X{N}`, `X{N}-{M}`, `X{N},{M}` | `X2` |
+| Cancel entire itinerary | `XI` | `XI` |
 | Discard unsaved work | `IG` | `IG` |
 | Full command list | `HELP` | `HELP` |
 
@@ -118,8 +147,9 @@ SI
 A15AUGDFWORD
 04Y1
 -SMITH/JOHN MR
-9DFW555-1234-A
-PJSMITH
-TAW/
+WP
+9214555-1234-A
+6JSMITH
+7TAW/
 ER
 ```

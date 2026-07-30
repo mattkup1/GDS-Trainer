@@ -92,7 +92,7 @@
   };
 
   function freshPNR(){
-    return { locator:null, names:[], segments:[], phones:[], receivedFrom:null, ticketing:null };
+    return { locator:null, names:[], segments:[], phones:[], receivedFrom:null, ticketing:null, pricing:null };
   }
 
   // ---------- availability ----------
@@ -147,10 +147,11 @@
     };
     state.pnr.segments.push(seg);
     print(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
+    invalidatePricing();
     refreshAndPrintPNR();
   }
 
-  function directSell(seats, cls, airline, flightNum, dayStr, monStr, orig, dest, statusCode){
+  function directSell(airline, flightNum, cls, dayStr, monStr, orig, dest, statusCode, seats){
     if(orig === dest){ printErr('FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME'); return; }
     const dinfo = parseDate(dayStr, monStr);
     if(!dinfo){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
@@ -164,11 +165,77 @@
     };
     state.pnr.segments.push(seg);
     print(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
+    invalidatePricing();
     refreshAndPrintPNR();
+  }
+
+  function invalidatePricing(){
+    if(state.pnr.pricing){
+      state.pnr.pricing = null;
+      print('FARE QUOTE INVALIDATED - ITINERARY CHANGED, RE-PRICE WITH WP', 'dim');
+    }
   }
 
   function formatSegmentShort(seg){
     return `${seg.airline}${seg.flightNum} ${seg.cls} ${seg.dinfo.day}${seg.dinfo.mon} ${seg.orig}${seg.dest} ${seg.status}${seg.seats}  ${minutesToClock(seg.dep)} ${minutesToClock(seg.arr)}`;
+  }
+
+  // ---------- pricing (WP / WPNCS) ----------
+  const CLASS_FARE_MULT = { F:5.5, J:4.2, C:3.6, Y:1.6, B:1.3, M:1.0 };
+  const TAX_POOL = [
+    { code:'US', label:'U.S. TRANSPORTATION TAX' },
+    { code:'XF', label:'PASSENGER FACILITY CHARGE' },
+    { code:'AY', label:'SEPTEMBER 11TH SECURITY FEE' },
+    { code:'ZP', label:'PASSENGER SERVICE CHARGE' },
+    { code:'YQ', label:'CARRIER-IMPOSED SURCHARGE' },
+    { code:'YR', label:'CARRIER-IMPOSED SURCHARGE' }
+  ];
+
+  function priceItinerary(mode){
+    const p = state.pnr;
+    if(p.segments.length === 0){ printErr('UNABLE TO PRICE - NO ITINERARY SEGMENTS'); return; }
+    if(p.names.length === 0){ printErr('UNABLE TO PRICE - NAME FIELD REQUIRED PRIOR TO PRICING'); return; }
+
+    const seed = hashStr(p.segments.map(s => `${s.airline}${s.flightNum}${s.cls}${s.dinfo.day}${s.dinfo.mon}${s.orig}${s.dest}${s.seats}`).join('|') + mode);
+    const rng = mulberry32(seed);
+
+    let baseFare = 0;
+    for(const s of p.segments){
+      const mult = CLASS_FARE_MULT[s.cls] || 1.4;
+      const dist = 60 + Math.floor(rng()*400);
+      baseFare += Math.round((45 + dist*0.35) * mult * s.seats);
+    }
+
+    const numTaxes = 2 + Math.floor(rng()*3);
+    const pool = TAX_POOL.slice().sort(() => rng()-0.5).slice(0, numTaxes);
+    const taxes = [];
+    let taxTotal = 0;
+    for(const t of pool){
+      const amt = Math.round((3 + rng()*22) * 100)/100;
+      taxes.push({ code:t.code, label:t.label, amount:amt });
+      taxTotal += amt;
+    }
+    taxTotal = Math.round(taxTotal*100)/100;
+    const total = Math.round((baseFare + taxTotal)*100)/100;
+    const fareBasis = `${p.segments[0].cls}OW`;
+
+    p.pricing = { mode, baseFare, taxes, taxTotal, total, fareBasis, currency:'USD' };
+
+    print(mode === 'WPNCS' ? '** LOWEST FARE - WPNCS (SUBJECT TO AVAILABILITY) **' : '** ITINERARY PRICING - WP **', 'hd');
+    p.segments.forEach((s,i) => print(`  ${i+1}  ${formatSegmentShort(s)}`, 'dim'));
+    printBlank();
+    print(`FARE BASIS: ${fareBasis}`);
+    print(`BASE FARE      USD ${baseFare.toFixed(2)}`);
+    for(const t of taxes){ print(`  ${t.code}   USD ${t.amount.toFixed(2)}   ${t.label}`, 'dim'); }
+    print(`TAXES/FEES     USD ${taxTotal.toFixed(2)}`);
+    print(`TOTAL          USD ${total.toFixed(2)}`, 'hd');
+    printBlank();
+    print('FARE QUOTE STORED - REQUIRED PRIOR TO TICKETING', 'dim');
+    refreshAndPrintPNR();
+  }
+
+  function formatPricingShort(pr){
+    return `${pr.mode}  ${pr.fareBasis}  BASE USD${pr.baseFare.toFixed(2)}  TAX USD${pr.taxTotal.toFixed(2)}  TTL USD${pr.total.toFixed(2)}`;
   }
 
   // ---------- PNR element display / cancel ----------
@@ -176,6 +243,7 @@
     const els = [];
     state.pnr.names.forEach((n, i) => els.push({ kind:'name', idx:i, label:`NM${i+1}`, text:n }));
     state.pnr.segments.forEach((s, i) => els.push({ kind:'segment', idx:i, label:`SEG${i+1}`, text: formatSegmentShort(s) + `  ${s.dinfo.weekday}` }));
+    if(state.pnr.pricing) els.push({ kind:'fq', idx:0, label:'FQ', text: formatPricingShort(state.pnr.pricing) });
     state.pnr.phones.forEach((p, i) => els.push({ kind:'phone', idx:i, label:'CTC', text:p }));
     if(state.pnr.receivedFrom) els.push({ kind:'rf', idx:0, label:'RF', text: state.pnr.receivedFrom });
     if(state.pnr.ticketing) els.push({ kind:'tk', idx:0, label:'TK', text: state.pnr.ticketing });
@@ -196,15 +264,35 @@
     }
   }
 
-  function cancelElement(n){
-    const e = state.lastDisplay.find(x => x.num === n);
-    if(!e){ printErr('INVALID ELEMENT NUMBER - REDISPLAY WITH *R'); return; }
+  function removeElement(e){
     if(e.kind === 'name') state.pnr.names.splice(e.idx, 1);
-    else if(e.kind === 'segment') state.pnr.segments.splice(e.idx, 1);
+    else if(e.kind === 'segment'){ state.pnr.segments.splice(e.idx, 1); state.pnr.pricing = null; }
+    else if(e.kind === 'fq') state.pnr.pricing = null;
     else if(e.kind === 'phone') state.pnr.phones.splice(e.idx, 1);
     else if(e.kind === 'rf') state.pnr.receivedFrom = null;
     else if(e.kind === 'tk') state.pnr.ticketing = null;
-    print(`ELEMENT ${n} CANCELLED`);
+  }
+
+  function cancelElements(nums){
+    const uniqDesc = Array.from(new Set(nums)).sort((a,b) => b-a);
+    const cancelled = [];
+    for(const n of uniqDesc){
+      const e = state.lastDisplay.find(x => x.num === n);
+      if(!e) continue;
+      removeElement(e);
+      cancelled.push(n);
+    }
+    if(cancelled.length === 0){ printErr('INVALID ELEMENT NUMBER - REDISPLAY WITH *R'); return; }
+    cancelled.sort((a,b) => a-b);
+    print(`ELEMENT${cancelled.length > 1 ? 'S' : ''} ${cancelled.join(',')} CANCELLED`);
+    refreshAndPrintPNR();
+  }
+
+  function cancelItinerary(){
+    if(state.pnr.segments.length === 0){ printErr('NO ITINERARY SEGMENTS TO CANCEL'); return; }
+    state.pnr.segments = [];
+    state.pnr.pricing = null;
+    print('ITINERARY CANCELLED');
     refreshAndPrintPNR();
   }
 
@@ -223,9 +311,10 @@
     const p = state.pnr;
     if(p.segments.length === 0){ printErr('PNR INCOMPLETE - NO ITINERARY SEGMENTS'); return; }
     if(p.names.length === 0){ printErr('PNR INCOMPLETE - NEED NAME FIELD (ENTRY: -SURNAME/GIVEN)'); return; }
+    if(!p.pricing){ printErr('PNR INCOMPLETE - NEED FARE QUOTE (ENTRY: WP)'); return; }
     if(p.phones.length === 0){ printErr('PNR INCOMPLETE - NEED PHONE FIELD (ENTRY: 9...)'); return; }
-    if(!p.receivedFrom){ printErr('PNR INCOMPLETE - NEED RECEIVED FROM (ENTRY: P...)'); return; }
-    if(!p.ticketing){ printErr('PNR INCOMPLETE - NEED TICKETING ARRANGEMENT (ENTRY: TAW/ )'); return; }
+    if(!p.receivedFrom){ printErr('PNR INCOMPLETE - NEED RECEIVED FROM (ENTRY: 6...)'); return; }
+    if(!p.ticketing){ printErr('PNR INCOMPLETE - NEED TICKETING ARRANGEMENT (ENTRY: 7TAW/)'); return; }
 
     if(!p.locator) p.locator = genLocator();
     state.history[p.locator] = JSON.parse(JSON.stringify(p));
@@ -262,26 +351,35 @@
     printBlank();
     print('AVAILABILITY', 'hd');
     print('  A{DD}{MMM}{ORG}{DST}   Air availability   e.g. A15AUGDFWORD');
+    print('  1{DD}{MMM}{ORG}{DST}   Air availability (alternate entry)  e.g. 115AUGDFWORD');
     printBlank();
     print('SELL', 'hd');
-    print('  0{LN}{CLASS}{SEATS}    Sell from avail line   e.g. 04Y1');
-    print('  SS{SEATS}{CLASS} {AL}{FLT} {DD}{MMM}{ORG}{DST}{STATUS}');
-    print('                         Direct sell   e.g. SS1Y AA100 15AUGDFWORDNN');
+    print('  0{LN}{CLASS}{SEATS}                        Sell from avail line   e.g. 04Y1');
+    print('  0{AL}{FLT}{CLASS}{DD}{MMM}{ORG}{DST}{STATUS}{SEATS}');
+    print('                                              Direct/long sell   e.g. 0AA100Y15AUGDFWORDNN1');
     printBlank();
     print('PNR BUILD', 'hd');
-    print('  -{SURNAME}/{GIVEN} {TITLE}   Name field   e.g. -SMITH/JOHN MR');
-    print('  9{PHONE}                     Phone field  e.g. 9DFW555-1234-A');
-    print('  P{TEXT}                      Received from  e.g. PJSMITH');
-    print('  TAW/                         Ticketing: will call');
-    print('  TAU{DD}{MMM}/{HHMM}          Ticketing by date/time  e.g. TAU16AUG/1800');
+    print('  -{SURNAME}/{GIVEN} {TITLE}          Name field   e.g. -SMITH/JOHN MR');
+    print('  -{N}{SURNAME}/{G1} {T1}/{G2} {T2}   Multiple passengers, same surname');
+    print('                                       e.g. -2SMITH/JOHN MR/JANE MRS');
+    print('  9{NUMBER}-{LOC}                     Phone field   e.g. 9214555-1234-A');
+    print('  9/{CTY}{NUMBER}-{LOC}               Phone field, out-of-area   e.g. 9/BOS617-555-1234-A');
+    print('  6{TEXT}                             Received from   e.g. 6JSMITH');
+    print('  WP                                  Price itinerary (required before ticketing)');
+    print('  WPNCS                               Price - lowest fare regardless of availability');
+    print('  7TAW/                               Ticketing: at will (ticket on/before departure)');
+    print('  7TAW{DD}{MMM}/{HHMM}                Ticketing at will, queued to date/time');
+    print('  7TAX{DD}{MMM}/{HHMM}                Ticketing time limit   e.g. 7TAX16AUG/1800');
     printBlank();
     print('PNR MANAGEMENT', 'hd');
-    print('  *R  or  *          Display current PNR');
-    print('  *{LOCATOR}         Retrieve PNR by record locator');
-    print('  X{N}               Cancel numbered element N');
-    print('  IG                 Ignore PNR (discard unsaved work)');
-    print('  ER                 End transaction, redisplay');
-    print('  ET                 End transaction, clear work area');
+    print('  *R  or  *              Display current PNR');
+    print('  *{LOCATOR}             Retrieve PNR by record locator');
+    print('  X{N}                   Cancel numbered element N');
+    print('  X{N}-{M}, X{N},{M}     Cancel a range or list of elements');
+    print('  XI                     Cancel entire itinerary (all segments)');
+    print('  IG                     Ignore PNR (discard unsaved work)');
+    print('  ER                     End transaction, redisplay');
+    print('  ET                     End transaction, clear work area');
     printBlank();
     print('Everything above is entered on the command line and submitted with Enter.', 'dim');
   }
@@ -343,29 +441,46 @@
     if((m = U.match(/^A(\d{1,2})([A-Z]{3})([A-Z]{3})([A-Z]{3})$/))){
       genAvailability(m[1], m[2], m[3], m[4]); return;
     }
+    if((m = U.match(/^1(\d{1,2})([A-Z]{3})([A-Z]{3})([A-Z]{3})$/))){
+      genAvailability(m[1], m[2], m[3], m[4]); return;
+    }
     if((m = U.match(/^0(\d{1,2})([A-Z])(\d{1,2})$/))){
       sellFromAvail(parseInt(m[1],10), m[2], parseInt(m[3],10)); return;
     }
-    if((m = U.match(/^SS(\d{1,2})([A-Z])\s+([A-Z]{2})(\d{1,4})\s+(\d{1,2})([A-Z]{3})([A-Z]{3})([A-Z]{3})([A-Z]{2})$/))){
-      directSell(parseInt(m[1],10), m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9]); return;
+    if((m = U.match(/^0([A-Z]{2})(\d{1,4})([A-Z])(\d{1,2})([A-Z]{3})([A-Z]{3})([A-Z]{3})([A-Z]{2})(\d{1,2})$/))){
+      directSell(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], parseInt(m[9],10)); return;
     }
     if(U.startsWith('-')){
       const text = cmd.slice(1).trim();
       if(!text.includes('/')){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
-      state.pnr.names.push(text.toUpperCase());
-      print(`NAME ADDED - ${text.toUpperCase()}`);
+      const parts = text.split('/').map(s => s.trim()).filter(s => s.length);
+      const headMatch = parts.length >= 2 ? parts[0].match(/^(\d{1,2})?([A-Z][A-Z\-' ]*)$/i) : null;
+      if(!headMatch){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
+      const surname = headMatch[2].toUpperCase();
+      const added = [];
+      for(const g of parts.slice(1)){
+        const full = `${surname}/${g.toUpperCase()}`;
+        state.pnr.names.push(full);
+        added.push(full);
+      }
+      print(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${added.join('  ')}`);
       refreshAndPrintPNR();
       return;
     }
     if(U.startsWith('9')){
       const text = cmd.slice(1).trim();
-      if(!text){ printErr('FORMAT - PHONE FIELD REQUIRED'); return; }
-      state.pnr.phones.push(text.toUpperCase());
-      print(`PHONE ADDED - ${text.toUpperCase()}`);
+      const pm = text.match(/^(?:\/([A-Z]{3}))?(\d[\d\-]{4,14})-([A-Z]{1,3})$/i);
+      const PHONE_LOC_CODES = ['A','H','B','C','M','F','HTL'];
+      if(!pm || !PHONE_LOC_CODES.includes(pm[3].toUpperCase())){
+        printErr('FORMAT - PHONE MUST BE 9[/CTY]NUMBER-LOC  e.g. 9DFW555-1234-A'); return;
+      }
+      const formatted = `${pm[1] ? '/'+pm[1].toUpperCase() : ''}${pm[2]}-${pm[3].toUpperCase()}`;
+      state.pnr.phones.push(formatted);
+      print(`PHONE ADDED - 9${formatted}`);
       refreshAndPrintPNR();
       return;
     }
-    if(U.startsWith('P') && U !== 'P'){
+    if(U.startsWith('6') && U !== '6'){
       const text = cmd.slice(1).trim();
       if(!text){ printErr('FORMAT - RECEIVED FROM TEXT REQUIRED'); return; }
       state.pnr.receivedFrom = text.toUpperCase();
@@ -373,23 +488,52 @@
       refreshAndPrintPNR();
       return;
     }
-    if(U === 'TAW/' || U === 'TAW'){
-      state.pnr.ticketing = 'TAW/ (TICKET ON OR BEFORE DEPARTURE - WILL CALL)';
-      print('TICKETING ARRANGEMENT ADDED - TAW/');
+    if(U === 'WP' || U === 'WPNCS'){ priceItinerary(U); return; }
+    if(U === '7TAW/' || U === '7TAW'){
+      state.pnr.ticketing = '7TAW/ (TICKETING AT WILL - TICKET ON OR BEFORE DEPARTURE)';
+      print('TICKETING ARRANGEMENT ADDED - 7TAW/');
       refreshAndPrintPNR();
       return;
     }
-    if((m = U.match(/^TAU(\d{1,2})([A-Z]{3})\/(\d{3,4})$/))){
+    if((m = U.match(/^7TAW(\d{1,2})([A-Z]{3})\/(\d{3,4})?$/))){
       const dinfo = parseDate(m[1], m[2]);
       if(!dinfo){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
-      state.pnr.ticketing = `TAU${dinfo.day}${dinfo.mon}/${m[3]} (TICKET BY ${dinfo.day}${dinfo.mon} ${m[3]})`;
-      print(`TICKETING ARRANGEMENT ADDED - TAU${dinfo.day}${dinfo.mon}/${m[3]}`);
+      const timeSuffix = m[3] ? '/'+m[3] : '/';
+      state.pnr.ticketing = `7TAW${dinfo.day}${dinfo.mon}${timeSuffix} (TICKETING AT WILL - QUEUED ${dinfo.day}${dinfo.mon}${m[3] ? ' '+m[3] : ''})`;
+      print(`TICKETING ARRANGEMENT ADDED - 7TAW${dinfo.day}${dinfo.mon}${timeSuffix}`);
+      refreshAndPrintPNR();
+      return;
+    }
+    if((m = U.match(/^7TAX(\d{1,2})([A-Z]{3})\/(\d{3,4})$/))){
+      const dinfo = parseDate(m[1], m[2]);
+      if(!dinfo){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
+      state.pnr.ticketing = `7TAX${dinfo.day}${dinfo.mon}/${m[3]} (TIME LIMIT - TICKET BY ${dinfo.day}${dinfo.mon} ${m[3]})`;
+      print(`TICKETING ARRANGEMENT ADDED - 7TAX${dinfo.day}${dinfo.mon}/${m[3]}`);
       refreshAndPrintPNR();
       return;
     }
     if(U === '*R' || U === '*'){ refreshAndPrintPNR(); return; }
     if((m = U.match(/^\*([A-Z0-9]{6})$/))){ retrieveByLocator(m[1]); return; }
-    if((m = U.match(/^X(\d{1,2})$/))){ cancelElement(parseInt(m[1],10)); return; }
+    if(U === 'XI'){ cancelItinerary(); return; }
+    if((m = U.match(/^X([\d,\-]+)$/))){
+      const nums = [];
+      let valid = true;
+      for(const part of m[1].split(',')){
+        if(part.includes('-')){
+          const bounds = part.split('-');
+          const a = parseInt(bounds[0],10), b = parseInt(bounds[1],10);
+          if(bounds.length !== 2 || !a || !b || a > b){ valid = false; break; }
+          for(let i=a;i<=b;i++) nums.push(i);
+        } else {
+          const v = parseInt(part,10);
+          if(!v){ valid = false; break; }
+          nums.push(v);
+        }
+      }
+      if(!valid || nums.length === 0){ printErr('INVALID ELEMENT RANGE - CHECK ENTRY AND REENTER'); return; }
+      cancelElements(nums);
+      return;
+    }
     if(U === 'IG'){
       state.pnr = freshPNR();
       state.lastDisplay = [];

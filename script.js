@@ -204,6 +204,14 @@
     { code:'YR', label:'CARRIER-IMPOSED SURCHARGE' }
   ];
 
+  function tripType(segments){
+    if(segments.length === 1) return 'OW';
+    const first = segments[0], last = segments[segments.length-1];
+    if(segments.length === 2 && first.orig === last.dest && first.dest === last.orig) return 'RT';
+    if(first.orig === last.dest) return 'CT';
+    return 'OJ';
+  }
+
   function priceItinerary(mode){
     const p = state.pnr;
     if(p.segments.length === 0){ printErr('UNABLE TO PRICE - NO ITINERARY SEGMENTS'); return; }
@@ -230,7 +238,7 @@
     }
     taxTotal = Math.round(taxTotal*100)/100;
     const total = Math.round((baseFare + taxTotal)*100)/100;
-    const fareBasis = `${p.segments[0].cls}OW`;
+    const fareBasis = `${p.segments[0].cls}${tripType(p.segments)}`;
 
     p.pricing = { mode, baseFare, taxes, taxTotal, total, fareBasis, currency:'USD' };
 

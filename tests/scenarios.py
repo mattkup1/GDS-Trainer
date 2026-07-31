@@ -227,4 +227,109 @@ SCENARIOS: list[Scenario] = [
             Step("DANCHICAGO", expect_contains=["CITY/AIRPORT NAME SEARCH", "CHICAGO"]),
         ],
     ),
+    Scenario(
+        "apis_document_accepted_and_malformed_dob_rejected",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            NAME_SMITH,
+            Step(
+                "3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1",
+                expect_contains=["DOCUMENT ADDED", "PASSPORT"],
+            ),
+            Step(
+                "3DOCSP/US/987654321/US/99XXX90/M/25DEC30-1",
+                expect_contains=["INVALID DOB"],
+                expect_not_contains=["DOCUMENT ADDED - PASSPORT US 987654321"],
+            ),
+        ],
+    ),
+    Scenario(
+        "general_remark_added",
+        [
+            SIGN_IN,
+            Step(
+                "5VIP CLIENT - HANDLE WITH CARE",
+                expect_contains=["GENERAL REMARK ADDED", "VIP CLIENT"],
+            ),
+        ],
+    ),
+    Scenario(
+        "fqtv_tier_shown_unknown_tier_rejected",
+        [
+            SIGN_IN,
+            Step("3FQTVAA1234567/GLD", expect_contains=["SSR ADDED", "TIER: GOLD"]),
+            Step(
+                "3FQTVAA7654321/ZZZ",
+                expect_contains=["UNKNOWN LOYALTY TIER"],
+                expect_not_contains=["SSR ADDED - FQTV AA FREQUENT FLYER NUMBER  AA7654321"],
+            ),
+        ],
+    ),
+    Scenario(
+        "corporate_code_discount_applied",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            NAME_SMITH,
+            Step("WP/ACME01", expect_contains=["CORPORATE CODE APPLIED", "ACME CORP"]),
+        ],
+    ),
+    Scenario(
+        "corporate_code_unknown_rejected",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            NAME_SMITH,
+            Step(
+                "WP/BADCODE",
+                expect_contains=["UNKNOWN CORPORATE CODE"],
+                expect_not_contains=["FARE QUOTE STORED"],
+            ),
+        ],
+    ),
+    Scenario(
+        "fare_rules_shown_on_every_price",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            NAME_SMITH,
+            Step(
+                "WP",
+                expect_contains=["FARE RULES", "CHANGE FEE", "REFUNDABLE", "ADVANCE PURCHASE REQUIRED"],
+            ),
+        ],
+    ),
+    Scenario(
+        "cancel_docs_and_remark_elements",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            NAME_SMITH,
+            Step("3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1", expect_contains=["DOCUMENT ADDED"]),
+            Step("5AGENCY NOTE", expect_contains=["GENERAL REMARK ADDED"]),
+            Step("*R", expect_contains=["DOC", "RM"]),
+            Step("X2", expect_contains=["ELEMENT 2 CANCELLED"]),
+            Step("*R", expect_contains=["RM"], expect_not_contains=["DOC"]),
+            Step("X3", expect_contains=["ELEMENT 3 CANCELLED"]),
+            Step("*R", expect_not_contains=["RM"]),
+        ],
+    ),
+    Scenario(
+        "seat_pool_depletes_to_waitlist",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            # Class capacity is randomly 0-9 seats; 9 unconditional 1-seat sells guarantee
+            # the pool is fully drained by the 10th attempt regardless of the starting count.
+            Step("01Y1"), Step("01Y1"), Step("01Y1"), Step("01Y1"), Step("01Y1"),
+            Step("01Y1"), Step("01Y1"), Step("01Y1"), Step("01Y1"),
+            Step("01Y1", expect_contains=["WAITLISTED", "HL"]),
+        ],
+    ),
 ]

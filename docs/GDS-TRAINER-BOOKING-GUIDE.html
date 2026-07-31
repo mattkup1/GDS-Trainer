@@ -241,7 +241,7 @@
     <h2>Sell a seat from the list</h2>
     <p class="format">Format: <code>0</code> + line number + class letter + number of seats</p>
     <div class="cmdblock">04Y1</div>
-    <p class="note">Sells <b>1 seat in Y class from line 4</b> of the availability display you just pulled up. The simulator confirms the segment and shows your PNR so far (currently just that flight segment).</p>
+    <p class="note">Sells <b>1 seat in Y class from line 4</b> of the availability display you just pulled up. The simulator confirms the segment and shows your PNR so far (currently just that flight segment). Selling reduces that class's remaining seat count for the rest of the session — sell it down to 0 and the next sell in that class waitlists (status <code>HL</code>) instead of being blocked.</p>
     <p class="note">You can also sell a specific flight directly, without pulling up availability first (a "long sell"). Format: <code>0</code> + airline + flight number + class + date + origin/destination + status code + party size:</p>
     <div class="cmdblock">0AA100Y15AUGDFWORDNN1</div>
   </div>
@@ -264,17 +264,32 @@
 <section class="step">
   <div class="step-num">5</div>
   <div>
+    <h2>Add passenger travel documents (APIS) (optional)</h2>
+    <p class="format">Format: <code>3DOCS</code> + document type + <code>/</code> + issuing country + <code>/</code> + number + <code>/</code> + nationality + <code>/</code> + date of birth + <code>/</code> + sex + <code>/</code> + expiry date + <code>-</code> + passenger number</p>
+    <div class="cmdblock">3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1</div>
+    <p class="note">This is Advance Passenger Information (APIS) / Secure Flight-style data, tied to a specific passenger by number (<code>-1</code> above means passenger 1 in the name field). <code>TYPE</code> is <code>P</code> for passport. Dates are <code>DDMONYY</code>, sex is <code>M</code> or <code>F</code>.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">6</div>
+  <div>
     <h2>Add special service requests / other service info (optional)</h2>
     <p class="format">Format: <code>3{SSRCODE}</code> for a service request (meals, wheelchair, etc.), optionally with a passenger number and free text: <code>3{SSRCODE}-{PAX#}/{TEXT}</code>. Format: <code>3OSI{AIRLINE}{TEXT}</code> for other-service-info free text to a carrier.</p>
     <div class="cmdblock">3VGML
 3WCHR-1/AISLE SEAT PREFERRED
 3OSIAA VIP PASSENGER</div>
     <p class="note">Common SSR codes: <code>WCHR</code>/<code>WCHS</code>/<code>WCHC</code> (wheelchair), <code>VGML</code>/<code>BBML</code>/<code>CHML</code>/<code>KSML</code>/<code>MOML</code>/<code>DBML</code>/<code>SPML</code> (meals), <code>BLND</code>/<code>DEAF</code> (accessibility), <code>UMNR</code> (unaccompanied minor), <code>PETC</code> (pet in cabin), <code>BSCT</code> (bassinet), <code>XBAG</code> (extra baggage).</p>
+    <p class="note">A frequent flyer number can optionally carry a loyalty tier:</p>
+    <div class="cmdblock">3FQTVAA1234567/GLD</div>
+    <p class="note">Tiers: <code>SLV</code> (Silver), <code>GLD</code> (Gold), <code>PLT</code> (Platinum), <code>DIA</code> (Diamond).</p>
+    <p class="note">To add an agency-internal note that isn't sent to the airline (distinct from OSI, which is carrier-facing):</p>
+    <div class="cmdblock">5VIP CLIENT - HANDLE WITH CARE</div>
   </div>
 </section>
 
 <section class="step">
-  <div class="step-num">6</div>
+  <div class="step-num">7</div>
   <div>
     <h2>Assign a seat (optional)</h2>
     <p class="format">Format: <code>4{N}</code> to display the seat map for itinerary segment N, then <code>4{N}-{SEAT}</code> to assign one.</p>
@@ -284,17 +299,20 @@
 </section>
 
 <section class="step">
-  <div class="step-num">7</div>
+  <div class="step-num">8</div>
   <div>
     <h2>Price the itinerary</h2>
     <p class="format">Format: <code>WP</code> (once segments and at least one name are on the PNR)</p>
     <div class="cmdblock">WP</div>
-    <p class="note">Prices the itinerary and shows a base fare, itemized taxes, and total — this is stored on the PNR as a fare quote and is <b>required before ticketing</b>. <code>WPNCS</code> prices the lowest fare regardless of seat availability (informational only).</p>
+    <p class="note">Prices the itinerary and shows a base fare, itemized taxes, a total, and fare rules (change fee, refundability, advance-purchase requirement) — this is stored on the PNR as a fare quote and is <b>required before ticketing</b>. <code>WPNCS</code> prices the lowest fare regardless of seat availability (informational only).</p>
+    <p class="note">To apply a negotiated/corporate fare code, append it after a slash:</p>
+    <div class="cmdblock">WP/ACME01</div>
+    <p class="note">An unrecognized code is rejected with the list of valid codes; a valid one applies its discount to the base fare and is noted on the quote.</p>
   </div>
 </section>
 
 <section class="step">
-  <div class="step-num">8</div>
+  <div class="step-num">9</div>
   <div>
     <h2>Add a contact phone number</h2>
     <p class="format">Format: <code>9</code> + phone number + <code>-</code> + location code (<code>A</code>=Agency, <code>H</code>=Home, <code>B</code>=Business, <code>C</code>/<code>M</code>=Cell, <code>F</code>=Fax, <code>HTL</code>=Hotel)</p>
@@ -303,7 +321,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">9</div>
+  <div class="step-num">10</div>
   <div>
     <h2>Add "received from" (who the booking request came from)</h2>
     <p class="format">Format: <code>6</code> + text</p>
@@ -312,7 +330,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">10</div>
+  <div class="step-num">11</div>
   <div>
     <h2>Add a ticketing arrangement</h2>
     <div class="cmdblock">7TAW/</div>
@@ -321,7 +339,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">11</div>
+  <div class="step-num">12</div>
   <div>
     <h2>Add a form of payment</h2>
     <p class="format">Format: <code>FPCASH</code>, <code>FPCHECK</code>, or <code>FPCC{TYPE}{CARDNUMBER}/{MMYY}</code> for a credit card (<code>TYPE</code> is <code>VI</code>=Visa, <code>CA</code>=MasterCard, <code>AX</code>=Amex, <code>DC</code>=Diners Club, <code>DS</code>=Discover, <code>JC</code>=JCB).</p>
@@ -333,7 +351,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">12</div>
+  <div class="step-num">13</div>
   <div>
     <h2>End the transaction (save the booking)</h2>
     <div class="cmdblock">ER</div>
@@ -342,17 +360,17 @@
 </section>
 
 <section class="step">
-  <div class="step-num">13</div>
+  <div class="step-num">14</div>
   <div>
     <h2>Issue the ticket (optional)</h2>
     <div class="cmdblock">TKTT</div>
-    <p class="note">This is the step people often assume <code>ER</code> already did — it doesn't. Saving a PNR (<code>ER</code>/<code>ET</code>) and <b>ticketing</b> it are two different things in a real GDS, exactly like here: the "ticketing arrangement" you added in step 10 just sets a deadline (or "ticket at will"), it doesn't issue anything. <code>TKTT</code> is the actual ticketing entry — it requires the PNR to already be saved (has a record locator) and to have a fare quote, ticketing arrangement, and form of payment on file, and it generates a real-format ticket number (airline numeric code + serial) per passenger, including infants.</p>
+    <p class="note">This is the step people often assume <code>ER</code> already did — it doesn't. Saving a PNR (<code>ER</code>/<code>ET</code>) and <b>ticketing</b> it are two different things in a real GDS, exactly like here: the "ticketing arrangement" you added in step 11 just sets a deadline (or "ticket at will"), it doesn't issue anything. <code>TKTT</code> is the actual ticketing entry — it requires the PNR to already be saved (has a record locator) and to have a fare quote, ticketing arrangement, and form of payment on file, and it generates a real-format ticket number (airline numeric code + serial) per passenger, including infants.</p>
     <p class="note">If you change the itinerary after ticketing (sell or cancel a segment), the ticket(s) are automatically voided along with the fare quote — you'll need to <code>WP</code> and <code>TKTT</code> again before saving.</p>
   </div>
 </section>
 
 <section class="step">
-  <div class="step-num">14</div>
+  <div class="step-num">15</div>
   <div>
     <h2>Look up the booking again later</h2>
     <div class="cmdblock">*ABC123</div>
@@ -373,13 +391,15 @@
     <tr><td>Add name</td><td class="mono">-{SURNAME}/{GIVEN} {TITLE}</td><td class="mono">-SMITH/JOHN MR</td></tr>
     <tr><td>Add multiple passengers</td><td class="mono">-{N}{SURNAME}/{G1} {T1}/{G2} {T2}</td><td class="mono">-2SMITH/JOHN MR/JANE MRS</td></tr>
     <tr><td>Add lap infant</td><td class="mono">-...(INF{SURNAME}/{GIVEN}/{DOB})</td><td class="mono">-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)</td></tr>
+    <tr><td>Add travel document (APIS)</td><td class="mono">3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}</td><td class="mono">3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1</td></tr>
     <tr><td>Add SSR</td><td class="mono">3{SSRCODE}[-{PAX#}][/{TEXT}]</td><td class="mono">3VGML</td></tr>
     <tr><td>Add OSI</td><td class="mono">3OSI{AL}{TEXT}</td><td class="mono">3OSIAA VIP PASSENGER</td></tr>
-    <tr><td>Add frequent flyer number</td><td class="mono">3FQTV{AL}{NUMBER}</td><td class="mono">3FQTVAA1234567</td></tr>
+    <tr><td>Add frequent flyer number (+ tier)</td><td class="mono">3FQTV{AL}{NUMBER}[/{TIER}]</td><td class="mono">3FQTVAA1234567/GLD</td></tr>
+    <tr><td>Add general remark</td><td class="mono">5{TEXT}</td><td class="mono">5VIP CLIENT</td></tr>
     <tr><td>Seat map / assign seat</td><td class="mono">4{N} / 4{N}-{SEAT}</td><td class="mono">41 / 41-14A</td></tr>
     <tr><td>Decode airport code</td><td class="mono">DC{CODE}</td><td class="mono">DCORD</td></tr>
     <tr><td>Search airports by name</td><td class="mono">DAN{TEXT}</td><td class="mono">DANCHICAGO</td></tr>
-    <tr><td>Price itinerary</td><td class="mono">WP</td><td class="mono">WP</td></tr>
+    <tr><td>Price itinerary (+ corporate code)</td><td class="mono">WP[/{CORPCODE}]</td><td class="mono">WP or WP/ACME01</td></tr>
     <tr><td>Add phone</td><td class="mono">9{NUMBER}-{LOC}</td><td class="mono">9214555-1234-A</td></tr>
     <tr><td>Add received-from</td><td class="mono">6{TEXT}</td><td class="mono">6JSMITH</td></tr>
     <tr><td>Add ticketing</td><td class="mono">7TAW/</td><td class="mono">7TAW/</td></tr>
@@ -402,6 +422,7 @@
 A15AUGDFWORD
 04Y1
 -SMITH/JOHN MR
+3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1
 3VGML
 41-14A
 WP
@@ -476,7 +497,7 @@ TKTT</div>
     <dl class="terms">
       <div class="entry"><dt>Segment</dt><dd>one sold flight on the PNR</dd></div>
       <div class="entry"><dt>Long sell</dt><dd>selling a specific flight directly by airline/flight number, bypassing the availability display</dd></div>
-      <div class="entry"><dt>Status code</dt><dd>the two-letter segment status (HK = holds confirmed, the only status a sell in this simulator produces; NN = need/request, used when typing a long-sell entry by hand)</dd></div>
+      <div class="entry"><dt>Status code</dt><dd>the two-letter segment status: HK = holds confirmed; HL = waitlisted (a class sold down to 0 remaining sells as a waitlist request instead of being blocked); NN = need/request, used when typing a long-sell entry by hand</dd></div>
       <div class="entry"><dt>Party size</dt><dd>the number of seats requested in a sell entry; caps how many passenger names the PNR can carry</dd></div>
       <div class="entry"><dt>PNR element</dt><dd>any single numbered line on the PNR display (a name, a segment, a phone, etc.) — what X{N} cancels</dd></div>
     </dl>
@@ -484,7 +505,7 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 04</span><span class="stage-name">Add passenger data (name field)</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 04</span><span class="stage-name">Add passenger data (name field &amp; documents)</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -492,6 +513,7 @@ TKTT</div>
         <tr><td class="mono">-{SURNAME}/{GIVEN} {TITLE}</td><td>Add a name</td></tr>
         <tr><td class="mono">-{N}{SURNAME}/{G1} {T1}/{G2} {T2}</td><td>Add multiple passengers sharing a surname in one entry</td></tr>
         <tr><td class="mono">-...(INF{SURNAME}/{GIVEN}/{DOB})</td><td>Attach a lap infant to the name just added</td></tr>
+        <tr><td class="mono">3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}</td><td>Add a travel document (APIS) for a passenger</td></tr>
       </tbody>
     </table>
     <div class="stage-term-head">Terminology</div>
@@ -499,6 +521,7 @@ TKTT</div>
       <div class="entry"><dt>Name field</dt><dd>the passenger name(s) on the PNR; required before pricing</dd></div>
       <div class="entry"><dt>Lap infant</dt><dd>an infant traveling on an adult's lap rather than in their own seat; doesn't count against the party size/seats-sold limit</dd></div>
       <div class="entry"><dt>DOB format</dt><dd>DDMONYY, e.g. 12JAN26</dd></div>
+      <div class="entry"><dt>APIS</dt><dd>(Advance Passenger Information) passport/nationality/date-of-birth data governments require for international travel, tied to a specific passenger by number</dd></div>
     </dl>
   </div>
 </div>
@@ -511,14 +534,16 @@ TKTT</div>
       <tbody>
         <tr><td class="mono">3{SSRCODE}[-{PAX#}][/{TEXT}]</td><td>Add a special service request</td></tr>
         <tr><td class="mono">3OSI{AL}{TEXT}</td><td>Add other-service-info free text to a carrier</td></tr>
-        <tr><td class="mono">3FQTV{AL}{NUMBER}</td><td>Add a frequent flyer number</td></tr>
+        <tr><td class="mono">3FQTV{AL}{NUMBER}[/{TIER}]</td><td>Add a frequent flyer number, optionally with a loyalty tier</td></tr>
+        <tr><td class="mono">5{TEXT}</td><td>Add a general remark (agency-internal, not sent to the carrier)</td></tr>
       </tbody>
     </table>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
       <div class="entry"><dt>SSR</dt><dd>(Special Service Request) a coded request to the airline: meals, wheelchair assistance, unaccompanied minor, extra baggage, etc.</dd></div>
       <div class="entry"><dt>OSI</dt><dd>(Other Service Info) free-text information sent to a carrier that isn't a coded SSR</dd></div>
-      <div class="entry"><dt>FQTV</dt><dd>frequent flyer number, stored as a special kind of SSR</dd></div>
+      <div class="entry"><dt>FQTV</dt><dd>frequent flyer number, stored as a special kind of SSR; can carry a loyalty tier (SLV/GLD/PLT/DIA)</dd></div>
+      <div class="entry"><dt>General remark</dt><dd>an agency-internal note on the PNR, distinct from OSI (which the carrier sees)</dd></div>
     </dl>
   </div>
 </div>
@@ -548,6 +573,7 @@ TKTT</div>
       <tbody>
         <tr><td class="mono">WP</td><td>Price the itinerary</td></tr>
         <tr><td class="mono">WPNCS</td><td>Price at the lowest fare, regardless of seat availability (informational only)</td></tr>
+        <tr><td class="mono">WP/{CORPCODE}, WPNCS/{CORPCODE}</td><td>Price using a negotiated/corporate fare code</td></tr>
       </tbody>
     </table>
     <div class="stage-term-head">Terminology</div>
@@ -556,6 +582,8 @@ TKTT</div>
       <div class="entry"><dt>Fare basis</dt><dd>the short code summarizing the fare's class and trip type (e.g. YOW = Y class, one-way)</dd></div>
       <div class="entry"><dt>Base fare</dt><dd>the pre-tax fare amount</dd></div>
       <div class="entry"><dt>Taxes/fees</dt><dd>the itemized government and carrier charges added on top of the base fare</dd></div>
+      <div class="entry"><dt>Fare rules</dt><dd>the change fee, refundability, and advance-purchase requirement shown with every fare quote, keyed off the itinerary's class</dd></div>
+      <div class="entry"><dt>Corporate/negotiated fare code</dt><dd>an account code that unlocks a discounted fare tier</dd></div>
     </dl>
   </div>
 </div>

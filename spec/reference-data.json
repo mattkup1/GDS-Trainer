@@ -51,5 +51,23 @@
     "VI": "VISA", "CA": "MASTERCARD", "AX": "AMERICAN EXPRESS",
     "DC": "DINERS CLUB", "DS": "DISCOVER", "JC": "JCB"
   },
-  "phoneLocationCodes": ["A", "H", "B", "C", "M", "F", "HTL"]
+  "phoneLocationCodes": ["A", "H", "B", "C", "M", "F", "HTL"],
+  "documentTypes": {
+    "P": "PASSPORT"
+  },
+  "loyaltyTiers": {
+    "SLV": "SILVER", "GLD": "GOLD", "PLT": "PLATINUM", "DIA": "DIAMOND"
+  },
+  "fareRules": {
+    "F": {"changeFee": 0,   "refundable": true,  "advancePurchaseDays": 0},
+    "J": {"changeFee": 75,  "refundable": true,  "advancePurchaseDays": 0},
+    "C": {"changeFee": 100, "refundable": false, "advancePurchaseDays": 3},
+    "Y": {"changeFee": 150, "refundable": false, "advancePurchaseDays": 7},
+    "B": {"changeFee": 200, "refundable": false, "advancePurchaseDays": 14},
+    "M": {"changeFee": 250, "refundable": false, "advancePurchaseDays": 21}
+  },
+  "corporateCodes": {
+    "ACME01": {"label": "ACME CORP", "discount": 0.10},
+    "GLOBEX1": {"label": "GLOBEX INDUSTRIES", "discount": 0.15}
+  }
 }

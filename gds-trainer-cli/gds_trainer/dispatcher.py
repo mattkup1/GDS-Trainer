@@ -31,7 +31,8 @@ HANDLERS = {
     "NAME_FIELD": lambda raw, *g: c.handle_name(raw),
     "PHONE": lambda raw, *g: c.handle_phone(raw),
     "RECEIVED_FROM": lambda raw, *g: c.handle_received_from(raw),
-    "PRICE_ITINERARY": lambda raw, mode: c.price_itinerary(mode),
+    "GENERAL_REMARK": lambda raw, *g: c.handle_general_remark(raw),
+    "PRICE_ITINERARY": lambda raw, mode, corp_code: c.price_itinerary(mode, corp_code),
     "TICKETING_AT_WILL": lambda raw, *g: c.add_ticketing_at_will(),
     "TICKETING_AT_WILL_DATED": lambda raw, day, mon, time: c.add_ticketing_at_will_dated(day, mon, time),
     "TICKETING_TIME_LIMIT": lambda raw, day, mon, time: c.add_ticketing_time_limit(day, mon, time),
@@ -39,7 +40,10 @@ HANDLERS = {
     "FOP_CHECK": lambda raw, *g: c.add_fop_check(),
     "FOP_CREDIT_CARD": lambda raw, card_type, num, mm, yy: c.add_fop_credit_card(card_type, num, mm, yy),
     "ISSUE_TICKETS": lambda raw, *g: c.issue_tickets(),
-    "SSR_FQTV": lambda raw, airline, num: c.add_fqtv(airline, num),
+    "DOCS": lambda raw, doc_type, country, number, nationality, dob, sex, expiry, pax: c.add_docs(
+        doc_type, country, number, nationality, dob, sex, expiry, pax
+    ),
+    "SSR_FQTV": lambda raw, airline, num, tier: c.add_fqtv(airline, num, tier),
     "OSI": lambda raw, airline, text: c.add_osi(airline, text),
     "SSR": lambda raw, code, pax, free_text: c.add_ssr(code, pax, free_text),
     "SEAT_MAP": lambda raw, n: c.show_seat_map(int(n)),

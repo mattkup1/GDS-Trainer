@@ -53,6 +53,10 @@
   const SSR_CODES = REFERENCE_DATA.ssrCodes;
   const CARD_TYPES = REFERENCE_DATA.cardTypes;
   const PHONE_LOC_CODES = REFERENCE_DATA.phoneLocationCodes;
+  const DOCUMENT_TYPES = REFERENCE_DATA.documentTypes;
+  const LOYALTY_TIERS = REFERENCE_DATA.loyaltyTiers;
+  const FARE_RULES = REFERENCE_DATA.fareRules;
+  const CORPORATE_CODES = REFERENCE_DATA.corporateCodes;
 
   // AIRPORTS (code -> [name, city, country]) is loaded globally from airports.js
   function cityName(code){
@@ -103,7 +107,8 @@
 
   function freshPNR(){
     return { locator:null, names:[], segments:[], phones:[], receivedFrom:null, ticketing:null, pricing:null,
-              infants:[], ssrs:[], osis:[], seats:[], formOfPayment:null, activityLog:[], tickets:[] };
+              infants:[], ssrs:[], osis:[], seats:[], formOfPayment:null, activityLog:[], tickets:[],
+              docs:[], remarks:[] };
   }
 
   function nowStamp(){
@@ -156,7 +161,24 @@
     if(!f){ printErr('INVALID LINE NUMBER - CHECK ENTRY AND REENTER'); return; }
     const cinfo = f.classAvail.find(c => c.cls === cls.toUpperCase());
     if(!cinfo){ printErr(`CLASS ${cls.toUpperCase()} NOT OFFERED ON THIS FLIGHT`); return; }
-    if(cinfo.seats === 0){ printErr(`CLASS ${cls.toUpperCase()} SOLD OUT - CLOSED`); return; }
+
+    // A class at exactly 0 remaining sells as a waitlist request (HL) instead of being
+    // blocked outright - matches how a real GDS lets you request a closed class. Partial
+    // shortfalls (some seats left, just not enough for this request) still hard-block below,
+    // to keep the "how many can I actually get right now" signal meaningful.
+    if(cinfo.seats === 0){
+      const seg = {
+        airline: f.airline, flightNum: f.flightNum, cls: cls.toUpperCase(), seats,
+        dinfo: state.lastAvail.dinfo, orig: state.lastAvail.orig, dest: state.lastAvail.dest,
+        dep: f.dep, arr: f.arr, status: 'HL', equip: f.equip
+      };
+      state.pnr.segments.push(seg);
+      print(`SEGMENT WAITLISTED - ${formatSegmentShort(seg)}`);
+      logActivity(`SEGMENT WAITLISTED - ${formatSegmentShort(seg)}`);
+      invalidatePricing();
+      refreshAndPrintPNR();
+      return;
+    }
     if(seats > cinfo.seats){ printErr(`UNABLE - ONLY ${cinfo.seats} SEAT(S) AVAILABLE IN CLASS ${cls.toUpperCase()}`); return; }
 
     const seg = {
@@ -165,6 +187,7 @@
       dep: f.dep, arr: f.arr, status: 'HK', equip: f.equip
     };
     state.pnr.segments.push(seg);
+    cinfo.seats -= seats;
     print(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
     logActivity(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
     invalidatePricing();
@@ -217,10 +240,15 @@
     return 'OJ';
   }
 
-  function priceItinerary(mode){
+  function priceItinerary(mode, corpCode){
     const p = state.pnr;
     if(p.segments.length === 0){ printErr('UNABLE TO PRICE - NO ITINERARY SEGMENTS'); return; }
     if(p.names.length === 0){ printErr('UNABLE TO PRICE - NAME FIELD REQUIRED PRIOR TO PRICING'); return; }
+    let corporate = null;
+    if(corpCode){
+      corporate = CORPORATE_CODES[corpCode];
+      if(!corporate){ printErr(`UNKNOWN CORPORATE CODE ${corpCode} - VALID: ${Object.keys(CORPORATE_CODES).join(' ')}`); return; }
+    }
 
     const seed = hashStr(p.segments.map(s => `${s.airline}${s.flightNum}${s.cls}${s.dinfo.day}${s.dinfo.mon}${s.orig}${s.dest}${s.seats}`).join('|') + mode);
     const rng = mulberry32(seed);
@@ -231,6 +259,7 @@
       const dist = FARE_FORMULA.distanceMin + Math.floor(rng()*FARE_FORMULA.distanceRange);
       baseFare += Math.round((FARE_FORMULA.baseFareCoefficient + dist*FARE_FORMULA.baseFarePerMile) * mult * s.seats);
     }
+    if(corporate){ baseFare = Math.round(baseFare * (1 - corporate.discount)); }
 
     const numTaxes = FARE_FORMULA.minTaxes + Math.floor(rng()*FARE_FORMULA.additionalTaxesRange);
     const pool = TAX_POOL.slice().sort(() => rng()-0.5).slice(0, numTaxes);
@@ -244,17 +273,29 @@
     taxTotal = Math.round(taxTotal*100)/100;
     const total = Math.round((baseFare + taxTotal)*100)/100;
     const fareBasis = `${p.segments[0].cls}${tripType(p.segments)}`;
+    const rules = FARE_RULES[p.segments[0].cls] || null;
 
-    p.pricing = { mode, baseFare, taxes, taxTotal, total, fareBasis, currency:'USD' };
+    p.pricing = {
+      mode, baseFare, taxes, taxTotal, total, fareBasis, currency:'USD', rules,
+      corporateCode: corporate ? { code: corpCode, label: corporate.label, discount: corporate.discount } : null,
+    };
 
     print(mode === 'WPNCS' ? '** LOWEST FARE - WPNCS (SUBJECT TO AVAILABILITY) **' : '** ITINERARY PRICING - WP **', 'hd');
     p.segments.forEach((s,i) => print(`  ${i+1}  ${formatSegmentShort(s)}`, 'dim'));
     printBlank();
     print(`FARE BASIS: ${fareBasis}`);
+    if(corporate){ print(`CORPORATE CODE APPLIED - ${corporate.label} (${Math.round(corporate.discount*100)}% DISCOUNT)`, 'dim'); }
     print(`BASE FARE      USD ${baseFare.toFixed(2)}`);
     for(const t of taxes){ print(`  ${t.code}   USD ${t.amount.toFixed(2)}   ${t.label}`, 'dim'); }
     print(`TAXES/FEES     USD ${taxTotal.toFixed(2)}`);
     print(`TOTAL          USD ${total.toFixed(2)}`, 'hd');
+    if(rules){
+      printBlank();
+      print('FARE RULES', 'dim');
+      print(`  CHANGE FEE                  USD ${rules.changeFee.toFixed(2)}`, 'dim');
+      print(`  REFUNDABLE                  ${rules.refundable ? 'YES' : 'NO'}`, 'dim');
+      print(`  ADVANCE PURCHASE REQUIRED   ${rules.advancePurchaseDays} DAYS`, 'dim');
+    }
     printBlank();
     print('FARE QUOTE STORED - REQUIRED PRIOR TO TICKETING', 'dim');
     logActivity(`PRICED - ${formatPricingShort(p.pricing)}`);
@@ -329,10 +370,12 @@
     const els = [];
     state.pnr.names.forEach((n, i) => els.push({ kind:'name', idx:i, label:`NM${i+1}`, text:n }));
     state.pnr.infants.forEach((inf, i) => els.push({ kind:'infant', idx:i, label:'IN', text:`${inf.surname}/${inf.given}  DOB ${inf.dob}  (INFANT - TRAVELS WITH ${inf.adult})` }));
+    state.pnr.docs.forEach((d, i) => els.push({ kind:'docs', idx:i, label:'DOC', text:`${d.desc} ${d.country} ${d.number}  NATIONALITY ${d.nationality}  DOB ${d.dob}  ${d.sex}  EXP ${d.expiry}  PAX ${d.pax} (${state.pnr.names[d.pax-1] || '?'})` }));
     state.pnr.segments.forEach((s, i) => els.push({ kind:'segment', idx:i, label:`SEG${i+1}`, text: formatSegmentShort(s) + `  ${s.dinfo.weekday}` }));
     state.pnr.seats.forEach((st, i) => els.push({ kind:'seat', idx:i, label:'SEAT', text:`SEG${st.segIdx+1} - SEAT ${st.seat}` }));
     state.pnr.ssrs.forEach((r, i) => els.push({ kind:'ssr', idx:i, label:'SSR', text: r.text }));
     state.pnr.osis.forEach((o, i) => els.push({ kind:'osi', idx:i, label:'OSI', text: o.text }));
+    state.pnr.remarks.forEach((r, i) => els.push({ kind:'remark', idx:i, label:'RM', text: r }));
     if(state.pnr.pricing) els.push({ kind:'fq', idx:0, label:'FQ', text: formatPricingShort(state.pnr.pricing) });
     state.pnr.phones.forEach((p, i) => els.push({ kind:'phone', idx:i, label:'CTC', text:p }));
     if(state.pnr.receivedFrom) els.push({ kind:'rf', idx:0, label:'RF', text: state.pnr.receivedFrom });
@@ -359,6 +402,8 @@
   function removeElement(e){
     if(e.kind === 'name') state.pnr.names.splice(e.idx, 1);
     else if(e.kind === 'infant') state.pnr.infants.splice(e.idx, 1);
+    else if(e.kind === 'docs') state.pnr.docs.splice(e.idx, 1);
+    else if(e.kind === 'remark') state.pnr.remarks.splice(e.idx, 1);
     else if(e.kind === 'segment'){
       state.pnr.segments.splice(e.idx, 1);
       state.pnr.pricing = null;
@@ -538,6 +583,8 @@
     print('  0{LN}{CLASS}{SEATS}                        Sell from avail line   e.g. 04Y1');
     print('  0{AL}{FLT}{CLASS}{DD}{MMM}{ORG}{DST}{STATUS}{SEATS}');
     print('                                              Direct/long sell   e.g. 0AA100Y15AUGDFWORDNN1');
+    print('  A class at 0 remaining sells as a waitlist request (status HL) instead of', 'dim');
+    print('  being blocked - a real seat count still short-blocks as before.', 'dim');
     printBlank();
     print('PNR BUILD', 'hd');
     print('  -{SURNAME}/{GIVEN} {TITLE}          Name field   e.g. -SMITH/JOHN MR');
@@ -549,8 +596,9 @@
     print('  9{NUMBER}-{LOC}                     Phone field   e.g. 9214555-1234-A');
     print('  9/{CTY}{NUMBER}-{LOC}               Phone field, out-of-area   e.g. 9/BOS617-555-1234-A');
     print('  6{TEXT}                             Received from   e.g. 6JSMITH');
-    print('  WP                                  Price itinerary (required before ticketing)');
-    print('  WPNCS                               Price - lowest fare regardless of availability');
+    print('  5{TEXT}                             General remark (agency-internal, not sent to the carrier)   e.g. 5VIP - HANDLE WITH CARE');
+    print('  WP[/{CORPCODE}]                     Price itinerary (required before ticketing)   e.g. WP or WP/ACME01');
+    print('  WPNCS[/{CORPCODE}]                  Price - lowest fare regardless of availability');
     print('  7TAW/                               Ticketing: at will (ticket on/before departure)');
     print('  7TAW{DD}{MMM}/{HHMM}                Ticketing at will, queued to date/time');
     print('  7TAX{DD}{MMM}/{HHMM}                Ticketing time limit   e.g. 7TAX16AUG/1800');
@@ -568,8 +616,14 @@
     print('SPECIAL SERVICE / OTHER SERVICE INFO', 'hd');
     print('  3{SSRCODE}[-{PAX#}][/{TEXT}]   Special service request   e.g. 3VGML  or  3WCHR-1/AISLE SEAT');
     print('  3OSI{AL}{TEXT}                 Other service info   e.g. 3OSIAA VIP PASSENGER');
-    print('  3FQTV{AL}{NUMBER}              Frequent flyer number   e.g. 3FQTVAA1234567');
+    print('  3FQTV{AL}{NUMBER}[/{TIER}]     Frequent flyer number, optional tier   e.g. 3FQTVAA1234567 or 3FQTVAA1234567/GLD');
+    print('                                  Tiers: SLV GLD PLT DIA', 'dim');
     print('  SSR codes: WCHR WCHS WCHC VGML BBML CHML KSML MOML DBML BLND DEAF UMNR PETC BSCT SPML XBAG', 'dim');
+    printBlank();
+    print('PASSENGER DOCUMENTS (APIS)', 'hd');
+    print('  3DOCS{TYPE}/{COUNTRY}/{NUMBER}/{NATIONALITY}/{DOB}/{SEX}/{EXPIRY}-{PAX#}');
+    print('    e.g. 3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1', 'dim');
+    print('    TYPE: P (passport). DOB/EXPIRY: DDMONYY. SEX: M or F.', 'dim');
     printBlank();
     print('SEATS', 'hd');
     print('  4{N}            Display seat map for itinerary segment N   e.g. 41');
@@ -746,11 +800,49 @@
     refreshAndPrintPNR();
   }
 
-  function addFqtv(airline, num){
-    const entry = { code:'FQTV', text: `FQTV ${airline} FREQUENT FLYER NUMBER  ${airline}${num}` };
+  function addFqtv(airline, num, tierCode){
+    let text = `FQTV ${airline} FREQUENT FLYER NUMBER  ${airline}${num}`;
+    if(tierCode){
+      const tierName = LOYALTY_TIERS[tierCode];
+      if(!tierName){ printErr(`UNKNOWN LOYALTY TIER ${tierCode} - VALID: ${Object.keys(LOYALTY_TIERS).join(' ')}`); return; }
+      text += `  TIER: ${tierName}`;
+    }
+    const entry = { code:'FQTV', text };
     state.pnr.ssrs.push(entry);
     print(`SSR ADDED - ${entry.text}`);
     logActivity(`SSR ADDED - ${entry.text}`);
+    refreshAndPrintPNR();
+  }
+
+  function addDocs(type, country, number, nationality, dob, sex, expiry, paxStr){
+    const desc = DOCUMENT_TYPES[type];
+    if(!desc){ printErr(`UNKNOWN DOCUMENT TYPE ${type} - VALID: ${Object.keys(DOCUMENT_TYPES).join(' ')}`); return; }
+    const paxNum = parseInt(paxStr,10);
+    if(!paxNum || paxNum < 1 || paxNum > state.pnr.names.length){ printErr('INVALID PASSENGER NUMBER - CHECK NAME FIELD'); return; }
+    const dobMatch = dob.match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);
+    const dobDay = dobMatch ? parseInt(dobMatch[1],10) : 0;
+    if(!dobMatch || MONTHS.indexOf(dobMatch[2]) < 0 || dobDay < 1 || dobDay > 31){
+      printErr('FORMAT - INVALID DOB, USE DDMONYY e.g. 12JAN90'); return;
+    }
+    const expMatch = expiry.match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);
+    const expDay = expMatch ? parseInt(expMatch[1],10) : 0;
+    if(!expMatch || MONTHS.indexOf(expMatch[2]) < 0 || expDay < 1 || expDay > 31){
+      printErr('FORMAT - INVALID EXPIRY DATE, USE DDMONYY e.g. 25DEC30'); return;
+    }
+    const entry = { type, desc, country, number, nationality, dob, sex, expiry, pax: paxNum };
+    state.pnr.docs.push(entry);
+    const text = `${desc} ${country} ${number}  NATIONALITY ${nationality}  DOB ${dob}  ${sex}  EXP ${expiry}  PAX ${paxNum} (${state.pnr.names[paxNum-1]})`;
+    print(`DOCUMENT ADDED - ${text}`);
+    logActivity(`DOCUMENT ADDED - ${text}`);
+    refreshAndPrintPNR();
+  }
+
+  function handleGeneralRemark(u){
+    const text = u.slice(1).trim();
+    if(!text){ printErr('FORMAT - REMARK TEXT REQUIRED'); return; }
+    state.pnr.remarks.push(text);
+    print(`GENERAL REMARK ADDED - ${text}`);
+    logActivity(`GENERAL REMARK ADDED - ${text}`);
     refreshAndPrintPNR();
   }
 
@@ -842,7 +934,8 @@
     NAME_FIELD: (raw) => handleName(raw),
     PHONE: (raw) => handlePhone(raw),
     RECEIVED_FROM: (raw) => handleReceivedFrom(raw),
-    PRICE_ITINERARY: (raw, mode) => priceItinerary(mode),
+    GENERAL_REMARK: (raw) => handleGeneralRemark(raw),
+    PRICE_ITINERARY: (raw, mode, corpCode) => priceItinerary(mode, corpCode),
     TICKETING_AT_WILL: () => addTicketingAtWill(),
     TICKETING_AT_WILL_DATED: (raw, day, mon, time) => addTicketingAtWillDated(day, mon, time),
     TICKETING_TIME_LIMIT: (raw, day, mon, time) => addTicketingTimeLimit(day, mon, time),
@@ -850,7 +943,8 @@
     FOP_CHECK: () => addFopCheck(),
     FOP_CREDIT_CARD: (raw, type, num, mm, yy) => addFopCreditCard(type, num, mm, yy),
     ISSUE_TICKETS: () => issueTickets(),
-    SSR_FQTV: (raw, airline, num) => addFqtv(airline, num),
+    DOCS: (raw, type, country, number, nationality, dob, sex, expiry, pax) => addDocs(type, country, number, nationality, dob, sex, expiry, pax),
+    SSR_FQTV: (raw, airline, num, tier) => addFqtv(airline, num, tier),
     OSI: (raw, airline, text) => addOsi(airline, text),
     SSR: (raw, code, pax, freeText) => addSsr(code, pax, freeText),
     SEAT_MAP: (raw, n) => showSeatMap(parseInt(n,10)),

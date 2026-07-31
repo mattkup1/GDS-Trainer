@@ -25,8 +25,12 @@ from .data import (
     CARD_TYPES,
     CLASS_FARE_MULT,
     CLASSES,
+    CORPORATE_CODES,
+    DOCUMENT_TYPES,
     EQUIP,
     FARE_FORMULA,
+    FARE_RULES,
+    LOYALTY_TIERS,
     MONTHS,
     PHONE_LOC_CODES,
     SSR_CODES,
@@ -129,8 +133,30 @@ def sell_from_avail(line_num: int, cls: str, seats: int) -> None:
     if not cinfo:
         print_err(f"CLASS {cls.upper()} NOT OFFERED ON THIS FLIGHT")
         return
+
+    # A class at exactly 0 remaining sells as a waitlist request (HL) instead of being
+    # blocked outright - matches how a real GDS lets you request a closed class. Partial
+    # shortfalls (some seats left, just not enough for this request) still hard-block below,
+    # to keep the "how many can I actually get right now" signal meaningful.
     if cinfo["seats"] == 0:
-        print_err(f"CLASS {cls.upper()} SOLD OUT - CLOSED")
+        seg = {
+            "airline": f["airline"],
+            "flight_num": f["flight_num"],
+            "cls": cls.upper(),
+            "seats": seats,
+            "dinfo": STATE.last_avail["dinfo"],
+            "orig": STATE.last_avail["orig"],
+            "dest": STATE.last_avail["dest"],
+            "dep": f["dep"],
+            "arr": f["arr"],
+            "status": "HL",
+            "equip": f["equip"],
+        }
+        STATE.pnr["segments"].append(seg)
+        print_line(f"SEGMENT WAITLISTED - {format_segment_short(seg)}")
+        log_activity(STATE, f"SEGMENT WAITLISTED - {format_segment_short(seg)}")
+        invalidate_pricing()
+        refresh_and_print_pnr()
         return
     if seats > cinfo["seats"]:
         print_err(f"UNABLE - ONLY {cinfo['seats']} SEAT(S) AVAILABLE IN CLASS {cls.upper()}")
@@ -150,6 +176,7 @@ def sell_from_avail(line_num: int, cls: str, seats: int) -> None:
         "equip": f["equip"],
     }
     STATE.pnr["segments"].append(seg)
+    cinfo["seats"] -= seats
     print_line(f"SEGMENT SOLD - {format_segment_short(seg)}")
     log_activity(STATE, f"SEGMENT SOLD - {format_segment_short(seg)}")
     invalidate_pricing()
@@ -340,7 +367,7 @@ def _shuffled(items: list, rng) -> list:
     return arr
 
 
-def price_itinerary(mode: str) -> None:
+def price_itinerary(mode: str, corp_code: str | None = None) -> None:
     p = STATE.pnr
     if len(p["segments"]) == 0:
         print_err("UNABLE TO PRICE - NO ITINERARY SEGMENTS")
@@ -348,6 +375,12 @@ def price_itinerary(mode: str) -> None:
     if len(p["names"]) == 0:
         print_err("UNABLE TO PRICE - NAME FIELD REQUIRED PRIOR TO PRICING")
         return
+    corporate = None
+    if corp_code:
+        corporate = CORPORATE_CODES.get(corp_code)
+        if not corporate:
+            print_err(f"UNKNOWN CORPORATE CODE {corp_code} - VALID: {' '.join(CORPORATE_CODES.keys())}")
+            return
 
     seed_key = (
         "|".join(
@@ -364,6 +397,8 @@ def price_itinerary(mode: str) -> None:
         mult = CLASS_FARE_MULT.get(s["cls"], 1.4)
         dist = FARE_FORMULA["distanceMin"] + int(rng() * FARE_FORMULA["distanceRange"])
         base_fare += round((FARE_FORMULA["baseFareCoefficient"] + dist * FARE_FORMULA["baseFarePerMile"]) * mult * s["seats"])
+    if corporate:
+        base_fare = round(base_fare * (1 - corporate["discount"]))
 
     num_taxes = FARE_FORMULA["minTaxes"] + int(rng() * FARE_FORMULA["additionalTaxesRange"])
     pool = _shuffled(TAX_POOL, rng)[:num_taxes]
@@ -376,6 +411,7 @@ def price_itinerary(mode: str) -> None:
     tax_total = round(tax_total * 100) / 100
     total = round((base_fare + tax_total) * 100) / 100
     fare_basis = f"{p['segments'][0]['cls']}{_trip_type(p['segments'])}"
+    rules = FARE_RULES.get(p["segments"][0]["cls"])
 
     p["pricing"] = {
         "mode": mode,
@@ -385,6 +421,10 @@ def price_itinerary(mode: str) -> None:
         "total": total,
         "fare_basis": fare_basis,
         "currency": "USD",
+        "rules": rules,
+        "corporate_code": {"code": corp_code, "label": corporate["label"], "discount": corporate["discount"]}
+        if corporate
+        else None,
     }
 
     print_line(
@@ -397,11 +437,22 @@ def price_itinerary(mode: str) -> None:
         print_line(f"  {i + 1}  {format_segment_short(s)}", "dim")
     print_blank()
     print_line(f"FARE BASIS: {fare_basis}")
+    if corporate:
+        print_line(
+            f"CORPORATE CODE APPLIED - {corporate['label']} ({round(corporate['discount'] * 100)}% DISCOUNT)",
+            "dim",
+        )
     print_line(f"BASE FARE      USD {base_fare:.2f}")
     for t in taxes:
         print_line(f"  {t['code']}   USD {t['amount']:.2f}   {t['label']}", "dim")
     print_line(f"TAXES/FEES     USD {tax_total:.2f}")
     print_line(f"TOTAL          USD {total:.2f}", "hd")
+    if rules:
+        print_blank()
+        print_line("FARE RULES", "dim")
+        print_line(f"  CHANGE FEE                  USD {rules['changeFee']:.2f}", "dim")
+        print_line(f"  REFUNDABLE                  {'YES' if rules['refundable'] else 'NO'}", "dim")
+        print_line(f"  ADVANCE PURCHASE REQUIRED   {rules['advancePurchaseDays']} DAYS", "dim")
     print_blank()
     print_line("FARE QUOTE STORED - REQUIRED PRIOR TO TICKETING", "dim")
     log_activity(STATE, f"PRICED - {format_pricing_short(p['pricing'])}")
@@ -561,11 +612,63 @@ def add_fop_credit_card(card_type: str, num: str, mm_str: str, yy: str) -> None:
 
 # ---------- special service requests / other service info ----------
 
-def add_fqtv(airline: str, num: str) -> None:
+def add_fqtv(airline: str, num: str, tier_code: str | None = None) -> None:
     text = f"FQTV {airline} FREQUENT FLYER NUMBER  {airline}{num}"
+    if tier_code:
+        tier_name = LOYALTY_TIERS.get(tier_code)
+        if not tier_name:
+            print_err(f"UNKNOWN LOYALTY TIER {tier_code} - VALID: {' '.join(LOYALTY_TIERS.keys())}")
+            return
+        text += f"  TIER: {tier_name}"
     STATE.pnr["ssrs"].append({"code": "FQTV", "text": text})
     print_line(f"SSR ADDED - {text}")
     log_activity(STATE, f"SSR ADDED - {text}")
+    refresh_and_print_pnr()
+
+
+def add_docs(
+    doc_type: str, country: str, number: str, nationality: str, dob: str, sex: str, expiry: str, pax_str: str
+) -> None:
+    desc = DOCUMENT_TYPES.get(doc_type)
+    if not desc:
+        print_err(f"UNKNOWN DOCUMENT TYPE {doc_type} - VALID: {' '.join(DOCUMENT_TYPES.keys())}")
+        return
+    pax_num = int(pax_str) if pax_str.isdigit() else 0
+    if not pax_num or pax_num < 1 or pax_num > len(STATE.pnr["names"]):
+        print_err("INVALID PASSENGER NUMBER - CHECK NAME FIELD")
+        return
+    dob_match = _DOB_RE.match(dob)
+    dob_day = int(dob_match.group(1)) if dob_match else 0
+    if not dob_match or dob_match.group(2) not in MONTHS or dob_day < 1 or dob_day > 31:
+        print_err("FORMAT - INVALID DOB, USE DDMONYY e.g. 12JAN90")
+        return
+    exp_match = _DOB_RE.match(expiry)
+    exp_day = int(exp_match.group(1)) if exp_match else 0
+    if not exp_match or exp_match.group(2) not in MONTHS or exp_day < 1 or exp_day > 31:
+        print_err("FORMAT - INVALID EXPIRY DATE, USE DDMONYY e.g. 25DEC30")
+        return
+    entry = {
+        "type": doc_type, "desc": desc, "country": country, "number": number,
+        "nationality": nationality, "dob": dob, "sex": sex, "expiry": expiry, "pax": pax_num,
+    }
+    STATE.pnr["docs"].append(entry)
+    text = (
+        f"{desc} {country} {number}  NATIONALITY {nationality}  DOB {dob}  {sex}  "
+        f"EXP {expiry}  PAX {pax_num} ({STATE.pnr['names'][pax_num - 1]})"
+    )
+    print_line(f"DOCUMENT ADDED - {text}")
+    log_activity(STATE, f"DOCUMENT ADDED - {text}")
+    refresh_and_print_pnr()
+
+
+def handle_general_remark(u: str) -> None:
+    text = u[1:].strip()
+    if not text:
+        print_err("FORMAT - REMARK TEXT REQUIRED")
+        return
+    STATE.pnr["remarks"].append(text)
+    print_line(f"GENERAL REMARK ADDED - {text}")
+    log_activity(STATE, f"GENERAL REMARK ADDED - {text}")
     refresh_and_print_pnr()
 
 
@@ -655,6 +758,17 @@ def build_elements() -> list[dict]:
                 f"(INFANT - TRAVELS WITH {inf['adult']})",
             }
         )
+    for i, d in enumerate(p["docs"]):
+        pax_name = p["names"][d["pax"] - 1] if d["pax"] - 1 < len(p["names"]) else "?"
+        els.append(
+            {
+                "kind": "docs",
+                "idx": i,
+                "label": "DOC",
+                "text": f"{d['desc']} {d['country']} {d['number']}  NATIONALITY {d['nationality']}  "
+                f"DOB {d['dob']}  {d['sex']}  EXP {d['expiry']}  PAX {d['pax']} ({pax_name})",
+            }
+        )
     for i, s in enumerate(p["segments"]):
         els.append(
             {
@@ -677,6 +791,8 @@ def build_elements() -> list[dict]:
         els.append({"kind": "ssr", "idx": i, "label": "SSR", "text": r["text"]})
     for i, o in enumerate(p["osis"]):
         els.append({"kind": "osi", "idx": i, "label": "OSI", "text": o["text"]})
+    for i, r in enumerate(p["remarks"]):
+        els.append({"kind": "remark", "idx": i, "label": "RM", "text": r})
     if p["pricing"]:
         els.append({"kind": "fq", "idx": 0, "label": "FQ", "text": format_pricing_short(p["pricing"])})
     for i, ph in enumerate(p["phones"]):
@@ -713,6 +829,10 @@ def remove_element(e: dict) -> None:
         del p["names"][idx]
     elif kind == "infant":
         del p["infants"][idx]
+    elif kind == "docs":
+        del p["docs"][idx]
+    elif kind == "remark":
+        del p["remarks"][idx]
     elif kind == "segment":
         del p["segments"][idx]
         p["pricing"] = None
@@ -930,6 +1050,8 @@ def show_help() -> None:
     print_line("  0{LN}{CLASS}{SEATS}                        Sell from avail line   e.g. 04Y1")
     print_line("  0{AL}{FLT}{CLASS}{DD}{MMM}{ORG}{DST}{STATUS}{SEATS}")
     print_line("                                              Direct/long sell   e.g. 0AA100Y15AUGDFWORDNN1")
+    print_line("  A class at 0 remaining sells as a waitlist request (status HL) instead of", "dim")
+    print_line("  being blocked - a real seat count still short-blocks as before.", "dim")
     print_blank()
     print_line("PNR BUILD", "hd")
     print_line("  -{SURNAME}/{GIVEN} {TITLE}          Name field   e.g. -SMITH/JOHN MR")
@@ -941,8 +1063,9 @@ def show_help() -> None:
     print_line("  9{NUMBER}-{LOC}                     Phone field   e.g. 9214555-1234-A")
     print_line("  9/{CTY}{NUMBER}-{LOC}               Phone field, out-of-area   e.g. 9/BOS617-555-1234-A")
     print_line("  6{TEXT}                             Received from   e.g. 6JSMITH")
-    print_line("  WP                                  Price itinerary (required before ticketing)")
-    print_line("  WPNCS                               Price - lowest fare regardless of availability")
+    print_line("  5{TEXT}                             General remark (agency-internal, not sent to the carrier)   e.g. 5VIP - HANDLE WITH CARE")
+    print_line("  WP[/{CORPCODE}]                     Price itinerary (required before ticketing)   e.g. WP or WP/ACME01")
+    print_line("  WPNCS[/{CORPCODE}]                  Price - lowest fare regardless of availability")
     print_line("  7TAW/                               Ticketing: at will (ticket on/before departure)")
     print_line("  7TAW{DD}{MMM}/{HHMM}                Ticketing at will, queued to date/time")
     print_line("  7TAX{DD}{MMM}/{HHMM}                Ticketing time limit   e.g. 7TAX16AUG/1800")
@@ -960,11 +1083,17 @@ def show_help() -> None:
     print_line("SPECIAL SERVICE / OTHER SERVICE INFO", "hd")
     print_line("  3{SSRCODE}[-{PAX#}][/{TEXT}]   Special service request   e.g. 3VGML  or  3WCHR-1/AISLE SEAT")
     print_line("  3OSI{AL}{TEXT}                 Other service info   e.g. 3OSIAA VIP PASSENGER")
-    print_line("  3FQTV{AL}{NUMBER}              Frequent flyer number   e.g. 3FQTVAA1234567")
+    print_line("  3FQTV{AL}{NUMBER}[/{TIER}]     Frequent flyer number, optional tier   e.g. 3FQTVAA1234567 or 3FQTVAA1234567/GLD")
+    print_line("                                  Tiers: SLV GLD PLT DIA", "dim")
     print_line(
         "  SSR codes: WCHR WCHS WCHC VGML BBML CHML KSML MOML DBML BLND DEAF UMNR PETC BSCT SPML XBAG",
         "dim",
     )
+    print_blank()
+    print_line("PASSENGER DOCUMENTS (APIS)", "hd")
+    print_line("  3DOCS{TYPE}/{COUNTRY}/{NUMBER}/{NATIONALITY}/{DOB}/{SEX}/{EXPIRY}-{PAX#}")
+    print_line("    e.g. 3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1", "dim")
+    print_line("    TYPE: P (passport). DOB/EXPIRY: DDMONYY. SEX: M or F.", "dim")
     print_blank()
     print_line("SEATS", "hd")
     print_line("  4{N}            Display seat map for itinerary segment N   e.g. 41")

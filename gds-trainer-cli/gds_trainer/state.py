@@ -29,6 +29,8 @@ def fresh_pnr() -> dict[str, Any]:
         "form_of_payment": None,
         "activity_log": [],
         "tickets": [],
+        "docs": [],
+        "remarks": [],
     }
 
 

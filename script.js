@@ -524,7 +524,7 @@
 
   // ---------- help ----------
   function showHelp(){
-    print('SABRE-STYLE ENTRY REFERENCE', 'hd');
+    print('GDS TRAINER ENTRY REFERENCE', 'hd');
     printBlank();
     print('SIGN ON/OFF', 'hd');
     print('  SI[sine/pcc]        Sign in           e.g. SI  or  SI1234AA/DFW1');
@@ -606,7 +606,7 @@
     state.sine = sine;
     state.pcc = pcc;
     const now = new Date();
-    print('SABRE SYSTEM ONE - SIGN IN COMPLETE', 'hd');
+    print('GDS TRAINER - SIGN IN COMPLETE', 'hd');
     print(`  AGENT SINE: ${sine}   PCC: ${pcc}   ${MONTHS[now.getMonth()]}${pad(now.getDate(),2).trim()} ${now.getFullYear()}`);
     printBlank();
     print('TYPE HELP FOR COMMAND REFERENCE', 'dim');
@@ -621,9 +621,9 @@
 
   // ---------- boot ----------
   function boot(){
-    print('S*A*B*R*E*  ------------------------------------------------', 'hd');
-    print('            GLOBAL DISTRIBUTION SYSTEM - TERMINAL EMULATION');
-    print('            ------------------------------------------------');
+    print('G*D*S*  T*R*A*I*N*E*R*  -----------------------------------------------', 'hd');
+    print('                        GLOBAL DISTRIBUTION SYSTEM - TERMINAL EMULATION');
+    print('                        -----------------------------------------------');
     printBlank();
     print('NOT SIGNED IN', 'dim');
     print('TYPE SI TO SIGN IN   ·   HELP FOR COMMAND REFERENCE', 'dim');
@@ -672,8 +672,14 @@
       const headMatch = parts.length >= 2 ? parts[0].match(/^(\d{1,2})?([A-Z][A-Z\-' ]*)$/) : null;
       if(!headMatch){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
       const surname = headMatch[2];
+      const incoming = parts.slice(1);
+      const maxParty = state.pnr.segments.length ? Math.min(...state.pnr.segments.map(s => s.seats)) : null;
+      if(maxParty !== null && state.pnr.names.length + incoming.length > maxParty){
+        printErr(`UNABLE TO ADD NAME - PARTY SIZE EXCEEDS SEATS SOLD (${maxParty}) - SELL ADDITIONAL SEATS OR CANCEL A NAME`);
+        return;
+      }
       const added = [];
-      for(const g of parts.slice(1)){
+      for(const g of incoming){
         const full = `${surname}/${g}`;
         state.pnr.names.push(full);
         added.push(full);
@@ -700,7 +706,7 @@
       const pm = text.match(/^(?:\/([A-Z]{3}))?(\d[\d\-]{4,14})-([A-Z]{1,3})$/i);
       const PHONE_LOC_CODES = ['A','H','B','C','M','F','HTL'];
       if(!pm || !PHONE_LOC_CODES.includes(pm[3].toUpperCase())){
-        printErr('FORMAT - PHONE MUST BE 9[/CTY]NUMBER-LOC  e.g. 9DFW555-1234-A'); return;
+        printErr('FORMAT - PHONE MUST BE 9NUMBER-LOC or 9/CTYNUMBER-LOC  e.g. 9214555-1234-A or 9/DFW555-1234-A'); return;
       }
       const formatted = `${pm[1] ? '/'+pm[1].toUpperCase() : ''}${pm[2]}-${pm[3].toUpperCase()}`;
       state.pnr.phones.push(formatted);
@@ -920,7 +926,7 @@
   const shellEl = document.getElementById('shell');
   const settingsPanel = document.getElementById('settingsPanel');
   const btnSettings = document.getElementById('btnSettings');
-  const SETTINGS_KEY = 'sabreSimSettings';
+  const SETTINGS_KEY = 'gdsTrainerSettings';
   const DEFAULT_SETTINGS = { theme:'green', scanlines:true, glow:'med', vignette:true, fontSize:'md' };
 
   function loadSettings(){

@@ -1,6 +1,6 @@
 # Booking Your First Flight — Step by Step
 
-Open `index.html` in a browser to start. Everything is typed at the `>` prompt and submitted with **Enter**. Commands aren't case-sensitive, but Sabre convention is ALL CAPS.
+Open `index.html` in a browser to start. Everything is typed at the `>` prompt and submitted with **Enter**. Commands aren't case-sensitive, but standard GDS convention is ALL CAPS.
 
 ---
 
@@ -15,7 +15,7 @@ Confirms sign-in with a demo agent sine and pseudo city code (PCC). Nothing else
 
 ### 2. Search flight availability
 
-Format: `A` + day + month + origin + destination (or `1` in place of `A` — both are real Sabre entries)
+Format: `A` + day + month + origin + destination (or `1` in place of `A` — both are real GDS entries)
 
 ```
 A15AUGDFWORD
@@ -143,7 +143,7 @@ or
 ```
 FPCCVI4111111111111111/1225
 ```
-Just like real Sabre, the PNR can't be saved without a form of payment on file. Card numbers are masked to the last 4 digits once stored.
+Just like a real GDS, the PNR can't be saved without a form of payment on file. Card numbers are masked to the last 4 digits once stored.
 
 ---
 
@@ -161,7 +161,7 @@ This saves the PNR and gives you a **6-character record locator** — your confi
 ```
 TKTT
 ```
-This is the step people often assume `ER` already did — it doesn't. Saving a PNR (`ER`/`ET`) and **ticketing** it are two different things in real Sabre, exactly like here: the "ticketing arrangement" you added in step 10 just sets a deadline (or "ticket at will"), it doesn't issue anything. `TKTT` is the actual ticketing entry — it requires the PNR to already be saved (has a record locator) and to have a fare quote, ticketing arrangement, and form of payment on file, and it generates a real-format ticket number (airline numeric code + serial) per passenger, including infants.
+This is the step people often assume `ER` already did — it doesn't. Saving a PNR (`ER`/`ET`) and **ticketing** it are two different things in a real GDS, exactly like here: the "ticketing arrangement" you added in step 10 just sets a deadline (or "ticket at will"), it doesn't issue anything. `TKTT` is the actual ticketing entry — it requires the PNR to already be saved (has a record locator) and to have a fare quote, ticketing arrangement, and form of payment on file, and it generates a real-format ticket number (airline numeric code + serial) per passenger, including infants.
 
 If you change the itinerary after ticketing (sell or cancel a segment), the ticket(s) are automatically voided along with the fare quote — you'll need to `WP` and `TKTT` again before saving.
 
@@ -230,3 +230,167 @@ FPCASH
 ER
 TKTT
 ```
+
+---
+
+## Command &amp; terminology keymap, by PNR stage
+
+Every command and every piece of jargon from this guide, grouped by where it fits in building a PNR from scratch.
+
+### 1. Sign on
+
+| Command | Does |
+|---|---|
+| `SI` | Sign in |
+| `SI{sine}/{pcc}` | Sign in with a specific agent sine and pseudo city code |
+| `SO` | Sign out |
+| `HELP` | Full in-app command reference |
+
+**Terminology**
+- **Sine** — the agent's identifying code, shown on every sign-in and stamped on the PNR's activity log
+- **PCC** (Pseudo City Code) — the agency/office identifier an agent is signed in under
+- **GDS** (Global Distribution System) — the reservation platform itself; PNRs, fares, and inventory all live in it
+
+### 2. Shop for availability
+
+| Command | Does |
+|---|---|
+| `A{DD}{MON}{ORG}{DST}` | Air availability |
+| `1{DD}{MON}{ORG}{DST}` | Air availability (alternate entry, same result) |
+| `DC{CODE}` | Decode a 3-letter airport/city code |
+| `DAN{TEXT}` | Search airports/cities by name |
+
+**Terminology**
+- **Availability display** — the numbered list of flights returned by an `A`/`1` entry
+- **Line number** — the number to the left of each flight on the availability display, used to sell it
+- **Class of service** — the single-letter fare class (`F` First, `J`/`C` Business, `Y`/`B`/`M` Economy) shown with a seat count per flight
+- **EQP** — the aircraft equipment code (e.g. `738`, `320`) shown on each flight line
+
+### 3. Sell the itinerary
+
+| Command | Does |
+|---|---|
+| `0{LINE}{CLASS}{SEATS}` | Sell from an availability line |
+| `0{AL}{FLT}{CLASS}{DD}{MON}{ORG}{DST}{STATUS}{SEATS}` | Long/direct sell (no availability display needed) |
+| `X{N}` | Cancel element `N` |
+| `X{N}-{M}`, `X{N},{M}` | Cancel a range or list of elements |
+| `XI` | Cancel the entire itinerary (all segments) |
+
+**Terminology**
+- **Segment** — one sold flight on the PNR
+- **Long sell** — selling a specific flight directly by airline/flight number, bypassing the availability display
+- **Status code** — the two-letter segment status (`HK` = holds confirmed, the only status a sell in this simulator produces; `NN` = need/request, used when typing a long-sell entry by hand)
+- **Party size** — the number of seats requested in a sell entry; caps how many passenger names the PNR can carry
+- **PNR element** — any single numbered line on the PNR display (a name, a segment, a phone, etc.) — what `X{N}` cancels
+
+### 4. Add passenger data (name field)
+
+| Command | Does |
+|---|---|
+| `-{SURNAME}/{GIVEN} {TITLE}` | Add a name |
+| `-{N}{SURNAME}/{G1} {T1}/{G2} {T2}` | Add multiple passengers sharing a surname in one entry |
+| `-...(INF{SURNAME}/{GIVEN}/{DOB})` | Attach a lap infant to the name just added |
+
+**Terminology**
+- **Name field** — the passenger name(s) on the PNR; required before pricing
+- **Lap infant** — an infant traveling on an adult's lap rather than in their own seat; doesn't count against the party size/seats-sold limit
+- **DOB format** — `DDMONYY`, e.g. `12JAN26`
+
+### 5. Special service requests / other service info
+
+| Command | Does |
+|---|---|
+| `3{SSRCODE}[-{PAX#}][/{TEXT}]` | Add a special service request |
+| `3OSI{AL}{TEXT}` | Add other-service-info free text to a carrier |
+| `3FQTV{AL}{NUMBER}` | Add a frequent flyer number |
+
+**Terminology**
+- **SSR** (Special Service Request) — a coded request to the airline: meals, wheelchair assistance, unaccompanied minor, extra baggage, etc.
+- **OSI** (Other Service Info) — free-text information sent to a carrier that isn't a coded SSR
+- **FQTV** — frequent flyer number, stored as a special kind of SSR
+
+### 6. Seat selection
+
+| Command | Does |
+|---|---|
+| `4{N}` | Display the seat map for segment `N` |
+| `4{N}-{SEAT}` | Assign a seat on segment `N` |
+
+**Terminology**
+- **Seat map** — the row/column grid of open (`.`) and occupied (`X`) seats for a segment
+
+### 7. Price the itinerary
+
+| Command | Does |
+|---|---|
+| `WP` | Price the itinerary |
+| `WPNCS` | Price at the lowest fare, regardless of seat availability (informational only) |
+
+**Terminology**
+- **Fare quote** — the stored pricing result on the PNR; required before ticketing, and cleared automatically if the itinerary changes afterward
+- **Fare basis** — the short code summarizing the fare's class and trip type (e.g. `YOW` = Y class, one-way)
+- **Base fare** — the pre-tax fare amount
+- **Taxes/fees** — the itemized government and carrier charges added on top of the base fare
+
+### 8. Add contact &amp; booking info
+
+| Command | Does |
+|---|---|
+| `9{NUMBER}-{LOC}` | Add a phone number |
+| `9/{CTY}{NUMBER}-{LOC}` | Add a phone number, out-of-area (with city code) |
+| `6{TEXT}` | Add "received from" |
+
+**Terminology**
+- **Phone field** — the contact number(s) on the PNR; required before end transaction
+- **Location code** — the phone type suffix (`A`=Agency, `H`=Home, `B`=Business, `C`/`M`=Cell, `F`=Fax, `HTL`=Hotel)
+- **Received From (RF)** — who requested the booking; required before end transaction, same as a phone field
+
+### 9. Ticketing arrangement &amp; form of payment
+
+| Command | Does |
+|---|---|
+| `7TAW/` | Ticketing at will (no deadline) |
+| `7TAW{DD}{MON}/{HHMM}` | Ticketing at will, queued to a date/time |
+| `7TAX{DD}{MON}/{HHMM}` | Ticketing time limit |
+| `FPCASH` | Form of payment: cash |
+| `FPCHECK` | Form of payment: check |
+| `FPCC{TYPE}{CARDNUM}/{MMYY}` | Form of payment: credit card |
+
+**Terminology**
+- **Ticketing arrangement** — the deadline (or lack of one) by which the PNR must be ticketed; not the same as ticketing itself
+- **Ticket at will** — no fixed ticketing deadline
+- **Time limit** — a fixed date/time by which the PNR must be ticketed or it's expected to cancel
+- **Form of payment (FOP)** — how the ticket will be paid for; required before end transaction. Card numbers are masked to the last 4 digits once stored
+
+### 10. End transaction
+
+| Command | Does |
+|---|---|
+| `ER` | End transaction, redisplay the saved PNR |
+| `ET` | End transaction, clear the work area for a new booking |
+| `IG` | Ignore the PNR (discard unsaved work) |
+
+**Terminology**
+- **RLOC** (Record Locator) — the 6-character confirmation code assigned the first time a PNR is end-transacted
+- **End transaction** — saving the PNR; requires a segment, a name, a fare quote, a phone, a received-from, a form of payment, and a ticketing arrangement all on file
+
+### 11. Ticket issuance
+
+| Command | Does |
+|---|---|
+| `TKTT` | Issue ticket number(s) |
+
+**Terminology**
+- **Validating carrier** — the airline whose numeric code prefixes the issued ticket number(s); taken from the first segment
+- **Ticketing vs. ticketing arrangement** — the arrangement (`7TAW`/`7TAX`) only sets a deadline; `TKTT` is the entry that actually issues ticket numbers, and requires the PNR to already be saved (has an RLOC)
+
+### 12. Retrieve &amp; review
+
+| Command | Does |
+|---|---|
+| `*R` or `*` | Redisplay the current PNR |
+| `*H` | Show the PNR's chronological activity history |
+| `*{LOCATOR}` | Retrieve a saved PNR by its record locator |
+
+**Terminology**
+- **Activity log / PNR history** — the timestamped, sine-stamped record of every action taken on a PNR, viewed with `*H`, separate from the record-locator lookup done with `*{LOCATOR}`

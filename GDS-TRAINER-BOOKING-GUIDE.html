@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GDS Trainer — Booking Guide</title>
+<style>
+  @page { size: letter; margin: 0.85in 0.8in; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: #ffffff;
+    color: #1a2420;
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+  }
+  .mono {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+  }
+
+  /* ---- cover header ---- */
+  header.cover {
+    border-bottom: 3px solid #1e6e58;
+    padding-bottom: 16px;
+    margin-bottom: 26px;
+  }
+  .wordmark {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    font-size: 11pt;
+    letter-spacing: 0.08em;
+    color: #1e6e58;
+    font-weight: 700;
+  }
+  h1.doctitle {
+    font-size: 22pt;
+    margin: 8px 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: #4b5a54;
+    font-size: 10.5pt;
+    margin: 0;
+  }
+  .intro {
+    margin: 16px 0 28px;
+    max-width: 6.4in;
+  }
+  .intro code { background: #f0f3f0; border: 1px solid #d7e0da; border-radius: 3px; padding: 0.05em 0.4em; }
+
+  /* ---- steps ---- */
+  section.step {
+    break-inside: avoid;
+    margin: 0 0 20px;
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    column-gap: 14px;
+  }
+  .step-num {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    font-weight: 700;
+    font-size: 13pt;
+    color: #1e6e58;
+    border: 1.5px solid #1e6e58;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .step h2 {
+    font-size: 12.5pt;
+    margin: 3px 0 6px;
+  }
+  .step .format {
+    color: #4b5a54;
+    font-size: 9.7pt;
+    margin: 0 0 8px;
+  }
+  .step .format code { color: #1a2420; }
+  .cmdblock {
+    background: #10241d;
+    color: #b7f0d6;
+    border-radius: 5px;
+    padding: 8px 12px;
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    font-size: 9.7pt;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    margin: 0 0 8px;
+  }
+  .step p.note { margin: 6px 0 0; }
+  .step p.aside {
+    margin: 6px 0 0;
+    padding-left: 10px;
+    border-left: 2px solid #cfd9d3;
+    color: #4b5a54;
+    font-size: 9.7pt;
+  }
+  code { font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace; }
+
+  /* ---- quick reference ---- */
+  h2.section-head {
+    font-size: 14pt;
+    border-top: 2px solid #1e6e58;
+    padding-top: 10px;
+    margin-top: 34px;
+    break-before: page;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin-top: 10px;
+  }
+  thead th {
+    text-align: left;
+    text-transform: uppercase;
+    font-size: 7.6pt;
+    letter-spacing: 0.05em;
+    color: #4b5a54;
+    border-bottom: 1.5px solid #1a2420;
+    padding: 5px 8px;
+  }
+  tbody td {
+    padding: 5px 8px;
+    border-bottom: 1px solid #e2e8e4;
+    vertical-align: top;
+  }
+  tbody tr:nth-child(even) { background: #f7f9f7; }
+
+  .walkthrough {
+    margin-top: 20px;
+    break-inside: avoid;
+  }
+  .walkthrough .cmdblock { font-size: 9.3pt; }
+
+  /* ---- keymap ---- */
+  h2.keymap-head {
+    font-size: 15pt;
+    border-top: 2px solid #1e6e58;
+    padding-top: 10px;
+    margin-top: 34px;
+    break-before: page;
+    margin-bottom: 2px;
+  }
+  p.keymap-dek { color: #4b5a54; font-size: 9.5pt; margin: 0 0 18px; }
+  .stage {
+    break-inside: avoid;
+    margin-bottom: 20px;
+    border: 1px solid #dde5e0;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .stage-head {
+    background: #eef4f0;
+    padding: 7px 12px;
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+  }
+  .stage-num {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    font-size: 7.6pt;
+    letter-spacing: 0.06em;
+    color: #1e6e58;
+    background: #fff;
+    border: 1px solid #1e6e58;
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+  .stage-name { font-weight: 700; font-size: 10.5pt; }
+  .stage-body { padding: 10px 12px 12px; }
+  .stage table { margin-top: 0; font-size: 8.6pt; }
+  .stage thead th { padding: 3px 8px; }
+  .stage tbody td { padding: 3px 8px; }
+  .stage-term-head {
+    font-size: 7.6pt;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #4b5a54;
+    margin: 10px 0 4px;
+  }
+  dl.terms { margin: 0; font-size: 8.8pt; }
+  dl.terms dt {
+    font-weight: 700;
+    display: inline;
+  }
+  dl.terms dt::after { content: " — "; font-weight: 400; color: #4b5a54; }
+  dl.terms dd {
+    display: inline;
+    margin: 0;
+  }
+  dl.terms .entry { margin-bottom: 4px; }
+
+  footer.doc {
+    margin-top: 30px;
+    padding-top: 10px;
+    border-top: 1px solid #d7e0da;
+    color: #4b5a54;
+    font-size: 8pt;
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="wordmark">G&middot;D&middot;S&middot; T&middot;R&middot;A&middot;I&middot;N&middot;E&middot;R</div>
+  <h1 class="doctitle">Booking Your First Flight</h1>
+  <p class="subtitle">A step-by-step guide to the GDS Trainer terminal simulator</p>
+</header>
+
+<p class="intro">Open <code>index.html</code> in a browser to start (or run the <code>gds-trainer</code> command-line edition). Everything is typed at the prompt and submitted with <b>Enter</b>. Commands aren't case-sensitive, but standard GDS convention is ALL CAPS.</p>
+
+<section class="step">
+  <div class="step-num">1</div>
+  <div>
+    <h2>Sign in</h2>
+    <div class="cmdblock">SI</div>
+    <p class="note">Confirms sign-in with a demo agent sine and pseudo city code (PCC). Nothing else works until you're signed in.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">2</div>
+  <div>
+    <h2>Search flight availability</h2>
+    <p class="format">Format: <code>A</code> + day + month + origin + destination (or <code>1</code> in place of <code>A</code> — both are real GDS entries)</p>
+    <div class="cmdblock">A15AUGDFWORD</div>
+    <p class="note">This requests flights from <b>DFW</b> (Dallas/Ft Worth) to <b>ORD</b> (Chicago O'Hare) on <b>August 15</b>. You'll get back a numbered list of flights, each with airline, flight number, seats open per class (F/J/C/Y/B/M), departure/arrival times.</p>
+    <p class="aside">Any real-world IATA airport code works — the simulator ships with data for ~6,000 airports worldwide.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">3</div>
+  <div>
+    <h2>Sell a seat from the list</h2>
+    <p class="format">Format: <code>0</code> + line number + class letter + number of seats</p>
+    <div class="cmdblock">04Y1</div>
+    <p class="note">Sells <b>1 seat in Y class from line 4</b> of the availability display you just pulled up. The simulator confirms the segment and shows your PNR so far (currently just that flight segment).</p>
+    <p class="note">You can also sell a specific flight directly, without pulling up availability first (a "long sell"). Format: <code>0</code> + airline + flight number + class + date + origin/destination + status code + party size:</p>
+    <div class="cmdblock">0AA100Y15AUGDFWORDNN1</div>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">4</div>
+  <div>
+    <h2>Add the passenger's name</h2>
+    <p class="format">Format: <code>-</code> + SURNAME + <code>/</code> + GIVEN NAME + TITLE</p>
+    <div class="cmdblock">-SMITH/JOHN MR</div>
+    <p class="note">To add <b>more than one passenger with the same surname</b> in a single entry, prefix the surname with a count and chain additional given-name/title pairs with <code>/</code>:</p>
+    <div class="cmdblock">-2SMITH/JOHN MR/JANE MRS</div>
+    <p class="note">For passengers with different surnames, add a separate <code>-</code> entry for each. The number of named passengers can't exceed the number of seats sold.</p>
+    <p class="note">To add a <b>lap infant</b> traveling with a passenger, append <code>(INF{SURNAME}/{GIVEN}/{DOB})</code> to that passenger's name entry (<code>DOB</code> is <code>DDMONYY</code>):</p>
+    <div class="cmdblock">-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)</div>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">5</div>
+  <div>
+    <h2>Add special service requests / other service info (optional)</h2>
+    <p class="format">Format: <code>3{SSRCODE}</code> for a service request (meals, wheelchair, etc.), optionally with a passenger number and free text: <code>3{SSRCODE}-{PAX#}/{TEXT}</code>. Format: <code>3OSI{AIRLINE}{TEXT}</code> for other-service-info free text to a carrier.</p>
+    <div class="cmdblock">3VGML
+3WCHR-1/AISLE SEAT PREFERRED
+3OSIAA VIP PASSENGER</div>
+    <p class="note">Common SSR codes: <code>WCHR</code>/<code>WCHS</code>/<code>WCHC</code> (wheelchair), <code>VGML</code>/<code>BBML</code>/<code>CHML</code>/<code>KSML</code>/<code>MOML</code>/<code>DBML</code>/<code>SPML</code> (meals), <code>BLND</code>/<code>DEAF</code> (accessibility), <code>UMNR</code> (unaccompanied minor), <code>PETC</code> (pet in cabin), <code>BSCT</code> (bassinet), <code>XBAG</code> (extra baggage).</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">6</div>
+  <div>
+    <h2>Assign a seat (optional)</h2>
+    <p class="format">Format: <code>4{N}</code> to display the seat map for itinerary segment N, then <code>4{N}-{SEAT}</code> to assign one.</p>
+    <div class="cmdblock">41
+41-14A</div>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">7</div>
+  <div>
+    <h2>Price the itinerary</h2>
+    <p class="format">Format: <code>WP</code> (once segments and at least one name are on the PNR)</p>
+    <div class="cmdblock">WP</div>
+    <p class="note">Prices the itinerary and shows a base fare, itemized taxes, and total — this is stored on the PNR as a fare quote and is <b>required before ticketing</b>. <code>WPNCS</code> prices the lowest fare regardless of seat availability (informational only).</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">8</div>
+  <div>
+    <h2>Add a contact phone number</h2>
+    <p class="format">Format: <code>9</code> + phone number + <code>-</code> + location code (<code>A</code>=Agency, <code>H</code>=Home, <code>B</code>=Business, <code>C</code>/<code>M</code>=Cell, <code>F</code>=Fax, <code>HTL</code>=Hotel)</p>
+    <div class="cmdblock">9214555-1234-A</div>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">9</div>
+  <div>
+    <h2>Add "received from" (who the booking request came from)</h2>
+    <p class="format">Format: <code>6</code> + text</p>
+    <div class="cmdblock">6JSMITH</div>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">10</div>
+  <div>
+    <h2>Add a ticketing arrangement</h2>
+    <div class="cmdblock">7TAW/</div>
+    <p class="note">This means "ticket at will" (no ticketing deadline). There's also <code>7TAX16AUG/1800</code> to set a ticketing time limit of Aug 16 at 6:00 PM.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">11</div>
+  <div>
+    <h2>Add a form of payment</h2>
+    <p class="format">Format: <code>FPCASH</code>, <code>FPCHECK</code>, or <code>FPCC{TYPE}{CARDNUMBER}/{MMYY}</code> for a credit card (<code>TYPE</code> is <code>VI</code>=Visa, <code>CA</code>=MasterCard, <code>AX</code>=Amex, <code>DC</code>=Diners Club, <code>DS</code>=Discover, <code>JC</code>=JCB).</p>
+    <div class="cmdblock">FPCASH</div>
+    <p class="note">or</p>
+    <div class="cmdblock">FPCCVI4111111111111111/1225</div>
+    <p class="note">Just like a real GDS, the PNR can't be saved without a form of payment on file. Card numbers are masked to the last 4 digits once stored.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">12</div>
+  <div>
+    <h2>End the transaction (save the booking)</h2>
+    <div class="cmdblock">ER</div>
+    <p class="note">This saves the PNR and gives you a <b>6-character record locator</b> — your confirmation code. <code>ER</code> redisplays the saved PNR; <code>ET</code> saves it and clears the screen for a new booking.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">13</div>
+  <div>
+    <h2>Issue the ticket (optional)</h2>
+    <div class="cmdblock">TKTT</div>
+    <p class="note">This is the step people often assume <code>ER</code> already did — it doesn't. Saving a PNR (<code>ER</code>/<code>ET</code>) and <b>ticketing</b> it are two different things in a real GDS, exactly like here: the "ticketing arrangement" you added in step 10 just sets a deadline (or "ticket at will"), it doesn't issue anything. <code>TKTT</code> is the actual ticketing entry — it requires the PNR to already be saved (has a record locator) and to have a fare quote, ticketing arrangement, and form of payment on file, and it generates a real-format ticket number (airline numeric code + serial) per passenger, including infants.</p>
+    <p class="note">If you change the itinerary after ticketing (sell or cancel a segment), the ticket(s) are automatically voided along with the fare quote — you'll need to <code>WP</code> and <code>TKTT</code> again before saving.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">14</div>
+  <div>
+    <h2>Look up the booking again later</h2>
+    <div class="cmdblock">*ABC123</div>
+    <p class="note">(using the actual locator you were given)</p>
+    <p class="note">To see the full chronological history of everything that's been added, changed, or cancelled on the PNR:</p>
+    <div class="cmdblock">*H</div>
+  </div>
+</section>
+
+<h2 class="section-head">Quick reference</h2>
+<table>
+  <thead><tr><th>Step</th><th>Command</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td>Sign in</td><td class="mono">SI</td><td class="mono">SI</td></tr>
+    <tr><td>Search flights</td><td class="mono">A{DD}{MON}{ORIG}{DEST}</td><td class="mono">A15AUGDFWORD</td></tr>
+    <tr><td>Sell from list</td><td class="mono">0{LINE}{CLASS}{SEATS}</td><td class="mono">04Y1</td></tr>
+    <tr><td>Long/direct sell</td><td class="mono">0{AL}{FLT}{CLASS}{DD}{MON}{ORIG}{DEST}{STATUS}{SEATS}</td><td class="mono">0AA100Y15AUGDFWORDNN1</td></tr>
+    <tr><td>Add name</td><td class="mono">-{SURNAME}/{GIVEN} {TITLE}</td><td class="mono">-SMITH/JOHN MR</td></tr>
+    <tr><td>Add multiple passengers</td><td class="mono">-{N}{SURNAME}/{G1} {T1}/{G2} {T2}</td><td class="mono">-2SMITH/JOHN MR/JANE MRS</td></tr>
+    <tr><td>Add lap infant</td><td class="mono">-...(INF{SURNAME}/{GIVEN}/{DOB})</td><td class="mono">-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)</td></tr>
+    <tr><td>Add SSR</td><td class="mono">3{SSRCODE}[-{PAX#}][/{TEXT}]</td><td class="mono">3VGML</td></tr>
+    <tr><td>Add OSI</td><td class="mono">3OSI{AL}{TEXT}</td><td class="mono">3OSIAA VIP PASSENGER</td></tr>
+    <tr><td>Add frequent flyer number</td><td class="mono">3FQTV{AL}{NUMBER}</td><td class="mono">3FQTVAA1234567</td></tr>
+    <tr><td>Seat map / assign seat</td><td class="mono">4{N} / 4{N}-{SEAT}</td><td class="mono">41 / 41-14A</td></tr>
+    <tr><td>Decode airport code</td><td class="mono">DC{CODE}</td><td class="mono">DCORD</td></tr>
+    <tr><td>Search airports by name</td><td class="mono">DAN{TEXT}</td><td class="mono">DANCHICAGO</td></tr>
+    <tr><td>Price itinerary</td><td class="mono">WP</td><td class="mono">WP</td></tr>
+    <tr><td>Add phone</td><td class="mono">9{NUMBER}-{LOC}</td><td class="mono">9214555-1234-A</td></tr>
+    <tr><td>Add received-from</td><td class="mono">6{TEXT}</td><td class="mono">6JSMITH</td></tr>
+    <tr><td>Add ticketing</td><td class="mono">7TAW/</td><td class="mono">7TAW/</td></tr>
+    <tr><td>Add form of payment</td><td class="mono">FPCASH, FPCHECK, FPCC{TYPE}{NUM}/{MMYY}</td><td class="mono">FPCASH</td></tr>
+    <tr><td>Save booking</td><td class="mono">ER or ET</td><td class="mono">ER</td></tr>
+    <tr><td>Issue ticket</td><td class="mono">TKTT</td><td class="mono">TKTT</td></tr>
+    <tr><td>Redisplay PNR</td><td class="mono">*R or *</td><td class="mono">*R</td></tr>
+    <tr><td>Show PNR activity history</td><td class="mono">*H</td><td class="mono">*H</td></tr>
+    <tr><td>Retrieve saved PNR</td><td class="mono">*{LOCATOR}</td><td class="mono">*ABC123</td></tr>
+    <tr><td>Cancel an item</td><td class="mono">X{N}, X{N}-{M}, X{N},{M}</td><td class="mono">X2</td></tr>
+    <tr><td>Cancel entire itinerary</td><td class="mono">XI</td><td class="mono">XI</td></tr>
+    <tr><td>Discard unsaved work</td><td class="mono">IG</td><td class="mono">IG</td></tr>
+    <tr><td>Full command list</td><td class="mono">HELP</td><td class="mono">HELP</td></tr>
+  </tbody>
+</table>
+
+<div class="walkthrough">
+  <h2 class="section-head" style="break-before: auto; margin-top: 26px;">Full walkthrough, start to finish</h2>
+  <div class="cmdblock">SI
+A15AUGDFWORD
+04Y1
+-SMITH/JOHN MR
+3VGML
+41-14A
+WP
+9214555-1234-A
+6JSMITH
+7TAW/
+FPCASH
+ER
+TKTT</div>
+</div>
+
+<h2 class="keymap-head">Command &amp; terminology keymap, by PNR stage</h2>
+<p class="keymap-dek">Every command and every piece of jargon from this guide, grouped by where it fits in building a PNR from scratch.</p>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 01</span><span class="stage-name">Sign on</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">SI</td><td>Sign in</td></tr>
+        <tr><td class="mono">SI{sine}/{pcc}</td><td>Sign in with a specific agent sine and pseudo city code</td></tr>
+        <tr><td class="mono">SO</td><td>Sign out</td></tr>
+        <tr><td class="mono">HELP</td><td>Full in-app command reference</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Sine</dt><dd>the agent's identifying code, shown on every sign-in and stamped on the PNR's activity log</dd></div>
+      <div class="entry"><dt>PCC</dt><dd>(Pseudo City Code) the agency/office identifier an agent is signed in under</dd></div>
+      <div class="entry"><dt>GDS</dt><dd>(Global Distribution System) the reservation platform itself; PNRs, fares, and inventory all live in it</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 02</span><span class="stage-name">Shop for availability</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">A{DD}{MON}{ORG}{DST}</td><td>Air availability</td></tr>
+        <tr><td class="mono">1{DD}{MON}{ORG}{DST}</td><td>Air availability (alternate entry, same result)</td></tr>
+        <tr><td class="mono">DC{CODE}</td><td>Decode a 3-letter airport/city code</td></tr>
+        <tr><td class="mono">DAN{TEXT}</td><td>Search airports/cities by name</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Availability display</dt><dd>the numbered list of flights returned by an <span class="mono">A</span>/<span class="mono">1</span> entry</dd></div>
+      <div class="entry"><dt>Line number</dt><dd>the number to the left of each flight on the availability display, used to sell it</dd></div>
+      <div class="entry"><dt>Class of service</dt><dd>the single-letter fare class (F First, J/C Business, Y/B/M Economy) shown with a seat count per flight</dd></div>
+      <div class="entry"><dt>EQP</dt><dd>the aircraft equipment code (e.g. 738, 320) shown on each flight line</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 03</span><span class="stage-name">Sell the itinerary</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">0{LINE}{CLASS}{SEATS}</td><td>Sell from an availability line</td></tr>
+        <tr><td class="mono">0{AL}{FLT}{CLASS}{DD}{MON}{ORG}{DST}{STATUS}{SEATS}</td><td>Long/direct sell (no availability display needed)</td></tr>
+        <tr><td class="mono">X{N}</td><td>Cancel element N</td></tr>
+        <tr><td class="mono">X{N}-{M}, X{N},{M}</td><td>Cancel a range or list of elements</td></tr>
+        <tr><td class="mono">XI</td><td>Cancel the entire itinerary (all segments)</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Segment</dt><dd>one sold flight on the PNR</dd></div>
+      <div class="entry"><dt>Long sell</dt><dd>selling a specific flight directly by airline/flight number, bypassing the availability display</dd></div>
+      <div class="entry"><dt>Status code</dt><dd>the two-letter segment status (HK = holds confirmed, the only status a sell in this simulator produces; NN = need/request, used when typing a long-sell entry by hand)</dd></div>
+      <div class="entry"><dt>Party size</dt><dd>the number of seats requested in a sell entry; caps how many passenger names the PNR can carry</dd></div>
+      <div class="entry"><dt>PNR element</dt><dd>any single numbered line on the PNR display (a name, a segment, a phone, etc.) — what X{N} cancels</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 04</span><span class="stage-name">Add passenger data (name field)</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">-{SURNAME}/{GIVEN} {TITLE}</td><td>Add a name</td></tr>
+        <tr><td class="mono">-{N}{SURNAME}/{G1} {T1}/{G2} {T2}</td><td>Add multiple passengers sharing a surname in one entry</td></tr>
+        <tr><td class="mono">-...(INF{SURNAME}/{GIVEN}/{DOB})</td><td>Attach a lap infant to the name just added</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Name field</dt><dd>the passenger name(s) on the PNR; required before pricing</dd></div>
+      <div class="entry"><dt>Lap infant</dt><dd>an infant traveling on an adult's lap rather than in their own seat; doesn't count against the party size/seats-sold limit</dd></div>
+      <div class="entry"><dt>DOB format</dt><dd>DDMONYY, e.g. 12JAN26</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 05</span><span class="stage-name">Special service requests / other service info</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">3{SSRCODE}[-{PAX#}][/{TEXT}]</td><td>Add a special service request</td></tr>
+        <tr><td class="mono">3OSI{AL}{TEXT}</td><td>Add other-service-info free text to a carrier</td></tr>
+        <tr><td class="mono">3FQTV{AL}{NUMBER}</td><td>Add a frequent flyer number</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>SSR</dt><dd>(Special Service Request) a coded request to the airline: meals, wheelchair assistance, unaccompanied minor, extra baggage, etc.</dd></div>
+      <div class="entry"><dt>OSI</dt><dd>(Other Service Info) free-text information sent to a carrier that isn't a coded SSR</dd></div>
+      <div class="entry"><dt>FQTV</dt><dd>frequent flyer number, stored as a special kind of SSR</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 06</span><span class="stage-name">Seat selection</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">4{N}</td><td>Display the seat map for segment N</td></tr>
+        <tr><td class="mono">4{N}-{SEAT}</td><td>Assign a seat on segment N</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Seat map</dt><dd>the row/column grid of open (.) and occupied (X) seats for a segment</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 07</span><span class="stage-name">Price the itinerary</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">WP</td><td>Price the itinerary</td></tr>
+        <tr><td class="mono">WPNCS</td><td>Price at the lowest fare, regardless of seat availability (informational only)</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Fare quote</dt><dd>the stored pricing result on the PNR; required before ticketing, and cleared automatically if the itinerary changes afterward</dd></div>
+      <div class="entry"><dt>Fare basis</dt><dd>the short code summarizing the fare's class and trip type (e.g. YOW = Y class, one-way)</dd></div>
+      <div class="entry"><dt>Base fare</dt><dd>the pre-tax fare amount</dd></div>
+      <div class="entry"><dt>Taxes/fees</dt><dd>the itemized government and carrier charges added on top of the base fare</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 08</span><span class="stage-name">Add contact &amp; booking info</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">9{NUMBER}-{LOC}</td><td>Add a phone number</td></tr>
+        <tr><td class="mono">9/{CTY}{NUMBER}-{LOC}</td><td>Add a phone number, out-of-area (with city code)</td></tr>
+        <tr><td class="mono">6{TEXT}</td><td>Add "received from"</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Phone field</dt><dd>the contact number(s) on the PNR; required before end transaction</dd></div>
+      <div class="entry"><dt>Location code</dt><dd>the phone type suffix (A=Agency, H=Home, B=Business, C/M=Cell, F=Fax, HTL=Hotel)</dd></div>
+      <div class="entry"><dt>Received From (RF)</dt><dd>who requested the booking; required before end transaction, same as a phone field</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 09</span><span class="stage-name">Ticketing arrangement &amp; form of payment</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">7TAW/</td><td>Ticketing at will (no deadline)</td></tr>
+        <tr><td class="mono">7TAW{DD}{MON}/{HHMM}</td><td>Ticketing at will, queued to a date/time</td></tr>
+        <tr><td class="mono">7TAX{DD}{MON}/{HHMM}</td><td>Ticketing time limit</td></tr>
+        <tr><td class="mono">FPCASH</td><td>Form of payment: cash</td></tr>
+        <tr><td class="mono">FPCHECK</td><td>Form of payment: check</td></tr>
+        <tr><td class="mono">FPCC{TYPE}{CARDNUM}/{MMYY}</td><td>Form of payment: credit card</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Ticketing arrangement</dt><dd>the deadline (or lack of one) by which the PNR must be ticketed; not the same as ticketing itself</dd></div>
+      <div class="entry"><dt>Ticket at will</dt><dd>no fixed ticketing deadline</dd></div>
+      <div class="entry"><dt>Time limit</dt><dd>a fixed date/time by which the PNR must be ticketed or it's expected to cancel</dd></div>
+      <div class="entry"><dt>Form of payment (FOP)</dt><dd>how the ticket will be paid for; required before end transaction. Card numbers are masked to the last 4 digits once stored</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 10</span><span class="stage-name">End transaction</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">ER</td><td>End transaction, redisplay the saved PNR</td></tr>
+        <tr><td class="mono">ET</td><td>End transaction, clear the work area for a new booking</td></tr>
+        <tr><td class="mono">IG</td><td>Ignore the PNR (discard unsaved work)</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>RLOC</dt><dd>(Record Locator) the 6-character confirmation code assigned the first time a PNR is end-transacted</dd></div>
+      <div class="entry"><dt>End transaction</dt><dd>saving the PNR; requires a segment, a name, a fare quote, a phone, a received-from, a form of payment, and a ticketing arrangement all on file</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 11</span><span class="stage-name">Ticket issuance</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">TKTT</td><td>Issue ticket number(s)</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Validating carrier</dt><dd>the airline whose numeric code prefixes the issued ticket number(s); taken from the first segment</dd></div>
+      <div class="entry"><dt>Ticketing vs. ticketing arrangement</dt><dd>the arrangement (7TAW/7TAX) only sets a deadline; TKTT is the entry that actually issues ticket numbers, and requires the PNR to already be saved (has an RLOC)</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 12</span><span class="stage-name">Retrieve &amp; review</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">*R or *</td><td>Redisplay the current PNR</td></tr>
+        <tr><td class="mono">*H</td><td>Show the PNR's chronological activity history</td></tr>
+        <tr><td class="mono">*{LOCATOR}</td><td>Retrieve a saved PNR by its record locator</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Activity log / PNR history</dt><dd>the timestamped, sine-stamped record of every action taken on a PNR, viewed with *H, separate from the record-locator lookup done with *{LOCATOR}</dd></div>
+    </dl>
+  </div>
+</div>
+
+<footer class="doc">
+  <span>GDS Trainer &middot; Booking Guide</span>
+  <span>Source: GDS-TRAINER-BOOKING-GUIDE.html</span>
+</footer>
+
+</body>
+</html>

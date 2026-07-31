@@ -1,0 +1,22 @@
+[project]
+name = "gds-trainer-cli"
+version = "0.1.0"
+description = "Terminal (CLI) edition of GDS Trainer — a GDS terminal simulator for training"
+requires-python = ">=3.10"
+dependencies = [
+    "prompt_toolkit>=3.0",
+    "rich>=13.0",
+]
+
+[project.scripts]
+gds-trainer = "gds_trainer.repl:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["gds_trainer*"]
+
+[tool.setuptools.package-data]
+gds_trainer = ["airports.json"]

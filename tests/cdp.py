@@ -90,6 +90,8 @@ class ChromeSession:
                 self._chrome_path,
                 "--headless=new",
                 "--disable-gpu",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
                 f"--remote-debugging-port={port}",
                 "--no-first-run",
                 f"--user-data-dir={self._profile_dir}",

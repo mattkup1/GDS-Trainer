@@ -1,0 +1,8 @@
+# Pytest configuration only - there's no root Python package (the browser edition
+# has no build step by design, and gds-trainer-cli/ is its own separate package;
+# see CLAUDE.md). This exists solely so `pytest` from the repo root discovers
+# both the CLI's own unit suite and the top-level cross-edition suite in one run.
+# See tests/README.md for how to run each layer individually.
+
+[tool.pytest.ini_options]
+testpaths = ["gds-trainer-cli/tests", "tests"]

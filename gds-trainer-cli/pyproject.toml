@@ -8,6 +8,9 @@ dependencies = [
     "rich>=13.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
 [project.scripts]
 gds-trainer = "gds_trainer.repl:main"
 

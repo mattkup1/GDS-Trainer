@@ -14,6 +14,8 @@ Note: code comments and inline documentation below still refer to "Sabre" where 
 - `gds-trainer-cli/` — the Python CLI edition (`gds_trainer/` package).
 - `spec/` — the shared rules core both editions consume (command grammar, reference data, PNR-completeness rules, airport data) — see `spec/README.md`. Sibling to both edition folders, not nested in either, since both read it.
 - `docs/` — user-facing documentation: `HOW-TO-BOOK-A-FLIGHT.md` (step-by-step walkthrough) and `GDS-TRAINER-BOOKING-GUIDE.html`/`.pdf` (the same walkthrough as a printable guide — the `.html` is the editable source, the `.pdf` is a build artifact).
+- `tests/` — cross-edition test suite (shared scenarios run against both editions) — see `tests/README.md` and the Testing section below. Sibling to both edition folders, like `spec/`, since it tests both.
+- `.github/workflows/` — CI (see Testing section below).
 - `notes` — a symlink to an Obsidian vault; see the Obsidian integration section below.
 
 `docs/GDS-TRAINER-BOOKING-GUIDE.pdf` is generated from `docs/GDS-TRAINER-BOOKING-GUIDE.html`. To update the guide: edit `docs/HOW-TO-BOOK-A-FLIGHT.md` first, port the same changes into `docs/GDS-TRAINER-BOOKING-GUIDE.html`, then regenerate the PDF with headless Chrome:
@@ -27,7 +29,21 @@ cd docs && "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 
 ## Running it
 
-There is no build step, package manager, or test suite for the web edition — these are static files loaded via plain `<link>`/`<script src>` tags (not ES modules), so `web/index.html` can be opened directly via `file://` with no local server needed. (`spec/build.py` is the one exception — it's a content-authoring step for `spec/`, not an app build step; the app itself never needs it run to work, only to pick up a `spec/` edit.)
+There is no build step or package manager for the web edition — these are static files loaded via plain `<link>`/`<script src>` tags (not ES modules), so `web/index.html` can be opened directly via `file://` with no local server needed. (`spec/build.py` is the one exception — it's a content-authoring step for `spec/`, not an app build step; the app itself never needs it run to work, only to pick up a `spec/` edit.)
+
+## Testing
+
+```bash
+cd gds-trainer-cli && pip install -e ".[dev]"   # once, pulls in pytest
+source gds-trainer-cli/.venv/bin/activate
+pytest                                          # everything, from repo root
+```
+
+Two layers, see `tests/README.md` for the full breakdown:
+- `gds-trainer-cli/tests/` — fast Python-only unit tests for the CLI's pure-logic internals (`rng.py`, `dates.py`, `util.py`, a few `commands.py` helpers). No Chrome needed.
+- `tests/` (top-level) — the shared cross-edition scenario suite (`tests/scenarios.py`): the same command sequences and structural expectations run against **both** editions — the CLI directly via `process_command`, and the browser via a real headless Chrome driven over the DevTools Protocol (`tests/cdp.py`, stdlib-only, no Node/selenium/playwright). This is what actually enforces that the two editions stay behaviorally in sync, the way `spec/` enforces it for the data/grammar they consume — see `tests/README.md` for why assertions are structural (message substrings) rather than exact fare/seat/ticket values.
+
+**CI**: `.github/workflows/tests.yml` runs the full suite (`pytest` from repo root) on every push to `main` and every pull request, on `ubuntu-latest`. GitHub-hosted runners are Linux, so `tests/cdp.py`'s Chrome discovery doesn't use the macOS path there — the workflow provisions Chrome via `browser-actions/setup-chrome` and points `tests/cdp.py` at it through the `GDS_TRAINER_TEST_CHROME` env var (`default_chrome_path()` in `tests/cdp.py` checks that env var first, then the macOS install path, then common Linux binary names on `PATH` — same override works for local Linux dev, not just CI).
 
 ## Shared rules core (`spec/`)
 

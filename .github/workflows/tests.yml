@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # GitHub-hosted runners are Linux, so tests/cdp.py's default macOS Chrome
+      # path doesn't apply here - this step provides a Chrome build explicitly
+      # (rather than relying on whatever happens to be preinstalled on the
+      # runner image) and points GDS_TRAINER_TEST_CHROME at it below.
+      - name: Set up Chrome (for the web edition's E2E scenario tests)
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Install gds-trainer-cli + test dependencies
+        run: |
+          cd gds-trainer-cli
+          pip install -e ".[dev]"
+
+      # Runs both layers in one pass - gds-trainer-cli/tests (fast unit tests)
+      # and tests/ (shared cross-edition scenarios, CLI + real headless-Chrome
+      # E2E) - via the testpaths configured in root pyproject.toml. See
+      # tests/README.md for what each layer covers.
+      - name: Run full test suite
+        env:
+          GDS_TRAINER_TEST_CHROME: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: pytest

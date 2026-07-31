@@ -40,8 +40,8 @@ HANDLERS = {
     "FOP_CHECK": lambda raw, *g: c.add_fop_check(),
     "FOP_CREDIT_CARD": lambda raw, card_type, num, mm, yy: c.add_fop_credit_card(card_type, num, mm, yy),
     "ISSUE_TICKETS": lambda raw, *g: c.issue_tickets(),
-    "DOCS": lambda raw, doc_type, country, number, nationality, dob, sex, expiry, pax: c.add_docs(
-        doc_type, country, number, nationality, dob, sex, expiry, pax
+    "DOCS": lambda raw, doc_type, country, number, nationality, dob, sex, expiry, pax, infant: c.add_docs(
+        doc_type, country, number, nationality, dob, sex, expiry, pax, infant
     ),
     "SSR_FQTV": lambda raw, airline, num, tier: c.add_fqtv(airline, num, tier),
     "OSI": lambda raw, airline, text: c.add_osi(airline, text),

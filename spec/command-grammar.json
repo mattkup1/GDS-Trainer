@@ -17,7 +17,7 @@
   {"name": "fop_check", "pattern": "^FPCHECK$", "handler": "FOP_CHECK"},
   {"name": "fop_credit_card", "pattern": "^FPCC([A-Z]{2})(\\d{13,19})/(\\d{2})(\\d{2})$", "handler": "FOP_CREDIT_CARD"},
   {"name": "issue_tickets", "pattern": "^TKTT$", "handler": "ISSUE_TICKETS"},
-  {"name": "docs", "pattern": "^3DOCS([A-Z])/([A-Z]{2})/([A-Z0-9]{5,15})/([A-Z]{2})/(\\d{1,2}[A-Z]{3}\\d{2})/([MF])/(\\d{1,2}[A-Z]{3}\\d{2})-(\\d{1,2})$", "handler": "DOCS"},
+  {"name": "docs", "pattern": "^3DOCS([A-Z])/([A-Z]{2})/([A-Z0-9]{5,15})/([A-Z]{2})/(\\d{1,2}[A-Z]{3}\\d{2})/([MF])/(\\d{1,2}[A-Z]{3}\\d{2})-(\\d{1,2})(?:\\.(\\d{1,2}))?$", "handler": "DOCS"},
   {"name": "ssr_fqtv", "pattern": "^3FQTV([A-Z]{2})(\\d{5,12})(?:/([A-Z]{3}))?$", "handler": "SSR_FQTV"},
   {"name": "osi", "pattern": "^3OSI([A-Z]{2})\\s*(.+)$", "handler": "OSI"},
   {"name": "ssr", "pattern": "^3([A-Z]{4})(?:-(\\d{1,2}))?(?:/(.+))?$", "handler": "SSR"},

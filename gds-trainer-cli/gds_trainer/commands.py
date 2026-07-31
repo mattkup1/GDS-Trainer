@@ -626,8 +626,33 @@ def add_fqtv(airline: str, num: str, tier_code: str | None = None) -> None:
     refresh_and_print_pnr()
 
 
+def _resolve_doc_traveler(pax_num: int, infant_num: int | None) -> tuple[str, str]:
+    """Resolves a DOCS entry's traveler to a Sabre-style "1"/"1.1" label + display
+    name - infants have no name-field entry of their own, so P{n}.{m} means the
+    m-th infant travelling with passenger n (see add_docs)."""
+    names = STATE.pnr["names"]
+    adult_name = names[pax_num - 1] if pax_num - 1 < len(names) else "?"
+    if not infant_num:
+        return str(pax_num), adult_name
+    adult_infants = [inf for inf in STATE.pnr["infants"] if inf["adult"] == adult_name]
+    if infant_num - 1 < len(adult_infants):
+        inf = adult_infants[infant_num - 1]
+        name = f"{inf['surname']}/{inf['given']} (INFANT)"
+    else:
+        name = "?"
+    return f"{pax_num}.{infant_num}", name
+
+
 def add_docs(
-    doc_type: str, country: str, number: str, nationality: str, dob: str, sex: str, expiry: str, pax_str: str
+    doc_type: str,
+    country: str,
+    number: str,
+    nationality: str,
+    dob: str,
+    sex: str,
+    expiry: str,
+    pax_str: str,
+    infant_str: str | None = None,
 ) -> None:
     desc = DOCUMENT_TYPES.get(doc_type)
     if not desc:
@@ -637,6 +662,17 @@ def add_docs(
     if not pax_num or pax_num < 1 or pax_num > len(STATE.pnr["names"]):
         print_err("INVALID PASSENGER NUMBER - CHECK NAME FIELD")
         return
+    infant_num: int | None = None
+    if infant_str:
+        infant_num = int(infant_str) if infant_str.isdigit() else 0
+        adult_name = STATE.pnr["names"][pax_num - 1]
+        adult_infants = [inf for inf in STATE.pnr["infants"] if inf["adult"] == adult_name]
+        if not infant_num or infant_num < 1 or infant_num > len(adult_infants):
+            print_err(
+                f"INVALID INFANT NUMBER - PASSENGER {pax_num} ({adult_name}) HAS "
+                f"{len(adult_infants)} INFANT(S) ON FILE"
+            )
+            return
     dob_match = _DOB_RE.match(dob)
     dob_day = int(dob_match.group(1)) if dob_match else 0
     if not dob_match or dob_match.group(2) not in MONTHS or dob_day < 1 or dob_day > 31:
@@ -649,12 +685,14 @@ def add_docs(
         return
     entry = {
         "type": doc_type, "desc": desc, "country": country, "number": number,
-        "nationality": nationality, "dob": dob, "sex": sex, "expiry": expiry, "pax": pax_num,
+        "nationality": nationality, "dob": dob, "sex": sex, "expiry": expiry,
+        "pax": pax_num, "infant_num": infant_num,
     }
     STATE.pnr["docs"].append(entry)
+    label, name = _resolve_doc_traveler(pax_num, infant_num)
     text = (
         f"{desc} {country} {number}  NATIONALITY {nationality}  DOB {dob}  {sex}  "
-        f"EXP {expiry}  PAX {pax_num} ({STATE.pnr['names'][pax_num - 1]})"
+        f"EXP {expiry}  PAX {label} ({name})"
     )
     print_line(f"DOCUMENT ADDED - {text}")
     log_activity(STATE, f"DOCUMENT ADDED - {text}")
@@ -759,14 +797,14 @@ def build_elements() -> list[dict]:
             }
         )
     for i, d in enumerate(p["docs"]):
-        pax_name = p["names"][d["pax"] - 1] if d["pax"] - 1 < len(p["names"]) else "?"
+        label, name = _resolve_doc_traveler(d["pax"], d.get("infant_num"))
         els.append(
             {
                 "kind": "docs",
                 "idx": i,
                 "label": "DOC",
                 "text": f"{d['desc']} {d['country']} {d['number']}  NATIONALITY {d['nationality']}  "
-                f"DOB {d['dob']}  {d['sex']}  EXP {d['expiry']}  PAX {d['pax']} ({pax_name})",
+                f"DOB {d['dob']}  {d['sex']}  EXP {d['expiry']}  PAX {label} ({name})",
             }
         )
     for i, s in enumerate(p["segments"]):
@@ -1091,8 +1129,9 @@ def show_help() -> None:
     )
     print_blank()
     print_line("PASSENGER DOCUMENTS (APIS)", "hd")
-    print_line("  3DOCS{TYPE}/{COUNTRY}/{NUMBER}/{NATIONALITY}/{DOB}/{SEX}/{EXPIRY}-{PAX#}")
+    print_line("  3DOCS{TYPE}/{COUNTRY}/{NUMBER}/{NATIONALITY}/{DOB}/{SEX}/{EXPIRY}-{PAX#}[.{INFANT#}]")
     print_line("    e.g. 3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1", "dim")
+    print_line("    infant e.g. 3DOCSP/US/123456789/US/12JAN26/M/25DEC30-1.1  (1st infant travelling with PAX 1)", "dim")
     print_line("    TYPE: P (passport). DOB/EXPIRY: DDMONYY. SEX: M or F.", "dim")
     print_blank()
     print_line("SEATS", "hd")

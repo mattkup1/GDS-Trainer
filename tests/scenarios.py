@@ -332,4 +332,25 @@ SCENARIOS: list[Scenario] = [
             Step("01Y1", expect_contains=["WAITLISTED", "HL"]),
         ],
     ),
+    Scenario(
+        "apis_document_accepted_for_infant_and_invalid_infant_number_rejected",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            Step(
+                "-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)",
+                expect_contains=["NAME ADDED", "INFANT ADDED"],
+            ),
+            Step(
+                "3DOCSP/US/123456789/US/12JAN26/M/25DEC30-1.1",
+                expect_contains=["DOCUMENT ADDED", "PASSPORT", "1.1", "INFANT"],
+            ),
+            Step(
+                "3DOCSP/US/987654321/US/12JAN26/M/25DEC30-1.2",
+                expect_contains=["INVALID INFANT NUMBER"],
+                expect_not_contains=["DOCUMENT ADDED - PASSPORT US 987654321"],
+            ),
+        ],
+    ),
 ]

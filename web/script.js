@@ -366,11 +366,22 @@
   }
 
   // ---------- PNR element display / cancel ----------
+  // Resolves a DOCS entry's traveler to a Sabre-style "P1"/"P1.1" label + display
+  // name - infants have no name-field entry of their own, so P{n}.{m} means the
+  // m-th infant travelling with passenger n (see addDocs).
+  function resolveDocTraveler(paxNum, infantNum){
+    const adultName = state.pnr.names[paxNum-1];
+    if(!infantNum) return { label: `${paxNum}`, name: adultName || '?' };
+    const adultInfants = state.pnr.infants.filter(inf => inf.adult === adultName);
+    const inf = adultInfants[infantNum-1];
+    return { label: `${paxNum}.${infantNum}`, name: inf ? `${inf.surname}/${inf.given} (INFANT)` : '?' };
+  }
+
   function buildElements(){
     const els = [];
     state.pnr.names.forEach((n, i) => els.push({ kind:'name', idx:i, label:`NM${i+1}`, text:n }));
     state.pnr.infants.forEach((inf, i) => els.push({ kind:'infant', idx:i, label:'IN', text:`${inf.surname}/${inf.given}  DOB ${inf.dob}  (INFANT - TRAVELS WITH ${inf.adult})` }));
-    state.pnr.docs.forEach((d, i) => els.push({ kind:'docs', idx:i, label:'DOC', text:`${d.desc} ${d.country} ${d.number}  NATIONALITY ${d.nationality}  DOB ${d.dob}  ${d.sex}  EXP ${d.expiry}  PAX ${d.pax} (${state.pnr.names[d.pax-1] || '?'})` }));
+    state.pnr.docs.forEach((d, i) => { const t = resolveDocTraveler(d.pax, d.infantNum); els.push({ kind:'docs', idx:i, label:'DOC', text:`${d.desc} ${d.country} ${d.number}  NATIONALITY ${d.nationality}  DOB ${d.dob}  ${d.sex}  EXP ${d.expiry}  PAX ${t.label} (${t.name})` }); });
     state.pnr.segments.forEach((s, i) => els.push({ kind:'segment', idx:i, label:`SEG${i+1}`, text: formatSegmentShort(s) + `  ${s.dinfo.weekday}` }));
     state.pnr.seats.forEach((st, i) => els.push({ kind:'seat', idx:i, label:'SEAT', text:`SEG${st.segIdx+1} - SEAT ${st.seat}` }));
     state.pnr.ssrs.forEach((r, i) => els.push({ kind:'ssr', idx:i, label:'SSR', text: r.text }));
@@ -621,8 +632,9 @@
     print('  SSR codes: WCHR WCHS WCHC VGML BBML CHML KSML MOML DBML BLND DEAF UMNR PETC BSCT SPML XBAG', 'dim');
     printBlank();
     print('PASSENGER DOCUMENTS (APIS)', 'hd');
-    print('  3DOCS{TYPE}/{COUNTRY}/{NUMBER}/{NATIONALITY}/{DOB}/{SEX}/{EXPIRY}-{PAX#}');
+    print('  3DOCS{TYPE}/{COUNTRY}/{NUMBER}/{NATIONALITY}/{DOB}/{SEX}/{EXPIRY}-{PAX#}[.{INFANT#}]');
     print('    e.g. 3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1', 'dim');
+    print('    infant e.g. 3DOCSP/US/123456789/US/12JAN26/M/25DEC30-1.1  (1st infant travelling with PAX 1)', 'dim');
     print('    TYPE: P (passport). DOB/EXPIRY: DDMONYY. SEX: M or F.', 'dim');
     printBlank();
     print('SEATS', 'hd');
@@ -814,11 +826,19 @@
     refreshAndPrintPNR();
   }
 
-  function addDocs(type, country, number, nationality, dob, sex, expiry, paxStr){
+  function addDocs(type, country, number, nationality, dob, sex, expiry, paxStr, infantStr){
     const desc = DOCUMENT_TYPES[type];
     if(!desc){ printErr(`UNKNOWN DOCUMENT TYPE ${type} - VALID: ${Object.keys(DOCUMENT_TYPES).join(' ')}`); return; }
     const paxNum = parseInt(paxStr,10);
     if(!paxNum || paxNum < 1 || paxNum > state.pnr.names.length){ printErr('INVALID PASSENGER NUMBER - CHECK NAME FIELD'); return; }
+    let infantNum = null;
+    if(infantStr){
+      infantNum = parseInt(infantStr,10);
+      const adultInfants = state.pnr.infants.filter(inf => inf.adult === state.pnr.names[paxNum-1]);
+      if(!infantNum || infantNum < 1 || infantNum > adultInfants.length){
+        printErr(`INVALID INFANT NUMBER - PASSENGER ${paxNum} (${state.pnr.names[paxNum-1]}) HAS ${adultInfants.length} INFANT(S) ON FILE`); return;
+      }
+    }
     const dobMatch = dob.match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);
     const dobDay = dobMatch ? parseInt(dobMatch[1],10) : 0;
     if(!dobMatch || MONTHS.indexOf(dobMatch[2]) < 0 || dobDay < 1 || dobDay > 31){
@@ -829,9 +849,10 @@
     if(!expMatch || MONTHS.indexOf(expMatch[2]) < 0 || expDay < 1 || expDay > 31){
       printErr('FORMAT - INVALID EXPIRY DATE, USE DDMONYY e.g. 25DEC30'); return;
     }
-    const entry = { type, desc, country, number, nationality, dob, sex, expiry, pax: paxNum };
+    const entry = { type, desc, country, number, nationality, dob, sex, expiry, pax: paxNum, infantNum };
     state.pnr.docs.push(entry);
-    const text = `${desc} ${country} ${number}  NATIONALITY ${nationality}  DOB ${dob}  ${sex}  EXP ${expiry}  PAX ${paxNum} (${state.pnr.names[paxNum-1]})`;
+    const t = resolveDocTraveler(paxNum, infantNum);
+    const text = `${desc} ${country} ${number}  NATIONALITY ${nationality}  DOB ${dob}  ${sex}  EXP ${expiry}  PAX ${t.label} (${t.name})`;
     print(`DOCUMENT ADDED - ${text}`);
     logActivity(`DOCUMENT ADDED - ${text}`);
     refreshAndPrintPNR();
@@ -943,7 +964,7 @@
     FOP_CHECK: () => addFopCheck(),
     FOP_CREDIT_CARD: (raw, type, num, mm, yy) => addFopCreditCard(type, num, mm, yy),
     ISSUE_TICKETS: () => issueTickets(),
-    DOCS: (raw, type, country, number, nationality, dob, sex, expiry, pax) => addDocs(type, country, number, nationality, dob, sex, expiry, pax),
+    DOCS: (raw, type, country, number, nationality, dob, sex, expiry, pax, infant) => addDocs(type, country, number, nationality, dob, sex, expiry, pax, infant),
     SSR_FQTV: (raw, airline, num, tier) => addFqtv(airline, num, tier),
     OSI: (raw, airline, text) => addOsi(airline, text),
     SSR: (raw, code, pax, freeText) => addSsr(code, pax, freeText),

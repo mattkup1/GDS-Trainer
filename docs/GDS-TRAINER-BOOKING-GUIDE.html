@@ -268,6 +268,8 @@
     <p class="format">Format: <code>3DOCS</code> + document type + <code>/</code> + issuing country + <code>/</code> + number + <code>/</code> + nationality + <code>/</code> + date of birth + <code>/</code> + sex + <code>/</code> + expiry date + <code>-</code> + passenger number</p>
     <div class="cmdblock">3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1</div>
     <p class="note">This is Advance Passenger Information (APIS) / Secure Flight-style data, tied to a specific passenger by number (<code>-1</code> above means passenger 1 in the name field). <code>TYPE</code> is <code>P</code> for passport. Dates are <code>DDMONYY</code>, sex is <code>M</code> or <code>F</code>.</p>
+    <p class="note">For a <b>lap infant</b>, append <code>.{INFANT#}</code> after the passenger number — real GDSs don't give infants their own name-field entry, so they're addressed as a decimal off the adult they travel with (<code>1.1</code> = the 1st infant travelling with passenger 1):</p>
+    <div class="cmdblock">3DOCSP/US/123456789/US/12JAN26/M/25DEC30-1.1</div>
   </div>
 </section>
 
@@ -391,7 +393,7 @@
     <tr><td>Add name</td><td class="mono">-{SURNAME}/{GIVEN} {TITLE}</td><td class="mono">-SMITH/JOHN MR</td></tr>
     <tr><td>Add multiple passengers</td><td class="mono">-{N}{SURNAME}/{G1} {T1}/{G2} {T2}</td><td class="mono">-2SMITH/JOHN MR/JANE MRS</td></tr>
     <tr><td>Add lap infant</td><td class="mono">-...(INF{SURNAME}/{GIVEN}/{DOB})</td><td class="mono">-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)</td></tr>
-    <tr><td>Add travel document (APIS)</td><td class="mono">3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}</td><td class="mono">3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1</td></tr>
+    <tr><td>Add travel document (APIS)</td><td class="mono">3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}[.{INFANT#}]</td><td class="mono">3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1 or ...-1.1</td></tr>
     <tr><td>Add SSR</td><td class="mono">3{SSRCODE}[-{PAX#}][/{TEXT}]</td><td class="mono">3VGML</td></tr>
     <tr><td>Add OSI</td><td class="mono">3OSI{AL}{TEXT}</td><td class="mono">3OSIAA VIP PASSENGER</td></tr>
     <tr><td>Add frequent flyer number (+ tier)</td><td class="mono">3FQTV{AL}{NUMBER}[/{TIER}]</td><td class="mono">3FQTVAA1234567/GLD</td></tr>
@@ -513,7 +515,7 @@ TKTT</div>
         <tr><td class="mono">-{SURNAME}/{GIVEN} {TITLE}</td><td>Add a name</td></tr>
         <tr><td class="mono">-{N}{SURNAME}/{G1} {T1}/{G2} {T2}</td><td>Add multiple passengers sharing a surname in one entry</td></tr>
         <tr><td class="mono">-...(INF{SURNAME}/{GIVEN}/{DOB})</td><td>Attach a lap infant to the name just added</td></tr>
-        <tr><td class="mono">3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}</td><td>Add a travel document (APIS) for a passenger</td></tr>
+        <tr><td class="mono">3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}[.{INFANT#}]</td><td>Add a travel document (APIS) for a passenger, or for their infant</td></tr>
       </tbody>
     </table>
     <div class="stage-term-head">Terminology</div>
@@ -521,7 +523,7 @@ TKTT</div>
       <div class="entry"><dt>Name field</dt><dd>the passenger name(s) on the PNR; required before pricing</dd></div>
       <div class="entry"><dt>Lap infant</dt><dd>an infant traveling on an adult's lap rather than in their own seat; doesn't count against the party size/seats-sold limit</dd></div>
       <div class="entry"><dt>DOB format</dt><dd>DDMONYY, e.g. 12JAN26</dd></div>
-      <div class="entry"><dt>APIS</dt><dd>(Advance Passenger Information) passport/nationality/date-of-birth data governments require for international travel, tied to a specific passenger by number</dd></div>
+      <div class="entry"><dt>APIS</dt><dd>(Advance Passenger Information) passport/nationality/date-of-birth data governments require for international travel, tied to a specific passenger by number — or, for an infant, by {PAX#}.{INFANT#} (Sabre-style decimal notation, since an infant has no name-field entry of its own)</dd></div>
     </dl>
   </div>
 </div>

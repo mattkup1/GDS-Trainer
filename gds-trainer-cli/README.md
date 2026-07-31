@@ -1,6 +1,6 @@
 # gds-trainer-cli
 
-Terminal (CLI) edition of **GDS Trainer**, alongside the browser edition in `../`. Same
+Terminal (CLI) edition of **GDS Trainer**, alongside the browser edition in `../web/`. Same
 industry-standard GDS entry mnemonics (sign-in, availability, sell, PNR build, pricing,
 SSR/OSI, seats, ticketing, end transaction) and the same deterministic
 seeded-PRNG synthetic flight data, in a Python REPL instead of a browser page.

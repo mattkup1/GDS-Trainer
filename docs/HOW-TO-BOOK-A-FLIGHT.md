@@ -1,6 +1,6 @@
 # Booking Your First Flight — Step by Step
 
-Open `index.html` in a browser to start. Everything is typed at the `>` prompt and submitted with **Enter**. Commands aren't case-sensitive, but standard GDS convention is ALL CAPS.
+Open `../web/index.html` in a browser to start. Everything is typed at the `>` prompt and submitted with **Enter**. Commands aren't case-sensitive, but standard GDS convention is ALL CAPS.
 
 ---
 

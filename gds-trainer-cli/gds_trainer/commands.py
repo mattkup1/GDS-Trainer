@@ -12,18 +12,24 @@ first so earlier splices don't shift pending indices).
 from __future__ import annotations
 
 import copy
+import json
 import random
 import re
 from datetime import datetime
+from pathlib import Path
 
 from .airports import AIRPORTS, city_name
 from .data import (
     AIRLINE_NUMERIC_CODES,
     AIRLINES,
+    CARD_TYPES,
     CLASS_FARE_MULT,
     CLASSES,
     EQUIP,
+    FARE_FORMULA,
     MONTHS,
+    PHONE_LOC_CODES,
+    SSR_CODES,
     TAX_POOL,
 )
 from .dates import minutes_to_clock, parse_date
@@ -31,6 +37,27 @@ from .printer import print_blank, print_err, print_line
 from .rng import hash_str, mulberry32
 from .state import STATE, fresh_pnr, log_activity
 from .util import pad
+
+_SPEC_DIR = Path(__file__).resolve().parents[2] / "spec"
+_PNR_COMPLETENESS = json.loads((_SPEC_DIR / "pnr-completeness.json").read_text(encoding="utf-8"))
+
+
+def _completeness_check_passes(kind: str, value) -> bool:
+    if kind == "non_empty":
+        return isinstance(value, list) and len(value) > 0
+    if kind == "present":
+        return value is not None
+    if kind == "empty":
+        return isinstance(value, list) and len(value) == 0
+    return True
+
+
+def _first_incomplete_message(rule_key: str) -> str | None:
+    for rule in _PNR_COMPLETENESS.get(rule_key, []):
+        value = STATE.pnr[rule["field"]]
+        if not _completeness_check_passes(rule["check"], value):
+            return rule["message"]
+    return None
 
 
 # ---------- availability ----------
@@ -193,6 +220,105 @@ def format_segment_short(seg: dict) -> str:
     )
 
 
+# ---------- name / phone / received-from ----------
+
+_INF_RE = re.compile(r"\(INF([A-Z][A-Z\-' ]*)/([A-Z][A-Z\-' ]*)/(\d{1,2}[A-Z]{3}\d{2})\)\s*$")
+_HEAD_RE = re.compile(r"^(\d{1,2})?([A-Z][A-Z\-' ]*)$")
+_DOB_RE = re.compile(r"^(\d{1,2})([A-Z]{3})(\d{2})$")
+_PHONE_RE = re.compile(r"^(?:/([A-Z]{3}))?(\d[\d\-]{4,14})-([A-Z]{1,3})$")
+
+
+def handle_name(u: str) -> None:
+    working_text = u[1:].strip()
+    inf_match = _INF_RE.search(working_text)
+    infant_data = None
+    if inf_match:
+        infant_data = {
+            "surname": inf_match.group(1).strip(),
+            "given": inf_match.group(2).strip(),
+            "dob": inf_match.group(3),
+        }
+        working_text = working_text[: inf_match.start()].strip()
+    if "/" not in working_text:
+        print_err("FORMAT - NAME MUST BE SURNAME/GIVEN NAME")
+        return
+    parts = [s.strip() for s in working_text.split("/") if s.strip()]
+    head_match = _HEAD_RE.match(parts[0]) if len(parts) >= 2 else None
+    if not head_match:
+        print_err("FORMAT - NAME MUST BE SURNAME/GIVEN NAME")
+        return
+    surname = head_match.group(2)
+    incoming = parts[1:]
+    segments = STATE.pnr["segments"]
+    max_party = min(s["seats"] for s in segments) if segments else None
+    if max_party is not None and len(STATE.pnr["names"]) + len(incoming) > max_party:
+        print_err(
+            f"UNABLE TO ADD NAME - PARTY SIZE EXCEEDS SEATS SOLD ({max_party}) - "
+            "SELL ADDITIONAL SEATS OR CANCEL A NAME"
+        )
+        return
+    added = []
+    for g in incoming:
+        full = f"{surname}/{g}"
+        STATE.pnr["names"].append(full)
+        added.append(full)
+    suffix = "S" if len(added) > 1 else ""
+    print_line(f"NAME{suffix} ADDED - {'  '.join(added)}")
+    log_activity(STATE, f"NAME{suffix} ADDED - {'  '.join(added)}")
+    if infant_data:
+        dv = _DOB_RE.match(infant_data["dob"])
+        day = int(dv.group(1)) if dv else 0
+        if not dv or dv.group(2) not in MONTHS or day < 1 or day > 31:
+            print_err("FORMAT - INVALID INFANT DOB, USE DDMONYY e.g. 12JAN26")
+        else:
+            adult_ref = added[-1]
+            STATE.pnr["infants"].append(
+                {
+                    "adult": adult_ref,
+                    "surname": infant_data["surname"],
+                    "given": infant_data["given"],
+                    "dob": infant_data["dob"],
+                }
+            )
+            print_line(
+                f"INFANT ADDED - {infant_data['surname']}/{infant_data['given']}  "
+                f"DOB {infant_data['dob']}  (TRAVELS WITH {adult_ref})"
+            )
+            log_activity(
+                STATE,
+                f"INFANT ADDED - {infant_data['surname']}/{infant_data['given']}  DOB {infant_data['dob']}",
+            )
+    refresh_and_print_pnr()
+
+
+def handle_phone(u: str) -> None:
+    text = u[1:].strip()
+    pm = _PHONE_RE.match(text)
+    if not pm or pm.group(3).upper() not in PHONE_LOC_CODES:
+        print_err(
+            "FORMAT - PHONE MUST BE 9NUMBER-LOC or 9/CTYNUMBER-LOC  "
+            "e.g. 9214555-1234-A or 9/DFW555-1234-A"
+        )
+        return
+    city = pm.group(1)
+    formatted = f"{'/' + city.upper() if city else ''}{pm.group(2)}-{pm.group(3).upper()}"
+    STATE.pnr["phones"].append(formatted)
+    print_line(f"PHONE ADDED - 9{formatted}")
+    log_activity(STATE, f"PHONE ADDED - 9{formatted}")
+    refresh_and_print_pnr()
+
+
+def handle_received_from(u: str) -> None:
+    text = u[1:].strip()
+    if not text:
+        print_err("FORMAT - RECEIVED FROM TEXT REQUIRED")
+        return
+    STATE.pnr["received_from"] = text
+    print_line(f"RECEIVED FROM ADDED - {text}")
+    log_activity(STATE, f"RECEIVED FROM ADDED - {text}")
+    refresh_and_print_pnr()
+
+
 # ---------- pricing (WP / WPNCS) ----------
 
 def _trip_type(segments: list[dict]) -> str:
@@ -236,15 +362,15 @@ def price_itinerary(mode: str) -> None:
     base_fare = 0
     for s in p["segments"]:
         mult = CLASS_FARE_MULT.get(s["cls"], 1.4)
-        dist = 60 + int(rng() * 400)
-        base_fare += round((45 + dist * 0.35) * mult * s["seats"])
+        dist = FARE_FORMULA["distanceMin"] + int(rng() * FARE_FORMULA["distanceRange"])
+        base_fare += round((FARE_FORMULA["baseFareCoefficient"] + dist * FARE_FORMULA["baseFarePerMile"]) * mult * s["seats"])
 
-    num_taxes = 2 + int(rng() * 3)
+    num_taxes = FARE_FORMULA["minTaxes"] + int(rng() * FARE_FORMULA["additionalTaxesRange"])
     pool = _shuffled(TAX_POOL, rng)[:num_taxes]
     taxes = []
     tax_total = 0.0
     for t in pool:
-        amt = round((3 + rng() * 22) * 100) / 100
+        amt = round((FARE_FORMULA["taxAmountMin"] + rng() * FARE_FORMULA["taxAmountRange"]) * 100) / 100
         taxes.append({"code": t["code"], "label": t["label"], "amount": amt})
         tax_total += amt
     tax_total = round(tax_total * 100) / 100
@@ -287,6 +413,44 @@ def format_pricing_short(pr: dict) -> str:
         f"{pr['mode']}  {pr['fare_basis']}  BASE USD{pr['base_fare']:.2f}  "
         f"TAX USD{pr['tax_total']:.2f}  TTL USD{pr['total']:.2f}"
     )
+
+
+# ---------- ticketing arrangement ----------
+
+def add_ticketing_at_will() -> None:
+    STATE.pnr["ticketing"] = "7TAW/ (TICKETING AT WILL - TICKET ON OR BEFORE DEPARTURE)"
+    print_line("TICKETING ARRANGEMENT ADDED - 7TAW/")
+    log_activity(STATE, "TICKETING ARRANGEMENT ADDED - 7TAW/")
+    refresh_and_print_pnr()
+
+
+def add_ticketing_at_will_dated(day: str, mon: str, time: str | None) -> None:
+    dinfo = parse_date(day, mon)
+    if dinfo is None:
+        print_err("INVALID DATE - CHECK ENTRY AND REENTER")
+        return
+    time_suffix = f"/{time}" if time else "/"
+    queued = f" {time}" if time else ""
+    STATE.pnr["ticketing"] = (
+        f"7TAW{dinfo.day}{dinfo.mon}{time_suffix} "
+        f"(TICKETING AT WILL - QUEUED {dinfo.day}{dinfo.mon}{queued})"
+    )
+    print_line(f"TICKETING ARRANGEMENT ADDED - 7TAW{dinfo.day}{dinfo.mon}{time_suffix}")
+    log_activity(STATE, f"TICKETING ARRANGEMENT ADDED - 7TAW{dinfo.day}{dinfo.mon}{time_suffix}")
+    refresh_and_print_pnr()
+
+
+def add_ticketing_time_limit(day: str, mon: str, time: str) -> None:
+    dinfo = parse_date(day, mon)
+    if dinfo is None:
+        print_err("INVALID DATE - CHECK ENTRY AND REENTER")
+        return
+    STATE.pnr["ticketing"] = (
+        f"7TAX{dinfo.day}{dinfo.mon}/{time} (TIME LIMIT - TICKET BY {dinfo.day}{dinfo.mon} {time})"
+    )
+    print_line(f"TICKETING ARRANGEMENT ADDED - 7TAX{dinfo.day}{dinfo.mon}/{time}")
+    log_activity(STATE, f"TICKETING ARRANGEMENT ADDED - 7TAX{dinfo.day}{dinfo.mon}/{time}")
+    refresh_and_print_pnr()
 
 
 # ---------- seat maps ----------
@@ -364,6 +528,78 @@ def assign_seat(n: int, seat_str: str) -> None:
 
 def mask_card(num: str) -> str:
     return "X" * max(0, len(num) - 4) + num[-4:]
+
+
+def add_fop_cash() -> None:
+    STATE.pnr["form_of_payment"] = {"type": "CASH", "display": "CASH"}
+    print_line("FORM OF PAYMENT ADDED - CASH")
+    log_activity(STATE, "FORM OF PAYMENT ADDED - CASH")
+    refresh_and_print_pnr()
+
+
+def add_fop_check() -> None:
+    STATE.pnr["form_of_payment"] = {"type": "CHECK", "display": "CHECK"}
+    print_line("FORM OF PAYMENT ADDED - CHECK")
+    log_activity(STATE, "FORM OF PAYMENT ADDED - CHECK")
+    refresh_and_print_pnr()
+
+
+def add_fop_credit_card(card_type: str, num: str, mm_str: str, yy: str) -> None:
+    if card_type not in CARD_TYPES:
+        print_err(f"UNKNOWN CARD TYPE {card_type} - VALID: {' '.join(CARD_TYPES.keys())}")
+        return
+    mm = int(mm_str)
+    if mm < 1 or mm > 12:
+        print_err("INVALID EXPIRY MONTH - USE MMYY")
+        return
+    display = f"CC {card_type} {mask_card(num)}  EXP {mm_str}/{yy}  ({CARD_TYPES[card_type]})"
+    STATE.pnr["form_of_payment"] = {"type": "CC", "display": display}
+    print_line(f"FORM OF PAYMENT ADDED - {display}")
+    log_activity(STATE, f"FORM OF PAYMENT ADDED - {display}")
+    refresh_and_print_pnr()
+
+
+# ---------- special service requests / other service info ----------
+
+def add_fqtv(airline: str, num: str) -> None:
+    text = f"FQTV {airline} FREQUENT FLYER NUMBER  {airline}{num}"
+    STATE.pnr["ssrs"].append({"code": "FQTV", "text": text})
+    print_line(f"SSR ADDED - {text}")
+    log_activity(STATE, f"SSR ADDED - {text}")
+    refresh_and_print_pnr()
+
+
+def add_osi(airline: str, raw_text: str) -> None:
+    text = raw_text.strip()
+    if not text:
+        print_err("FORMAT - OSI REQUIRES FREE TEXT, e.g. 3OSIAA VIP PASSENGER")
+        return
+    full_text = f"{airline} {text}"
+    STATE.pnr["osis"].append({"airline": airline, "text": full_text})
+    print_line(f"OSI ADDED - {full_text}")
+    log_activity(STATE, f"OSI ADDED - {full_text}")
+    refresh_and_print_pnr()
+
+
+def add_ssr(code: str, pax_str: str | None, free_text_raw: str | None) -> None:
+    desc = SSR_CODES.get(code)
+    if not desc:
+        print_err(f"UNKNOWN SSR CODE {code} - TYPE HELP FOR LIST")
+        return
+    pax_num = int(pax_str) if pax_str else None
+    if pax_num and (pax_num < 1 or pax_num > len(STATE.pnr["names"])):
+        print_err("INVALID PASSENGER NUMBER - CHECK NAME FIELD")
+        return
+    free_text = free_text_raw.strip() if free_text_raw else ""
+    text = f"{code} {desc}"
+    if pax_num:
+        text += f"  PAX {pax_num} ({STATE.pnr['names'][pax_num - 1]})"
+    if free_text:
+        text += f"  /{free_text}"
+    STATE.pnr["ssrs"].append({"code": code, "text": text})
+    print_line(f"SSR ADDED - {text}")
+    log_activity(STATE, f"SSR ADDED - {text}")
+    refresh_and_print_pnr()
 
 
 # ---------- encode/decode ----------
@@ -545,6 +781,39 @@ def cancel_itinerary() -> None:
     refresh_and_print_pnr()
 
 
+def handle_cancel(range_str: str) -> None:
+    nums: list[int] = []
+    valid = True
+    for part in range_str.split(","):
+        if "-" in part:
+            bounds = part.split("-")
+            if len(bounds) != 2:
+                valid = False
+                break
+            a = int(bounds[0]) if bounds[0].isdigit() else 0
+            b = int(bounds[1]) if bounds[1].isdigit() else 0
+            if not a or not b or a > b:
+                valid = False
+                break
+            nums.extend(range(a, b + 1))
+        else:
+            v = int(part) if part.isdigit() else 0
+            if not v:
+                valid = False
+                break
+            nums.append(v)
+    if not valid or not nums:
+        print_err("INVALID ELEMENT RANGE - CHECK ENTRY AND REENTER")
+        return
+    cancel_elements(nums)
+
+
+def ignore_pnr() -> None:
+    STATE.pnr = fresh_pnr()
+    STATE.last_display = []
+    print_line("IGNORED - PNR NOT SAVED")
+
+
 # ---------- end transaction ----------
 
 def gen_locator() -> str:
@@ -557,26 +826,9 @@ def gen_locator() -> str:
 
 def end_transaction(mode: str) -> None:
     p = STATE.pnr
-    if len(p["segments"]) == 0:
-        print_err("PNR INCOMPLETE - NO ITINERARY SEGMENTS")
-        return
-    if len(p["names"]) == 0:
-        print_err("PNR INCOMPLETE - NEED NAME FIELD (ENTRY: -SURNAME/GIVEN)")
-        return
-    if not p["pricing"]:
-        print_err("PNR INCOMPLETE - NEED FARE QUOTE (ENTRY: WP)")
-        return
-    if len(p["phones"]) == 0:
-        print_err("PNR INCOMPLETE - NEED PHONE FIELD (ENTRY: 9...)")
-        return
-    if not p["received_from"]:
-        print_err("PNR INCOMPLETE - NEED RECEIVED FROM (ENTRY: 6...)")
-        return
-    if not p["form_of_payment"]:
-        print_err("PNR INCOMPLETE - NEED FORM OF PAYMENT (ENTRY: FPCASH, FPCHECK, OR FPCC...)")
-        return
-    if not p["ticketing"]:
-        print_err("PNR INCOMPLETE - NEED TICKETING ARRANGEMENT (ENTRY: 7TAW/)")
+    incomplete = _first_incomplete_message("end_transaction")
+    if incomplete:
+        print_err(incomplete)
         return
 
     if not p["locator"]:
@@ -618,20 +870,9 @@ def gen_ticket_number(locator: str, identifier: str) -> str:
 
 def issue_tickets() -> None:
     p = STATE.pnr
-    if not p["locator"]:
-        print_err("UNABLE TO TICKET - END TRANSACT (ER OR ET) BEFORE TICKETING")
-        return
-    if not p["pricing"]:
-        print_err("UNABLE TO TICKET - NO FARE QUOTE ON FILE (ENTRY: WP)")
-        return
-    if not p["ticketing"]:
-        print_err("UNABLE TO TICKET - NO TICKETING ARRANGEMENT ON FILE")
-        return
-    if not p["form_of_payment"]:
-        print_err("UNABLE TO TICKET - NO FORM OF PAYMENT ON FILE")
-        return
-    if p["tickets"]:
-        print_err("PNR ALREADY TICKETED - TICKET NUMBERS ON FILE (SEE *R)")
+    incomplete = _first_incomplete_message("issue_tickets")
+    if incomplete:
+        print_err(incomplete)
         return
 
     validating_carrier = p["segments"][0]["airline"]

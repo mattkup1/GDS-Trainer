@@ -1,15 +1,16 @@
-"""Airport code -> [name, city, country] lookup, loaded from airports.json
-(converted once from the browser app's airports.js — same OpenFlights data)."""
+"""Airport code -> [name, city, country] lookup, loaded from spec/airports.json -
+shared with the browser edition (see spec/README.md)."""
 
 from __future__ import annotations
 
 import json
-from importlib import resources
+from pathlib import Path
+
+_SPEC_DIR = Path(__file__).resolve().parents[2] / "spec"
 
 
 def _load() -> dict[str, list[str]]:
-    with resources.files(__package__).joinpath("airports.json").open("r", encoding="utf-8") as f:
-        return json.load(f)
+    return json.loads((_SPEC_DIR / "airports.json").read_text(encoding="utf-8"))
 
 
 AIRPORTS: dict[str, list[str]] = _load()

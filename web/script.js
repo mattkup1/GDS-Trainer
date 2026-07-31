@@ -38,12 +38,21 @@
   }
 
   // ---------- reference data ----------
-  const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-  const WEEKDAYS = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
-  const AIRLINES = ['AA','UA','DL','WN','B6','AS','NK','F9'];
-  const AIRLINE_NUMERIC_CODES = { AA:'001', UA:'016', DL:'006', WN:'526', B6:'279', AS:'027', NK:'487', F9:'351' };
-  const EQUIP = ['738','73G','320','321','32N','E75','CR9','777','788','319'];
-  const CLASSES = ['F','J','C','Y','B','M'];
+  // Sourced from REFERENCE_DATA (spec/reference-data.json via reference-data.js) so the web
+  // and CLI editions share one spec - see spec/README.md. Local names kept as-is to avoid
+  // touching everywhere they're used below.
+  const MONTHS = REFERENCE_DATA.months;
+  const WEEKDAYS = REFERENCE_DATA.weekdays;
+  const AIRLINES = REFERENCE_DATA.airlines;
+  const AIRLINE_NUMERIC_CODES = REFERENCE_DATA.airlineNumericCodes;
+  const EQUIP = REFERENCE_DATA.equipment;
+  const CLASSES = REFERENCE_DATA.classes;
+  const CLASS_FARE_MULT = REFERENCE_DATA.classFareMultipliers;
+  const TAX_POOL = REFERENCE_DATA.taxPool;
+  const FARE_FORMULA = REFERENCE_DATA.fareFormula;
+  const SSR_CODES = REFERENCE_DATA.ssrCodes;
+  const CARD_TYPES = REFERENCE_DATA.cardTypes;
+  const PHONE_LOC_CODES = REFERENCE_DATA.phoneLocationCodes;
 
   // AIRPORTS (code -> [name, city, country]) is loaded globally from airports.js
   function cityName(code){
@@ -200,16 +209,6 @@
   }
 
   // ---------- pricing (WP / WPNCS) ----------
-  const CLASS_FARE_MULT = { F:5.5, J:4.2, C:3.6, Y:1.6, B:1.3, M:1.0 };
-  const TAX_POOL = [
-    { code:'US', label:'U.S. TRANSPORTATION TAX' },
-    { code:'XF', label:'PASSENGER FACILITY CHARGE' },
-    { code:'AY', label:'SEPTEMBER 11TH SECURITY FEE' },
-    { code:'ZP', label:'PASSENGER SERVICE CHARGE' },
-    { code:'YQ', label:'CARRIER-IMPOSED SURCHARGE' },
-    { code:'YR', label:'CARRIER-IMPOSED SURCHARGE' }
-  ];
-
   function tripType(segments){
     if(segments.length === 1) return 'OW';
     const first = segments[0], last = segments[segments.length-1];
@@ -229,16 +228,16 @@
     let baseFare = 0;
     for(const s of p.segments){
       const mult = CLASS_FARE_MULT[s.cls] || 1.4;
-      const dist = 60 + Math.floor(rng()*400);
-      baseFare += Math.round((45 + dist*0.35) * mult * s.seats);
+      const dist = FARE_FORMULA.distanceMin + Math.floor(rng()*FARE_FORMULA.distanceRange);
+      baseFare += Math.round((FARE_FORMULA.baseFareCoefficient + dist*FARE_FORMULA.baseFarePerMile) * mult * s.seats);
     }
 
-    const numTaxes = 2 + Math.floor(rng()*3);
+    const numTaxes = FARE_FORMULA.minTaxes + Math.floor(rng()*FARE_FORMULA.additionalTaxesRange);
     const pool = TAX_POOL.slice().sort(() => rng()-0.5).slice(0, numTaxes);
     const taxes = [];
     let taxTotal = 0;
     for(const t of pool){
-      const amt = Math.round((3 + rng()*22) * 100)/100;
+      const amt = Math.round((FARE_FORMULA.taxAmountMin + rng()*FARE_FORMULA.taxAmountRange) * 100)/100;
       taxes.push({ code:t.code, label:t.label, amount:amt });
       taxTotal += amt;
     }
@@ -267,24 +266,6 @@
   }
 
   // ---------- special service requests / other service info ----------
-  const SSR_CODES = {
-    WCHR: 'WHEELCHAIR - CAN WALK TO/FROM SEAT',
-    WCHS: 'WHEELCHAIR - MUST BE CARRIED SHORT DISTANCE',
-    WCHC: 'WHEELCHAIR - IMMOBILE, CARRIED TO SEAT',
-    VGML: 'VEGETARIAN MEAL',
-    BBML: 'BABY MEAL',
-    CHML: 'CHILD MEAL',
-    KSML: 'KOSHER MEAL',
-    MOML: 'MUSLIM MEAL',
-    DBML: 'DIABETIC MEAL',
-    BLND: 'BLIND PASSENGER',
-    DEAF: 'DEAF PASSENGER',
-    UMNR: 'UNACCOMPANIED MINOR',
-    PETC: 'PET IN CABIN',
-    BSCT: 'BASSINET REQUEST',
-    SPML: 'SPECIAL MEAL - SEE FREE TEXT',
-    XBAG: 'EXTRA BAGGAGE'
-  };
 
   // ---------- seat maps ----------
   function getSeatMap(seg){
@@ -339,8 +320,6 @@
   }
 
   // ---------- form of payment ----------
-  const CARD_TYPES = { VI:'VISA', CA:'MASTERCARD', AX:'AMERICAN EXPRESS', DC:'DINERS CLUB', DS:'DISCOVER', JC:'JCB' };
-
   function maskCard(num){
     return 'X'.repeat(Math.max(0, num.length-4)) + num.slice(-4);
   }
@@ -426,6 +405,35 @@
     refreshAndPrintPNR();
   }
 
+  // ---------- PNR completeness (shared spec: PNR_COMPLETENESS) ----------
+  const PNR_FIELD_ACCESSORS = {
+    segments: () => state.pnr.segments,
+    names: () => state.pnr.names,
+    pricing: () => state.pnr.pricing,
+    phones: () => state.pnr.phones,
+    received_from: () => state.pnr.receivedFrom,
+    form_of_payment: () => state.pnr.formOfPayment,
+    ticketing: () => state.pnr.ticketing,
+    tickets: () => state.pnr.tickets,
+    locator: () => state.pnr.locator,
+  };
+
+  function completenessCheckPasses(kind, value){
+    if(kind === 'non_empty') return Array.isArray(value) && value.length > 0;
+    if(kind === 'present') return value !== null && value !== undefined;
+    if(kind === 'empty') return Array.isArray(value) && value.length === 0;
+    return true;
+  }
+
+  function firstIncompleteMessage(ruleKey){
+    const rules = PNR_COMPLETENESS[ruleKey] || [];
+    for(const rule of rules){
+      const value = PNR_FIELD_ACCESSORS[rule.field]();
+      if(!completenessCheckPasses(rule.check, value)) return rule.message;
+    }
+    return null;
+  }
+
   // ---------- end transaction ----------
   function genLocator(){
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -439,13 +447,8 @@
 
   function endTransaction(mode){
     const p = state.pnr;
-    if(p.segments.length === 0){ printErr('PNR INCOMPLETE - NO ITINERARY SEGMENTS'); return; }
-    if(p.names.length === 0){ printErr('PNR INCOMPLETE - NEED NAME FIELD (ENTRY: -SURNAME/GIVEN)'); return; }
-    if(!p.pricing){ printErr('PNR INCOMPLETE - NEED FARE QUOTE (ENTRY: WP)'); return; }
-    if(p.phones.length === 0){ printErr('PNR INCOMPLETE - NEED PHONE FIELD (ENTRY: 9...)'); return; }
-    if(!p.receivedFrom){ printErr('PNR INCOMPLETE - NEED RECEIVED FROM (ENTRY: 6...)'); return; }
-    if(!p.formOfPayment){ printErr('PNR INCOMPLETE - NEED FORM OF PAYMENT (ENTRY: FPCASH, FPCHECK, OR FPCC...)'); return; }
-    if(!p.ticketing){ printErr('PNR INCOMPLETE - NEED TICKETING ARRANGEMENT (ENTRY: 7TAW/)'); return; }
+    const incomplete = firstIncompleteMessage('end_transaction');
+    if(incomplete){ printErr(incomplete); return; }
 
     if(!p.locator) p.locator = genLocator();
     logActivity(`PNR SAVED (${mode}) - RLOC ${p.locator}`);
@@ -484,11 +487,8 @@
 
   function issueTickets(){
     const p = state.pnr;
-    if(!p.locator){ printErr('UNABLE TO TICKET - END TRANSACT (ER OR ET) BEFORE TICKETING'); return; }
-    if(!p.pricing){ printErr('UNABLE TO TICKET - NO FARE QUOTE ON FILE (ENTRY: WP)'); return; }
-    if(!p.ticketing){ printErr('UNABLE TO TICKET - NO TICKETING ARRANGEMENT ON FILE'); return; }
-    if(!p.formOfPayment){ printErr('UNABLE TO TICKET - NO FORM OF PAYMENT ON FILE'); return; }
-    if(p.tickets.length){ printErr('PNR ALREADY TICKETED - TICKET NUMBERS ON FILE (SEE *R)'); return; }
+    const incomplete = firstIncompleteMessage('issue_tickets');
+    if(incomplete){ printErr(incomplete); return; }
 
     const validatingCarrier = p.segments[0].airline;
     const numericCode = AIRLINE_NUMERIC_CODES[validatingCarrier] || '000';
@@ -630,7 +630,250 @@
   }
   boot();
 
+  // ---------- command handlers (dispatched via COMMAND_GRAMMAR, see spec/README.md) ----------
+  function handleName(u){
+    let workingText = u.slice(1).trim();
+    const infMatch = workingText.match(/\(INF([A-Z][A-Z\-' ]*)\/([A-Z][A-Z\-' ]*)\/(\d{1,2}[A-Z]{3}\d{2})\)\s*$/);
+    let infantData = null;
+    if(infMatch){
+      infantData = { surname: infMatch[1].trim(), given: infMatch[2].trim(), dob: infMatch[3] };
+      workingText = workingText.slice(0, infMatch.index).trim();
+    }
+    if(!workingText.includes('/')){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
+    const parts = workingText.split('/').map(s => s.trim()).filter(s => s.length);
+    const headMatch = parts.length >= 2 ? parts[0].match(/^(\d{1,2})?([A-Z][A-Z\-' ]*)$/) : null;
+    if(!headMatch){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
+    const surname = headMatch[2];
+    const incoming = parts.slice(1);
+    const maxParty = state.pnr.segments.length ? Math.min(...state.pnr.segments.map(s => s.seats)) : null;
+    if(maxParty !== null && state.pnr.names.length + incoming.length > maxParty){
+      printErr(`UNABLE TO ADD NAME - PARTY SIZE EXCEEDS SEATS SOLD (${maxParty}) - SELL ADDITIONAL SEATS OR CANCEL A NAME`);
+      return;
+    }
+    const added = [];
+    for(const g of incoming){
+      const full = `${surname}/${g}`;
+      state.pnr.names.push(full);
+      added.push(full);
+    }
+    print(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${added.join('  ')}`);
+    logActivity(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${added.join('  ')}`);
+    if(infantData){
+      const dv = infantData.dob.match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);
+      const day = dv ? parseInt(dv[1],10) : 0;
+      if(!dv || MONTHS.indexOf(dv[2]) < 0 || day < 1 || day > 31){
+        printErr('FORMAT - INVALID INFANT DOB, USE DDMONYY e.g. 12JAN26');
+      } else {
+        const adultRef = added[added.length-1];
+        state.pnr.infants.push({ adult: adultRef, surname: infantData.surname, given: infantData.given, dob: infantData.dob });
+        print(`INFANT ADDED - ${infantData.surname}/${infantData.given}  DOB ${infantData.dob}  (TRAVELS WITH ${adultRef})`);
+        logActivity(`INFANT ADDED - ${infantData.surname}/${infantData.given}  DOB ${infantData.dob}`);
+      }
+    }
+    refreshAndPrintPNR();
+  }
+
+  function handlePhone(u){
+    const text = u.slice(1).trim();
+    const pm = text.match(/^(?:\/([A-Z]{3}))?(\d[\d\-]{4,14})-([A-Z]{1,3})$/);
+    if(!pm || !PHONE_LOC_CODES.includes(pm[3].toUpperCase())){
+      printErr('FORMAT - PHONE MUST BE 9NUMBER-LOC or 9/CTYNUMBER-LOC  e.g. 9214555-1234-A or 9/DFW555-1234-A'); return;
+    }
+    const formatted = `${pm[1] ? '/'+pm[1].toUpperCase() : ''}${pm[2]}-${pm[3].toUpperCase()}`;
+    state.pnr.phones.push(formatted);
+    print(`PHONE ADDED - 9${formatted}`);
+    logActivity(`PHONE ADDED - 9${formatted}`);
+    refreshAndPrintPNR();
+  }
+
+  function handleReceivedFrom(u){
+    const text = u.slice(1).trim();
+    if(!text){ printErr('FORMAT - RECEIVED FROM TEXT REQUIRED'); return; }
+    state.pnr.receivedFrom = text;
+    print(`RECEIVED FROM ADDED - ${text}`);
+    logActivity(`RECEIVED FROM ADDED - ${text}`);
+    refreshAndPrintPNR();
+  }
+
+  function addTicketingAtWill(){
+    state.pnr.ticketing = '7TAW/ (TICKETING AT WILL - TICKET ON OR BEFORE DEPARTURE)';
+    print('TICKETING ARRANGEMENT ADDED - 7TAW/');
+    logActivity('TICKETING ARRANGEMENT ADDED - 7TAW/');
+    refreshAndPrintPNR();
+  }
+
+  function addTicketingAtWillDated(day, mon, time){
+    const dinfo = parseDate(day, mon);
+    if(!dinfo){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
+    const timeSuffix = time ? '/'+time : '/';
+    state.pnr.ticketing = `7TAW${dinfo.day}${dinfo.mon}${timeSuffix} (TICKETING AT WILL - QUEUED ${dinfo.day}${dinfo.mon}${time ? ' '+time : ''})`;
+    print(`TICKETING ARRANGEMENT ADDED - 7TAW${dinfo.day}${dinfo.mon}${timeSuffix}`);
+    logActivity(`TICKETING ARRANGEMENT ADDED - 7TAW${dinfo.day}${dinfo.mon}${timeSuffix}`);
+    refreshAndPrintPNR();
+  }
+
+  function addTicketingTimeLimit(day, mon, time){
+    const dinfo = parseDate(day, mon);
+    if(!dinfo){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
+    state.pnr.ticketing = `7TAX${dinfo.day}${dinfo.mon}/${time} (TIME LIMIT - TICKET BY ${dinfo.day}${dinfo.mon} ${time})`;
+    print(`TICKETING ARRANGEMENT ADDED - 7TAX${dinfo.day}${dinfo.mon}/${time}`);
+    logActivity(`TICKETING ARRANGEMENT ADDED - 7TAX${dinfo.day}${dinfo.mon}/${time}`);
+    refreshAndPrintPNR();
+  }
+
+  function addFopCash(){
+    state.pnr.formOfPayment = { type:'CASH', display:'CASH' };
+    print('FORM OF PAYMENT ADDED - CASH');
+    logActivity('FORM OF PAYMENT ADDED - CASH');
+    refreshAndPrintPNR();
+  }
+
+  function addFopCheck(){
+    state.pnr.formOfPayment = { type:'CHECK', display:'CHECK' };
+    print('FORM OF PAYMENT ADDED - CHECK');
+    logActivity('FORM OF PAYMENT ADDED - CHECK');
+    refreshAndPrintPNR();
+  }
+
+  function addFopCreditCard(type, num, mmStr, yy){
+    const mm = parseInt(mmStr,10);
+    if(!CARD_TYPES[type]){ printErr(`UNKNOWN CARD TYPE ${type} - VALID: ${Object.keys(CARD_TYPES).join(' ')}`); return; }
+    if(mm < 1 || mm > 12){ printErr('INVALID EXPIRY MONTH - USE MMYY'); return; }
+    const display = `CC ${type} ${maskCard(num)}  EXP ${mmStr}/${yy}  (${CARD_TYPES[type]})`;
+    state.pnr.formOfPayment = { type:'CC', display };
+    print(`FORM OF PAYMENT ADDED - ${display}`);
+    logActivity(`FORM OF PAYMENT ADDED - ${display}`);
+    refreshAndPrintPNR();
+  }
+
+  function addFqtv(airline, num){
+    const entry = { code:'FQTV', text: `FQTV ${airline} FREQUENT FLYER NUMBER  ${airline}${num}` };
+    state.pnr.ssrs.push(entry);
+    print(`SSR ADDED - ${entry.text}`);
+    logActivity(`SSR ADDED - ${entry.text}`);
+    refreshAndPrintPNR();
+  }
+
+  function addOsi(airline, rawText){
+    const text = rawText.trim();
+    if(!text){ printErr('FORMAT - OSI REQUIRES FREE TEXT, e.g. 3OSIAA VIP PASSENGER'); return; }
+    const entry = { airline, text: `${airline} ${text}` };
+    state.pnr.osis.push(entry);
+    print(`OSI ADDED - ${entry.text}`);
+    logActivity(`OSI ADDED - ${entry.text}`);
+    refreshAndPrintPNR();
+  }
+
+  function addSsr(code, paxStr, freeTextRaw){
+    const desc = SSR_CODES[code];
+    if(!desc){ printErr(`UNKNOWN SSR CODE ${code} - TYPE HELP FOR LIST`); return; }
+    const paxNum = paxStr ? parseInt(paxStr,10) : null;
+    if(paxNum && (paxNum < 1 || paxNum > state.pnr.names.length)){ printErr('INVALID PASSENGER NUMBER - CHECK NAME FIELD'); return; }
+    const freeText = freeTextRaw ? freeTextRaw.trim() : '';
+    let text = `${code} ${desc}`;
+    if(paxNum) text += `  PAX ${paxNum} (${state.pnr.names[paxNum-1]})`;
+    if(freeText) text += `  /${freeText}`;
+    state.pnr.ssrs.push({ code, text });
+    print(`SSR ADDED - ${text}`);
+    logActivity(`SSR ADDED - ${text}`);
+    refreshAndPrintPNR();
+  }
+
+  function decodeAirport(code){
+    const a = typeof AIRPORTS !== 'undefined' ? AIRPORTS[code] : null;
+    if(!a){ printErr(`UNABLE TO DECODE - ${code} NOT FOUND`); return; }
+    print(`${code}  ${a[0].toUpperCase()}`, 'hd');
+    print(`  ${a[1].toUpperCase()}, ${a[2].toUpperCase()}`, 'dim');
+  }
+
+  function searchAirports(rawTerm){
+    const term = rawTerm.trim();
+    if(term.length < 2){ printErr('FORMAT - ENTER AT LEAST 2 CHARACTERS TO SEARCH'); return; }
+    const results = [];
+    for(const code in AIRPORTS){
+      const a = AIRPORTS[code];
+      if(a[0].toUpperCase().includes(term) || a[1].toUpperCase().includes(term)){
+        results.push({ code, name:a[0], city:a[1], country:a[2] });
+        if(results.length >= 25) break;
+      }
+    }
+    if(results.length === 0){ printErr(`NO MATCH FOUND FOR "${term}"`); return; }
+    print(`CITY/AIRPORT NAME SEARCH - "${term}"  (${results.length}${results.length===25?'+':''} MATCH${results.length===1?'':'ES'})`, 'hd');
+    printBlank();
+    for(const r of results){
+      print(` ${pad(r.code,4)} ${pad(r.name.toUpperCase(),34)} ${pad(r.city.toUpperCase(),20)} ${r.country.toUpperCase()}`);
+    }
+  }
+
+  function handleCancel(rangeStr){
+    const nums = [];
+    let valid = true;
+    for(const part of rangeStr.split(',')){
+      if(part.includes('-')){
+        const bounds = part.split('-');
+        const a = parseInt(bounds[0],10), b = parseInt(bounds[1],10);
+        if(bounds.length !== 2 || !a || !b || a > b){ valid = false; break; }
+        for(let i=a;i<=b;i++) nums.push(i);
+      } else {
+        const v = parseInt(part,10);
+        if(!v){ valid = false; break; }
+        nums.push(v);
+      }
+    }
+    if(!valid || nums.length === 0){ printErr('INVALID ELEMENT RANGE - CHECK ENTRY AND REENTER'); return; }
+    cancelElements(nums);
+  }
+
+  function ignorePnr(){
+    state.pnr = freshPNR();
+    state.lastDisplay = [];
+    print('IGNORED - PNR NOT SAVED');
+  }
+
+  // handler token (from COMMAND_GRAMMAR, shared with the CLI edition) -> local function.
+  // Every handler is called as handler(rawMatchedString, ...captureGroups) so the dispatch
+  // loop below stays fully generic - see spec/README.md.
+  const HANDLERS = {
+    SIGN_OUT: () => signOut(),
+    HELP: () => showHelp(),
+    AVAILABILITY: (raw, day, mon, orig, dest) => genAvailability(day, mon, orig, dest),
+    SELL_FROM_AVAIL: (raw, line, cls, seats) => sellFromAvail(parseInt(line,10), cls, parseInt(seats,10)),
+    LONG_SELL: (raw, al, flt, cls, day, mon, orig, dest, status, seats) => directSell(al, flt, cls, day, mon, orig, dest, status, parseInt(seats,10)),
+    NAME_FIELD: (raw) => handleName(raw),
+    PHONE: (raw) => handlePhone(raw),
+    RECEIVED_FROM: (raw) => handleReceivedFrom(raw),
+    PRICE_ITINERARY: (raw, mode) => priceItinerary(mode),
+    TICKETING_AT_WILL: () => addTicketingAtWill(),
+    TICKETING_AT_WILL_DATED: (raw, day, mon, time) => addTicketingAtWillDated(day, mon, time),
+    TICKETING_TIME_LIMIT: (raw, day, mon, time) => addTicketingTimeLimit(day, mon, time),
+    FOP_CASH: () => addFopCash(),
+    FOP_CHECK: () => addFopCheck(),
+    FOP_CREDIT_CARD: (raw, type, num, mm, yy) => addFopCreditCard(type, num, mm, yy),
+    ISSUE_TICKETS: () => issueTickets(),
+    SSR_FQTV: (raw, airline, num) => addFqtv(airline, num),
+    OSI: (raw, airline, text) => addOsi(airline, text),
+    SSR: (raw, code, pax, freeText) => addSsr(code, pax, freeText),
+    SEAT_MAP: (raw, n) => showSeatMap(parseInt(n,10)),
+    SEAT_ASSIGN: (raw, n, seat) => assignSeat(parseInt(n,10), seat),
+    DECODE_AIRPORT: (raw, code) => decodeAirport(code),
+    SEARCH_AIRPORTS: (raw, term) => searchAirports(term),
+    PNR_REDISPLAY: () => refreshAndPrintPNR(),
+    PNR_HISTORY: () => showHistory(),
+    PNR_RETRIEVE: (raw, loc) => retrieveByLocator(loc),
+    CANCEL_ITINERARY: () => cancelItinerary(),
+    CANCEL_ELEMENTS: (raw, rangeStr) => handleCancel(rangeStr),
+    IGNORE: () => ignorePnr(),
+    END_TRANSACT_ER: () => endTransaction('ER'),
+    END_TRANSACT_ET: () => endTransaction('ET'),
+  };
+
   // ---------- command dispatch ----------
+  // The signed-in/signed-out gate is structural (different handling entirely, not a
+  // repeating pattern) and stays hardcoded here. Everything after it is spec-driven from
+  // COMMAND_GRAMMAR (spec/command-grammar.json) - same ordered list the CLI edition loops
+  // over, so the two editions can't silently drift out of sync on syntax or ordering.
+  const COMPILED_GRAMMAR = COMMAND_GRAMMAR.map(entry => ({ ...entry, re: new RegExp(entry.pattern) }));
+
   function processCommand(raw){
     const cmd = raw.trim();
     if(cmd.length === 0) return;
@@ -643,239 +886,13 @@
       return;
     }
 
-    let m;
-    if(U === 'SO'){ signOut(); return; }
-    if(/^HELP/.test(U)){ showHelp(); return; }
-
-    if((m = U.match(/^A(\d{1,2})([A-Z]{3})([A-Z]{3})([A-Z]{3})$/))){
-      genAvailability(m[1], m[2], m[3], m[4]); return;
-    }
-    if((m = U.match(/^1(\d{1,2})([A-Z]{3})([A-Z]{3})([A-Z]{3})$/))){
-      genAvailability(m[1], m[2], m[3], m[4]); return;
-    }
-    if((m = U.match(/^0(\d{1,2})([A-Z])(\d{1,2})$/))){
-      sellFromAvail(parseInt(m[1],10), m[2], parseInt(m[3],10)); return;
-    }
-    if((m = U.match(/^0([A-Z]{2})(\d{1,4})([A-Z])(\d{1,2})([A-Z]{3})([A-Z]{3})([A-Z]{3})([A-Z]{2})(\d{1,2})$/))){
-      directSell(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], parseInt(m[9],10)); return;
-    }
-    if(U.startsWith('-')){
-      let workingText = U.slice(1).trim();
-      const infMatch = workingText.match(/\(INF([A-Z][A-Z\-' ]*)\/([A-Z][A-Z\-' ]*)\/(\d{1,2}[A-Z]{3}\d{2})\)\s*$/);
-      let infantData = null;
-      if(infMatch){
-        infantData = { surname: infMatch[1].trim(), given: infMatch[2].trim(), dob: infMatch[3] };
-        workingText = workingText.slice(0, infMatch.index).trim();
-      }
-      if(!workingText.includes('/')){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
-      const parts = workingText.split('/').map(s => s.trim()).filter(s => s.length);
-      const headMatch = parts.length >= 2 ? parts[0].match(/^(\d{1,2})?([A-Z][A-Z\-' ]*)$/) : null;
-      if(!headMatch){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
-      const surname = headMatch[2];
-      const incoming = parts.slice(1);
-      const maxParty = state.pnr.segments.length ? Math.min(...state.pnr.segments.map(s => s.seats)) : null;
-      if(maxParty !== null && state.pnr.names.length + incoming.length > maxParty){
-        printErr(`UNABLE TO ADD NAME - PARTY SIZE EXCEEDS SEATS SOLD (${maxParty}) - SELL ADDITIONAL SEATS OR CANCEL A NAME`);
+    for(const entry of COMPILED_GRAMMAR){
+      const m = U.match(entry.re);
+      if(m){
+        HANDLERS[entry.handler](U, ...m.slice(1));
         return;
       }
-      const added = [];
-      for(const g of incoming){
-        const full = `${surname}/${g}`;
-        state.pnr.names.push(full);
-        added.push(full);
-      }
-      print(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${added.join('  ')}`);
-      logActivity(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${added.join('  ')}`);
-      if(infantData){
-        const dv = infantData.dob.match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);
-        const day = dv ? parseInt(dv[1],10) : 0;
-        if(!dv || MONTHS.indexOf(dv[2]) < 0 || day < 1 || day > 31){
-          printErr('FORMAT - INVALID INFANT DOB, USE DDMONYY e.g. 12JAN26');
-        } else {
-          const adultRef = added[added.length-1];
-          state.pnr.infants.push({ adult: adultRef, surname: infantData.surname, given: infantData.given, dob: infantData.dob });
-          print(`INFANT ADDED - ${infantData.surname}/${infantData.given}  DOB ${infantData.dob}  (TRAVELS WITH ${adultRef})`);
-          logActivity(`INFANT ADDED - ${infantData.surname}/${infantData.given}  DOB ${infantData.dob}`);
-        }
-      }
-      refreshAndPrintPNR();
-      return;
     }
-    if(U.startsWith('9')){
-      const text = cmd.slice(1).trim();
-      const pm = text.match(/^(?:\/([A-Z]{3}))?(\d[\d\-]{4,14})-([A-Z]{1,3})$/i);
-      const PHONE_LOC_CODES = ['A','H','B','C','M','F','HTL'];
-      if(!pm || !PHONE_LOC_CODES.includes(pm[3].toUpperCase())){
-        printErr('FORMAT - PHONE MUST BE 9NUMBER-LOC or 9/CTYNUMBER-LOC  e.g. 9214555-1234-A or 9/DFW555-1234-A'); return;
-      }
-      const formatted = `${pm[1] ? '/'+pm[1].toUpperCase() : ''}${pm[2]}-${pm[3].toUpperCase()}`;
-      state.pnr.phones.push(formatted);
-      print(`PHONE ADDED - 9${formatted}`);
-      logActivity(`PHONE ADDED - 9${formatted}`);
-      refreshAndPrintPNR();
-      return;
-    }
-    if(U.startsWith('6') && U !== '6'){
-      const text = cmd.slice(1).trim();
-      if(!text){ printErr('FORMAT - RECEIVED FROM TEXT REQUIRED'); return; }
-      state.pnr.receivedFrom = text.toUpperCase();
-      print(`RECEIVED FROM ADDED - ${text.toUpperCase()}`);
-      logActivity(`RECEIVED FROM ADDED - ${text.toUpperCase()}`);
-      refreshAndPrintPNR();
-      return;
-    }
-    if(U === 'WP' || U === 'WPNCS'){ priceItinerary(U); return; }
-    if(U === '7TAW/' || U === '7TAW'){
-      state.pnr.ticketing = '7TAW/ (TICKETING AT WILL - TICKET ON OR BEFORE DEPARTURE)';
-      print('TICKETING ARRANGEMENT ADDED - 7TAW/');
-      logActivity('TICKETING ARRANGEMENT ADDED - 7TAW/');
-      refreshAndPrintPNR();
-      return;
-    }
-    if((m = U.match(/^7TAW(\d{1,2})([A-Z]{3})\/(\d{3,4})?$/))){
-      const dinfo = parseDate(m[1], m[2]);
-      if(!dinfo){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
-      const timeSuffix = m[3] ? '/'+m[3] : '/';
-      state.pnr.ticketing = `7TAW${dinfo.day}${dinfo.mon}${timeSuffix} (TICKETING AT WILL - QUEUED ${dinfo.day}${dinfo.mon}${m[3] ? ' '+m[3] : ''})`;
-      print(`TICKETING ARRANGEMENT ADDED - 7TAW${dinfo.day}${dinfo.mon}${timeSuffix}`);
-      logActivity(`TICKETING ARRANGEMENT ADDED - 7TAW${dinfo.day}${dinfo.mon}${timeSuffix}`);
-      refreshAndPrintPNR();
-      return;
-    }
-    if((m = U.match(/^7TAX(\d{1,2})([A-Z]{3})\/(\d{3,4})$/))){
-      const dinfo = parseDate(m[1], m[2]);
-      if(!dinfo){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
-      state.pnr.ticketing = `7TAX${dinfo.day}${dinfo.mon}/${m[3]} (TIME LIMIT - TICKET BY ${dinfo.day}${dinfo.mon} ${m[3]})`;
-      print(`TICKETING ARRANGEMENT ADDED - 7TAX${dinfo.day}${dinfo.mon}/${m[3]}`);
-      logActivity(`TICKETING ARRANGEMENT ADDED - 7TAX${dinfo.day}${dinfo.mon}/${m[3]}`);
-      refreshAndPrintPNR();
-      return;
-    }
-    if(U === 'FPCASH'){
-      state.pnr.formOfPayment = { type:'CASH', display:'CASH' };
-      print('FORM OF PAYMENT ADDED - CASH');
-      logActivity('FORM OF PAYMENT ADDED - CASH');
-      refreshAndPrintPNR();
-      return;
-    }
-    if(U === 'FPCHECK'){
-      state.pnr.formOfPayment = { type:'CHECK', display:'CHECK' };
-      print('FORM OF PAYMENT ADDED - CHECK');
-      logActivity('FORM OF PAYMENT ADDED - CHECK');
-      refreshAndPrintPNR();
-      return;
-    }
-    if((m = U.match(/^FPCC([A-Z]{2})(\d{13,19})\/(\d{2})(\d{2})$/))){
-      const type = m[1], num = m[2], mm = parseInt(m[3],10), yy = m[4];
-      if(!CARD_TYPES[type]){ printErr(`UNKNOWN CARD TYPE ${type} - VALID: ${Object.keys(CARD_TYPES).join(' ')}`); return; }
-      if(mm < 1 || mm > 12){ printErr('INVALID EXPIRY MONTH - USE MMYY'); return; }
-      const display = `CC ${type} ${maskCard(num)}  EXP ${m[3]}/${yy}  (${CARD_TYPES[type]})`;
-      state.pnr.formOfPayment = { type:'CC', display };
-      print(`FORM OF PAYMENT ADDED - ${display}`);
-      logActivity(`FORM OF PAYMENT ADDED - ${display}`);
-      refreshAndPrintPNR();
-      return;
-    }
-    if(U === 'TKTT'){ issueTickets(); return; }
-    if((m = U.match(/^3FQTV([A-Z]{2})(\d{5,12})$/))){
-      const airline = m[1], num = m[2];
-      const entry = { code:'FQTV', text: `FQTV ${airline} FREQUENT FLYER NUMBER  ${airline}${num}` };
-      state.pnr.ssrs.push(entry);
-      print(`SSR ADDED - ${entry.text}`);
-      logActivity(`SSR ADDED - ${entry.text}`);
-      refreshAndPrintPNR();
-      return;
-    }
-    if((m = U.match(/^3OSI([A-Z]{2})\s*(.+)$/))){
-      const text = m[2].trim();
-      if(!text){ printErr('FORMAT - OSI REQUIRES FREE TEXT, e.g. 3OSIAA VIP PASSENGER'); return; }
-      const entry = { airline: m[1], text: `${m[1]} ${text}` };
-      state.pnr.osis.push(entry);
-      print(`OSI ADDED - ${entry.text}`);
-      logActivity(`OSI ADDED - ${entry.text}`);
-      refreshAndPrintPNR();
-      return;
-    }
-    if((m = U.match(/^3([A-Z]{4})(?:-(\d{1,2}))?(?:\/(.+))?$/))){
-      const code = m[1];
-      const desc = SSR_CODES[code];
-      if(!desc){ printErr(`UNKNOWN SSR CODE ${code} - TYPE HELP FOR LIST`); return; }
-      const paxNum = m[2] ? parseInt(m[2],10) : null;
-      if(paxNum && (paxNum < 1 || paxNum > state.pnr.names.length)){ printErr('INVALID PASSENGER NUMBER - CHECK NAME FIELD'); return; }
-      const freeText = m[3] ? m[3].trim() : '';
-      let text = `${code} ${desc}`;
-      if(paxNum) text += `  PAX ${paxNum} (${state.pnr.names[paxNum-1]})`;
-      if(freeText) text += `  /${freeText}`;
-      state.pnr.ssrs.push({ code, text });
-      print(`SSR ADDED - ${text}`);
-      logActivity(`SSR ADDED - ${text}`);
-      refreshAndPrintPNR();
-      return;
-    }
-    if((m = U.match(/^4(\d{1,2})$/))){
-      showSeatMap(parseInt(m[1],10)); return;
-    }
-    if((m = U.match(/^4(\d{1,2})-(\d{1,2}[A-F])$/))){
-      assignSeat(parseInt(m[1],10), m[2]); return;
-    }
-    if((m = U.match(/^DC([A-Z]{3})$/))){
-      const code = m[1];
-      const a = typeof AIRPORTS !== 'undefined' ? AIRPORTS[code] : null;
-      if(!a){ printErr(`UNABLE TO DECODE - ${code} NOT FOUND`); return; }
-      print(`${code}  ${a[0].toUpperCase()}`, 'hd');
-      print(`  ${a[1].toUpperCase()}, ${a[2].toUpperCase()}`, 'dim');
-      return;
-    }
-    if((m = U.match(/^DAN(.+)$/))){
-      const term = m[1].trim();
-      if(term.length < 2){ printErr('FORMAT - ENTER AT LEAST 2 CHARACTERS TO SEARCH'); return; }
-      const results = [];
-      for(const code in AIRPORTS){
-        const a = AIRPORTS[code];
-        if(a[0].toUpperCase().includes(term) || a[1].toUpperCase().includes(term)){
-          results.push({ code, name:a[0], city:a[1], country:a[2] });
-          if(results.length >= 25) break;
-        }
-      }
-      if(results.length === 0){ printErr(`NO MATCH FOUND FOR "${term}"`); return; }
-      print(`CITY/AIRPORT NAME SEARCH - "${term}"  (${results.length}${results.length===25?'+':''} MATCH${results.length===1?'':'ES'})`, 'hd');
-      printBlank();
-      for(const r of results){
-        print(` ${pad(r.code,4)} ${pad(r.name.toUpperCase(),34)} ${pad(r.city.toUpperCase(),20)} ${r.country.toUpperCase()}`);
-      }
-      return;
-    }
-    if(U === '*R' || U === '*'){ refreshAndPrintPNR(); return; }
-    if(U === '*H'){ showHistory(); return; }
-    if((m = U.match(/^\*([A-Z0-9]{6})$/))){ retrieveByLocator(m[1]); return; }
-    if(U === 'XI'){ cancelItinerary(); return; }
-    if((m = U.match(/^X([\d,\-]+)$/))){
-      const nums = [];
-      let valid = true;
-      for(const part of m[1].split(',')){
-        if(part.includes('-')){
-          const bounds = part.split('-');
-          const a = parseInt(bounds[0],10), b = parseInt(bounds[1],10);
-          if(bounds.length !== 2 || !a || !b || a > b){ valid = false; break; }
-          for(let i=a;i<=b;i++) nums.push(i);
-        } else {
-          const v = parseInt(part,10);
-          if(!v){ valid = false; break; }
-          nums.push(v);
-        }
-      }
-      if(!valid || nums.length === 0){ printErr('INVALID ELEMENT RANGE - CHECK ENTRY AND REENTER'); return; }
-      cancelElements(nums);
-      return;
-    }
-    if(U === 'IG'){
-      state.pnr = freshPNR();
-      state.lastDisplay = [];
-      print('IGNORED - PNR NOT SAVED');
-      return;
-    }
-    if(U === 'ER'){ endTransaction('ER'); return; }
-    if(U === 'ET'){ endTransaction('ET'); return; }
 
     printErr('FORMAT - INVALID ENTRY, CHECK ENTRY AND REENTER (TYPE HELP)');
   }

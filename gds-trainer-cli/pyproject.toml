@@ -18,5 +18,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["gds_trainer*"]
 
-[tool.setuptools.package-data]
-gds_trainer = ["airports.json"]
+# No package-data: reference data, airport data, and the command grammar are loaded
+# directly from ../spec/ at runtime (shared with the browser edition, see spec/README.md).
+# This only works run from a repo checkout (editable install), matching how this CLI is
+# installed today - see gds-trainer-cli/README.md.

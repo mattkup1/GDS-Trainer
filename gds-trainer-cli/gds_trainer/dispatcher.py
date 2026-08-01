@@ -61,6 +61,9 @@ HANDLERS = {
     "IGNORE": lambda raw, *g: c.ignore_pnr(),
     "END_TRANSACT_ER": lambda raw, *g: c.end_transaction("ER"),
     "END_TRANSACT_ET": lambda raw, *g: c.end_transaction("ET"),
+    "END_TRANSACT_EM": lambda raw, *g: c.end_transaction("EM"),
+    "END_TRANSACT_EMI": lambda raw, *g: c.end_transaction("EMI"),
+    "END_TRANSACT_EMT": lambda raw, *g: c.end_transaction("EMT"),
 }
 
 

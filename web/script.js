@@ -59,6 +59,8 @@
   const LOYALTY_TIERS = REFERENCE_DATA.loyaltyTiers;
   const FARE_RULES = REFERENCE_DATA.fareRules;
   const CORPORATE_CODES = REFERENCE_DATA.corporateCodes;
+  const EMAIL_DOCUMENTS = REFERENCE_DATA.emailDocuments;
+  const SEGMENT_STATUS_LABELS = REFERENCE_DATA.segmentStatusLabels;
 
   // AIRPORTS (code -> [name, city, country]) is loaded globally from airports.js
   function cityName(code){
@@ -307,6 +309,138 @@
 
   function formatPricingShort(pr){
     return `${pr.mode}  ${pr.fareBasis}  BASE USD${pr.baseFare.toFixed(2)}  TAX USD${pr.taxTotal.toFixed(2)}  TTL USD${pr.total.toFixed(2)}`;
+  }
+
+  // ---------- itinerary/invoice document (EM/EMI/EMT, browser-only render) ----------
+  // Real Sabre's EM/EMI/EMT end-transaction variants mail the passenger an
+  // itinerary/invoice/e-ticket document. This offline simulator has no real
+  // email, so the honest equivalent is opening a formatted, print-ready
+  // document in a new tab the user can print or "Save as PDF" - presenting
+  // data end_transaction already produced, not a new source of truth.
+  function buildItineraryDocument(mode){
+    const p = state.pnr;
+    const cfg = EMAIL_DOCUMENTS[mode];
+    const has = (s) => cfg.sections.includes(s);
+    return {
+      mode, label: cfg.label,
+      pcc: state.pcc, sine: state.sine, issued: new Date(), locator: p.locator,
+      passengers: p.names.map(n => ({ name: n, infants: p.infants.filter(inf => inf.adult === n) })),
+      segments: has('segments') ? p.segments : [],
+      seats: has('seats') ? p.seats : [],
+      pricing: has('pricing') ? p.pricing : null,
+      formOfPayment: has('formOfPayment') ? p.formOfPayment : null,
+      tickets: has('tickets') ? p.tickets : null,
+    };
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function renderItineraryDocumentHTML(doc){
+    const e = escapeHtml;
+    const issuedStr = `${doc.issued.getDate()} ${MONTHS[doc.issued.getMonth()]} ${doc.issued.getFullYear()}`;
+
+    const passengersHtml = doc.passengers.map(p => {
+      const infantsHtml = p.infants.map(inf => `<div class="sub">+ INFANT: ${e(inf.surname)}/${e(inf.given)}  DOB ${e(inf.dob)}</div>`).join('');
+      return `<div class="pax">${e(p.name)}</div>${infantsHtml}`;
+    }).join('') || '<div class="dim">NO PASSENGERS ON FILE</div>';
+
+    const seatsBySeg = {};
+    for(const s of doc.seats){
+      (seatsBySeg[s.segIdx] = seatsBySeg[s.segIdx] || []).push(s.seat);
+    }
+    const segmentsHtml = doc.segments.map((s, i) => {
+      const statusLabel = SEGMENT_STATUS_LABELS[s.status] || s.status;
+      const seatList = (seatsBySeg[i] || []).join(', ');
+      return `
+        <tr>
+          <td>${e(s.airline)}${e(s.flightNum)}</td>
+          <td>${e(s.cls)}</td>
+          <td>${e(s.dinfo.day)}${e(s.dinfo.mon)} ${e(s.dinfo.weekday)}</td>
+          <td>${e(cityName(s.orig))} (${e(s.orig)}) ${minutesToClock(s.dep)}</td>
+          <td>${e(cityName(s.dest))} (${e(s.dest)}) ${minutesToClock(s.arr)}</td>
+          <td>${e(statusLabel)}</td>
+          <td>${e(seatList) || '&mdash;'}</td>
+        </tr>`;
+    }).join('');
+    const segmentsBlock = doc.segments.length ? `
+      <table class="doc-table">
+        <thead><tr><th>FLIGHT</th><th>CLASS</th><th>DATE</th><th>DEPARTS</th><th>ARRIVES</th><th>STATUS</th><th>SEAT</th></tr></thead>
+        <tbody>${segmentsHtml}</tbody>
+      </table>` : '';
+
+    let pricingBlock = '';
+    if(doc.pricing){
+      const pr = doc.pricing;
+      const taxRows = pr.taxes.map(t => `<tr><td>${e(t.code)} ${e(t.label)}</td><td class="amt">USD ${t.amount.toFixed(2)}</td></tr>`).join('');
+      const rulesHtml = pr.rules ? `
+        <div class="sub">CHANGE FEE: USD ${pr.rules.changeFee.toFixed(2)} &nbsp; REFUNDABLE: ${pr.rules.refundable ? 'YES' : 'NO'} &nbsp; ADVANCE PURCHASE: ${pr.rules.advancePurchaseDays} DAYS</div>` : '';
+      pricingBlock = `
+        <h2>FARE SUMMARY</h2>
+        <table class="doc-table">
+          <tbody>
+            <tr><td>BASE FARE</td><td class="amt">USD ${pr.baseFare.toFixed(2)}</td></tr>
+            ${taxRows}
+            <tr><td>TAXES/FEES</td><td class="amt">USD ${pr.taxTotal.toFixed(2)}</td></tr>
+            <tr class="total"><td>TOTAL</td><td class="amt">USD ${pr.total.toFixed(2)}</td></tr>
+          </tbody>
+        </table>
+        ${rulesHtml}`;
+    }
+
+    let paymentBlock = '';
+    if(doc.formOfPayment){
+      paymentBlock = `<h2>FORM OF PAYMENT</h2><div>${e(doc.formOfPayment.display)}</div>`;
+    }
+
+    let ticketsBlock = '';
+    if(doc.tickets !== null){
+      ticketsBlock = doc.tickets.length
+        ? `<h2>TICKET NUMBERS</h2><table class="doc-table"><tbody>${doc.tickets.map(t => `<tr><td>${e(t.passenger)}${t.isInfant ? ' (INFANT)' : ''}</td><td>${e(t.ticketNum)}</td></tr>`).join('')}</tbody></table>`
+        : `<h2>TICKET NUMBERS</h2><div class="dim">NOT YET TICKETED</div>`;
+    }
+
+    return `<!doctype html>
+<html><head><meta charset="utf-8"><title>${e(doc.label)} - ${e(doc.locator || 'GDS TRAINER')}</title>
+<style>
+  body{ font-family:'Courier New',Consolas,monospace; color:#111; max-width:760px; margin:32px auto; padding:0 16px; }
+  h1{ font-size:20px; letter-spacing:1px; margin-bottom:2px; }
+  h2{ font-size:13px; letter-spacing:1px; margin:22px 0 8px; border-bottom:1px solid #999; padding-bottom:4px; }
+  .meta{ color:#555; font-size:12px; margin-bottom:18px; }
+  .pax{ font-weight:bold; }
+  .sub{ color:#555; font-size:12px; margin:2px 0 8px 12px; }
+  .dim{ color:#777; }
+  table.doc-table{ width:100%; border-collapse:collapse; font-size:12px; margin-bottom:6px; }
+  table.doc-table td, table.doc-table th{ border:1px solid #ccc; padding:5px 8px; text-align:left; }
+  table.doc-table .amt{ text-align:right; }
+  table.doc-table tr.total td{ font-weight:bold; border-top:2px solid #333; }
+  .disclaimer{ margin-top:32px; padding-top:12px; border-top:1px solid #ccc; color:#888; font-size:11px; }
+  #printBtn{ margin:18px 0; padding:8px 16px; font-family:inherit; cursor:pointer; }
+  @media print{ #printBtn{ display:none; } body{ margin:0; } }
+</style></head>
+<body>
+  <h1>GDS TRAINER &mdash; ${e(doc.label)}</h1>
+  <div class="meta">ISSUED ${issuedStr} &nbsp; AGENT ${e(doc.sine || '----')} &nbsp; PCC ${e(doc.pcc || '----')} &nbsp; RLOC ${e(doc.locator || '(NOT SAVED)')}</div>
+  <button id="printBtn" onclick="window.print()">PRINT / SAVE AS PDF</button>
+  <h2>PASSENGER(S)</h2>
+  ${passengersHtml}
+  <h2>ITINERARY</h2>
+  ${segmentsBlock}
+  ${pricingBlock}
+  ${paymentBlock}
+  ${ticketsBlock}
+  <div class="disclaimer">This is an educational simulation, not connected to any real airline or GDS network - not a real travel document.</div>
+</body></html>`;
+  }
+
+  function openItineraryDocument(doc){
+    const html = renderItineraryDocumentHTML(doc);
+    const w = window.open('', '_blank');
+    if(!w){ printErr('POP-UP BLOCKED - ALLOW POP-UPS TO VIEW/PRINT THE ITINERARY DOCUMENT'); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   }
 
   // ---------- special service requests / other service info ----------
@@ -635,7 +769,14 @@
     print('END OF TRANSACTION COMPLETE', 'hd');
     print(`  ${ts}   RLOC: ${p.locator}`);
 
-    if(mode === 'ET'){
+    if(EMAIL_DOCUMENTS[mode]){
+      const doc = buildItineraryDocument(mode);
+      print(`${EMAIL_DOCUMENTS[mode].label} DOCUMENT GENERATED - OPENING PRINT VIEW`, 'dim');
+      logActivity(`${EMAIL_DOCUMENTS[mode].label} DOCUMENT SENT (${mode})`);
+      openItineraryDocument(doc);
+    }
+
+    if(mode === 'ET' || EMAIL_DOCUMENTS[mode]){
       state.pnr = freshPNR();
       state.lastDisplay = [];
       renderPnrPanel();
@@ -1161,6 +1302,9 @@
     IGNORE: () => ignorePnr(),
     END_TRANSACT_ER: () => endTransaction('ER'),
     END_TRANSACT_ET: () => endTransaction('ET'),
+    END_TRANSACT_EM: () => endTransaction('EM'),
+    END_TRANSACT_EMI: () => endTransaction('EMI'),
+    END_TRANSACT_EMT: () => endTransaction('EMT'),
   };
 
   // ---------- command dispatch ----------

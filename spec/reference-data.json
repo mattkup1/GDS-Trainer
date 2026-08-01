@@ -89,5 +89,14 @@
   "corporateCodes": {
     "ACME01": {"label": "ACME CORP", "discount": 0.10},
     "GLOBEX1": {"label": "GLOBEX INDUSTRIES", "discount": 0.15}
+  },
+  "emailDocuments": {
+    "EM":  {"label": "ITINERARY", "sections": ["passengers", "segments", "seats"]},
+    "EMI": {"label": "INVOICE", "sections": ["passengers", "segments", "seats", "pricing", "formOfPayment", "tickets"]},
+    "EMT": {"label": "E-TICKET NOTIFICATION", "sections": ["passengers", "tickets", "segments"]}
+  },
+  "segmentStatusLabels": {
+    "HK": "CONFIRMED",
+    "HL": "WAITLISTED"
   }
 }

@@ -35,5 +35,8 @@
   {"name": "cancel_elements", "pattern": "^X([\\d,\\-]+)$", "handler": "CANCEL_ELEMENTS"},
   {"name": "ignore", "pattern": "^IG$", "handler": "IGNORE"},
   {"name": "end_transact_er", "pattern": "^ER$", "handler": "END_TRANSACT_ER"},
-  {"name": "end_transact_et", "pattern": "^ET$", "handler": "END_TRANSACT_ET"}
+  {"name": "end_transact_et", "pattern": "^ET$", "handler": "END_TRANSACT_ET"},
+  {"name": "end_transact_em", "pattern": "^EM$", "handler": "END_TRANSACT_EM"},
+  {"name": "end_transact_emi", "pattern": "^EMI$", "handler": "END_TRANSACT_EMI"},
+  {"name": "end_transact_emt", "pattern": "^EMT$", "handler": "END_TRANSACT_EMT"}
 ]

@@ -27,6 +27,7 @@ from .data import (
     CLASSES,
     CORPORATE_CODES,
     DOCUMENT_TYPES,
+    EMAIL_DOCUMENTS,
     EQUIP,
     FARE_FORMULA,
     FARE_RULES,
@@ -35,6 +36,7 @@ from .data import (
     PHONE_LOC_CODES,
     QUEUE_CATEGORIES,
     SEAT_LAYOUTS,
+    SEGMENT_STATUS_LABELS,
     SSR_CODES,
     TAX_POOL,
 )
@@ -466,6 +468,122 @@ def format_pricing_short(pr: dict) -> str:
         f"{pr['mode']}  {pr['fare_basis']}  BASE USD{pr['base_fare']:.2f}  "
         f"TAX USD{pr['tax_total']:.2f}  TTL USD{pr['total']:.2f}"
     )
+
+
+# ---------- itinerary/invoice document (EM/EMI/EMT) ----------
+# Real Sabre's EM/EMI/EMT end-transaction variants mail the passenger an
+# itinerary/invoice/e-ticket document. This offline simulator has no real
+# email or PDF renderer in the CLI edition (that's the browser edition's
+# job, see script.js's renderItineraryDocumentHTML), so the CLI equivalent
+# prints the same underlying content as a formatted terminal block.
+
+def build_itinerary_document(mode: str) -> dict:
+    p = STATE.pnr
+    cfg = EMAIL_DOCUMENTS[mode]
+    sections = set(cfg["sections"])
+
+    def has(name: str) -> bool:
+        return name in sections
+
+    passengers = [
+        {"name": name, "infants": [inf for inf in p["infants"] if inf["adult"] == name]}
+        for name in p["names"]
+    ]
+
+    return {
+        "mode": mode,
+        "label": cfg["label"],
+        "pcc": STATE.pcc,
+        "sine": STATE.sine,
+        "issued": datetime.now(),
+        "locator": p["locator"],
+        "passengers": passengers,
+        "segments": p["segments"] if has("segments") else [],
+        "seats": p["seats"] if has("seats") else [],
+        "pricing": p["pricing"] if has("pricing") else None,
+        "form_of_payment": p["form_of_payment"] if has("form_of_payment") else None,
+        "tickets": p["tickets"] if has("tickets") else None,
+    }
+
+
+def print_itinerary_document(doc: dict) -> None:
+    issued = doc["issued"]
+    issued_str = f"{issued.day} {MONTHS[issued.month - 1]} {issued.year}"
+    sep = "-" * 60
+
+    print_blank()
+    print_line(sep, "dim")
+    print_line(f"GDS TRAINER - {doc['label']}", "hd")
+    print_line(
+        f"ISSUED {issued_str}   AGENT {doc['sine'] or '----'}   PCC {doc['pcc'] or '----'}   "
+        f"RLOC {doc['locator'] or '(NOT SAVED)'}",
+        "dim",
+    )
+    print_line(sep, "dim")
+
+    print_line("PASSENGER(S)", "hd")
+    if doc["passengers"]:
+        for pax in doc["passengers"]:
+            print_line(f"  {pax['name']}")
+            for inf in pax["infants"]:
+                print_line(f"    + INFANT: {inf['surname']}/{inf['given']}  DOB {inf['dob']}", "dim")
+    else:
+        print_line("  NO PASSENGERS ON FILE", "dim")
+
+    if doc["segments"]:
+        seats_by_seg: dict[int, list[str]] = {}
+        for s in doc["seats"]:
+            seats_by_seg.setdefault(s["seg_idx"], []).append(s["seat"])
+        print_blank()
+        print_line("ITINERARY", "hd")
+        for i, s in enumerate(doc["segments"]):
+            status_label = SEGMENT_STATUS_LABELS.get(s["status"], s["status"])
+            seat_list = ", ".join(seats_by_seg.get(i, [])) or "-"
+            print_line(
+                f"  {s['airline']}{s['flight_num']} {s['cls']}  {s['dinfo'].day}{s['dinfo'].mon} {s['dinfo'].weekday}  "
+                f"{city_name(s['orig'])} ({s['orig']}) {minutes_to_clock(s['dep'])} -> "
+                f"{city_name(s['dest'])} ({s['dest']}) {minutes_to_clock(s['arr'])}  {status_label}  SEAT {seat_list}"
+            )
+
+    if doc["pricing"]:
+        pr = doc["pricing"]
+        print_blank()
+        print_line("FARE SUMMARY", "hd")
+        print_line(f"  BASE FARE      USD {pr['base_fare']:.2f}")
+        for t in pr["taxes"]:
+            print_line(f"    {t['code']}   USD {t['amount']:.2f}   {t['label']}", "dim")
+        print_line(f"  TAXES/FEES     USD {pr['tax_total']:.2f}")
+        print_line(f"  TOTAL          USD {pr['total']:.2f}", "hd")
+        if pr["rules"]:
+            print_line(
+                f"  CHANGE FEE USD {pr['rules']['changeFee']:.2f}   "
+                f"REFUNDABLE {'YES' if pr['rules']['refundable'] else 'NO'}   "
+                f"ADVANCE PURCHASE {pr['rules']['advancePurchaseDays']} DAYS",
+                "dim",
+            )
+
+    if doc["form_of_payment"]:
+        print_blank()
+        print_line("FORM OF PAYMENT", "hd")
+        print_line(f"  {doc['form_of_payment']['display']}")
+
+    if doc["tickets"] is not None:
+        print_blank()
+        print_line("TICKET NUMBERS", "hd")
+        if doc["tickets"]:
+            for t in doc["tickets"]:
+                label = t["passenger"] + (" (INFANT)" if t["is_infant"] else "")
+                print_line(f"  {pad(label, 28)} {t['ticket_num']}")
+        else:
+            print_line("  NOT YET TICKETED", "dim")
+
+    print_blank()
+    print_line(
+        "This is an educational simulation, not connected to any real airline or GDS "
+        "network - not a real travel document.",
+        "dim",
+    )
+    print_line(sep, "dim")
 
 
 # ---------- ticketing arrangement ----------
@@ -1031,7 +1149,13 @@ def end_transaction(mode: str) -> None:
     print_line("END OF TRANSACTION COMPLETE", "hd")
     print_line(f"  {ts}   RLOC: {p['locator']}")
 
-    if mode == "ET":
+    if mode in EMAIL_DOCUMENTS:
+        doc = build_itinerary_document(mode)
+        print_line(f"{EMAIL_DOCUMENTS[mode]['label']} DOCUMENT GENERATED", "dim")
+        log_activity(STATE, f"{EMAIL_DOCUMENTS[mode]['label']} DOCUMENT SENT ({mode})")
+        print_itinerary_document(doc)
+
+    if mode == "ET" or mode in EMAIL_DOCUMENTS:
         STATE.pnr = fresh_pnr()
         STATE.last_display = []
         print_line("WORK AREA CLEARED - READY FOR NEXT ENTRY", "dim")

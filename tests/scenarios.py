@@ -383,4 +383,45 @@ SCENARIOS: list[Scenario] = [
             ),
         ],
     ),
+    Scenario(
+        "email_document_requires_complete_pnr",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            Step("EM", expect_contains=["PNR INCOMPLETE", "NAME FIELD"]),
+            Step("EMI", expect_contains=["PNR INCOMPLETE", "NAME FIELD"]),
+            Step("EMT", expect_contains=["PNR INCOMPLETE", "NAME FIELD"]),
+        ],
+    ),
+    Scenario(
+        "emi_generates_invoice_and_clears_work_area",
+        [
+            *_priced_single_pax_setup(),
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            # Document *content* (passenger names, ticket status) is only guaranteed
+            # visible in this step's terminal output for the CLI edition - the browser
+            # edition opens it in a separate tab. Only assert what's true in both
+            # editions' terminal output here; see test_web_scenarios.py for a DOM-level
+            # check of the browser's actual generated document content.
+            Step(
+                "EMI",
+                expect_contains=["END OF TRANSACTION COMPLETE", "INVOICE"],
+            ),
+            Step("*R", expect_contains=["PNR IS EMPTY"]),
+        ],
+    ),
+    Scenario(
+        "emt_without_tickets_still_generates_document",
+        [
+            *_priced_single_pax_setup(),
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step(
+                "EMT",
+                expect_contains=["END OF TRANSACTION COMPLETE", "E-TICKET NOTIFICATION"],
+            ),
+        ],
+    ),
 ]

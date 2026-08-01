@@ -374,6 +374,15 @@
 <section class="step">
   <div class="step-num">15</div>
   <div>
+    <h2>Print or save the customer a copy of the itinerary/invoice (optional)</h2>
+    <div class="cmdblock">EMI</div>
+    <p class="note"><code>EMI</code> ends the transaction (same requirements as <code>ER</code>/<code>ET</code>) and generates a formatted itinerary/invoice document — passenger names, flights, seats, the fare breakdown, form of payment, and ticket numbers if <code>TKTT</code> has already run. In the browser edition this opens in a new tab you can print or "Save as PDF" from your browser's print dialog; the CLI edition prints the same content directly in the terminal. Two related entries generate narrower documents the same way: <code>EM</code> (itinerary only, no fare/payment) and <code>EMT</code> (ticket-focused, notes "NOT YET TICKETED" if you haven't run <code>TKTT</code> yet). All three clear the work area on success, like <code>ET</code>.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">16</div>
+  <div>
     <h2>Look up the booking again later</h2>
     <div class="cmdblock">*ABC123</div>
     <p class="note">(using the actual locator you were given)</p>
@@ -383,7 +392,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">16</div>
+  <div class="step-num">17</div>
   <div>
     <h2>Queue the PNR for follow-up (optional)</h2>
     <p class="format">Format: <code>QE</code> + queue number (once the PNR has been saved with <code>ER</code>/<code>ET</code>)</p>
@@ -425,6 +434,7 @@
     <tr><td>Add form of payment</td><td class="mono">FPCASH, FPCHECK, FPCC{TYPE}{NUM}/{MMYY}</td><td class="mono">FPCASH</td></tr>
     <tr><td>Save booking</td><td class="mono">ER or ET</td><td class="mono">ER</td></tr>
     <tr><td>Issue ticket</td><td class="mono">TKTT</td><td class="mono">TKTT</td></tr>
+    <tr><td>Print/save itinerary, invoice, or e-ticket document</td><td class="mono">EM, EMI, EMT</td><td class="mono">EMI</td></tr>
     <tr><td>Redisplay PNR</td><td class="mono">*R or *</td><td class="mono">*R</td></tr>
     <tr><td>Show PNR activity history</td><td class="mono">*H</td><td class="mono">*H</td></tr>
     <tr><td>Retrieve saved PNR</td><td class="mono">*{LOCATOR}</td><td class="mono">*ABC123</td></tr>
@@ -691,7 +701,25 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 12</span><span class="stage-name">Retrieve &amp; review</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 12</span><span class="stage-name">Documents</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">EM</td><td>End transaction, generate an itinerary document (no fare/payment)</td></tr>
+        <tr><td class="mono">EMI</td><td>End transaction, generate an invoice document (adds fare summary, form of payment, ticket numbers if issued)</td></tr>
+        <tr><td class="mono">EMT</td><td>End transaction, generate an e-ticket notification document</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Itinerary/invoice document</dt><dd>a customer-facing formatted document (browser: printable page/PDF in a new tab; CLI: formatted terminal block), distinct from the PNR display an agent sees - EM/EMI/EMT are end-transaction entries like ER/ET, requiring the same completeness, and clear the work area on success</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 13</span><span class="stage-name">Retrieve &amp; review</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -709,7 +737,7 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 13</span><span class="stage-name">Queues</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 14</span><span class="stage-name">Queues</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>

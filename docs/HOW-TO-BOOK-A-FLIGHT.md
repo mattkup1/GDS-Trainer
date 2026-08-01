@@ -204,7 +204,16 @@ If you change the itinerary after ticketing (sell or cancel a segment), the tick
 
 ---
 
-### 15. Look up the booking again later
+### 15. Print or save the customer a copy of the itinerary/invoice (optional)
+
+```
+EMI
+```
+`EMI` ends the transaction (same requirements as `ER`/`ET`) and generates a formatted itinerary/invoice document — passenger names, flights, seats, the fare breakdown, form of payment, and ticket numbers if `TKTT` has already run. In the browser edition this opens in a new tab you can print or "Save as PDF" from your browser's print dialog; the CLI edition prints the same content directly in the terminal. Two related entries generate narrower documents the same way: `EM` (itinerary only, no fare/payment) and `EMT` (ticket-focused, notes "NOT YET TICKETED" if you haven't run `TKTT` yet). All three clear the work area on success, like `ET`.
+
+---
+
+### 16. Look up the booking again later
 
 ```
 *ABC123
@@ -219,7 +228,7 @@ To see the full chronological history of everything that's been added, changed, 
 
 ---
 
-### 16. Queue the PNR for follow-up (optional)
+### 17. Queue the PNR for follow-up (optional)
 
 Format: `QE` + queue number (once the PNR has been saved with `ER`/`ET`)
 
@@ -273,6 +282,7 @@ This works one PNR at a time, first-in-first-out — exactly how an agent works 
 | Add form of payment | `FPCASH`, `FPCHECK`, `FPCC{TYPE}{NUM}/{MMYY}` | `FPCASH` |
 | Save booking | `ER` or `ET` | `ER` |
 | Issue ticket | `TKTT` | `TKTT` |
+| Print/save itinerary, invoice, or e-ticket document | `EM`, `EMI`, `EMT` | `EMI` |
 | Redisplay PNR | `*R` or `*` | `*R` |
 | Show PNR activity history | `*H` | `*H` |
 | Retrieve saved PNR | `*{LOCATOR}` | `*ABC123` |
@@ -462,7 +472,18 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 - **Validating carrier** — the airline whose numeric code prefixes the issued ticket number(s); taken from the first segment
 - **Ticketing vs. ticketing arrangement** — the arrangement (`7TAW`/`7TAX`) only sets a deadline; `TKTT` is the entry that actually issues ticket numbers, and requires the PNR to already be saved (has an RLOC)
 
-### 12. Retrieve &amp; review
+### 12. Documents
+
+| Command | Does |
+|---|---|
+| `EM` | End transaction, generate an itinerary document (no fare/payment) |
+| `EMI` | End transaction, generate an invoice document (adds fare summary, form of payment, ticket numbers if issued) |
+| `EMT` | End transaction, generate an e-ticket notification document |
+
+**Terminology**
+- **Itinerary/invoice document** — a customer-facing formatted document (browser: printable page/PDF in a new tab; CLI: formatted terminal block), distinct from the PNR display an agent sees — `EM`/`EMI`/`EMT` are end-transaction entries like `ER`/`ET`, requiring the same completeness, and clear the work area on success
+
+### 13. Retrieve &amp; review
 
 | Command | Does |
 |---|---|
@@ -473,7 +494,7 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 **Terminology**
 - **Activity log / PNR history** — the timestamped, sine-stamped record of every action taken on a PNR, viewed with `*H`, separate from the record-locator lookup done with `*{LOCATOR}`
 
-### 13. Queues
+### 14. Queues
 
 | Command | Does |
 |---|---|

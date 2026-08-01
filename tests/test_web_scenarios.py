@@ -108,3 +108,48 @@ def test_toolbar_sign_in_button_submits_real_command(web_session):
     assert "SIGN IN COMPLETE" in after["output"]
     assert after["signInDisabled"] is True
     assert after["priceDisabled"] is False
+
+
+_FULL_BOOKING_COMMANDS = [
+    "SI", "A15AUGDFWORD", "01Y1", "-SMITH/JOHN MR", "WP",
+    "9214555-1234-A", "6JSMITH", "7TAW/", "FPCASH",
+]
+
+
+def _stub_window_open(web_session) -> None:
+    """Installs a fake window.open that captures the written HTML into
+    window.__capturedDoc instead of opening a real tab - CDP has no simple
+    hook for a newly-opened window/target, and this project's test harness
+    otherwise sticks to evaluate()-only DOM assertions (see cdp.py). Must
+    run before the command that triggers window.open."""
+    web_session.evaluate(
+        "window.__capturedDoc = null;"
+        "window.open = () => ({ document: { open(){}, write(h){ window.__capturedDoc = h; }, close(){} } });"
+    )
+
+
+def test_emi_document_contains_full_invoice_content(web_session):
+    """GUI-only regression guard for the EMI itinerary/invoice document -
+    see notes/GUI Expansion Scope-Out.md-style rationale in CLAUDE.md's
+    EM/EMI/EMT bullet. The shared scenario in scenarios.py only asserts
+    terminal-visible confirmation text (true for both editions); this test
+    verifies the actual document content the browser writes into the new
+    tab, which has no CLI equivalent to cross-check against.
+    """
+    _stub_window_open(web_session)
+    web_session.run_commands([*_FULL_BOOKING_COMMANDS, "EMI"])
+    doc = web_session.evaluate("window.__capturedDoc")
+
+    assert doc is not None
+    for expected in ["GDS TRAINER", "INVOICE", "SMITH/JOHN MR", "FARE SUMMARY", "NOT YET TICKETED"]:
+        assert expected in doc, f"expected {expected!r} in generated document:\n{doc}"
+
+
+def test_pop_up_blocked_shows_terminal_error_not_a_crash(web_session):
+    """If the browser blocks window.open (returns a falsy value), the app
+    should surface a terminal error instead of throwing - see
+    openItineraryDocument in web/script.js."""
+    web_session.evaluate("window.open = () => null;")
+    output = web_session.run_commands([*_FULL_BOOKING_COMMANDS, "EMI"])
+    assert "POP-UP BLOCKED" in output
+    assert "WORK AREA CLEARED" in output

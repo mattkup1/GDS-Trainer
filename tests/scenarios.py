@@ -196,6 +196,36 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "queue_requires_end_transacted_pnr",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            NAME_SMITH,
+            Step("QE25", expect_contains=["UNABLE TO QUEUE", "END TRANSACT"]),
+        ],
+    ),
+    Scenario(
+        "queue_place_count_and_retrieve",
+        [
+            *_priced_single_pax_setup(),
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            Step("QE25", expect_contains=["QUEUED TO QUEUE 25", "WORK AREA CLEARED"]),
+            Step("QC", expect_contains=["QUEUE COUNT", "25"]),
+            Step("QN25", expect_contains=["RETRIEVED FROM QUEUE 25"]),
+            Step("QC25", expect_contains=["25", "0"]),
+        ],
+    ),
+    Scenario(
+        "queue_next_on_empty_queue",
+        [
+            SIGN_IN,
+            Step("QN50", expect_contains=["END OF QUEUE 50"]),
+        ],
+    ),
+    Scenario(
         "invalid_entry_falls_through_to_format_error",
         [
             SIGN_IN,

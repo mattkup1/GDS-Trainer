@@ -382,6 +382,23 @@
   </div>
 </section>
 
+<section class="step">
+  <div class="step-num">16</div>
+  <div>
+    <h2>Queue the PNR for follow-up (optional)</h2>
+    <p class="format">Format: <code>QE</code> + queue number (once the PNR has been saved with <code>ER</code>/<code>ET</code>)</p>
+    <div class="cmdblock">QE25</div>
+    <p class="note">Places the saved PNR on queue <b>25</b> for later work — real agencies route PNRs to numbered queues for things like ticketing follow-up or schedule changes, rather than an agent handling everything in one sitting. Queuing clears the work area, the same as <code>ET</code>.</p>
+    <p class="note">To see how many PNRs are waiting on each queue:</p>
+    <div class="cmdblock">QC</div>
+    <p class="note">Or check one specific queue:</p>
+    <div class="cmdblock">QC25</div>
+    <p class="note">To pull the next PNR off a queue and load it into the work area:</p>
+    <div class="cmdblock">QN25</div>
+    <p class="note">This works one PNR at a time, first-in-first-out — exactly how an agent works a real queue. An empty or unused queue number just reports there's nothing there.</p>
+  </div>
+</section>
+
 <h2 class="section-head">Quick reference</h2>
 <table>
   <thead><tr><th>Step</th><th>Command</th><th>Example</th></tr></thead>
@@ -411,6 +428,9 @@
     <tr><td>Redisplay PNR</td><td class="mono">*R or *</td><td class="mono">*R</td></tr>
     <tr><td>Show PNR activity history</td><td class="mono">*H</td><td class="mono">*H</td></tr>
     <tr><td>Retrieve saved PNR</td><td class="mono">*{LOCATOR}</td><td class="mono">*ABC123</td></tr>
+    <tr><td>Place PNR on a queue</td><td class="mono">QE{N}</td><td class="mono">QE25</td></tr>
+    <tr><td>Show queue counts</td><td class="mono">QC or QC{N}</td><td class="mono">QC or QC25</td></tr>
+    <tr><td>Retrieve next PNR from a queue</td><td class="mono">QN{N}</td><td class="mono">QN25</td></tr>
     <tr><td>Cancel an item</td><td class="mono">X{N}, X{N}-{M}, X{N},{M}</td><td class="mono">X2</td></tr>
     <tr><td>Cancel entire itinerary</td><td class="mono">XI</td><td class="mono">XI</td></tr>
     <tr><td>Discard unsaved work</td><td class="mono">IG</td><td class="mono">IG</td></tr>
@@ -684,6 +704,27 @@ TKTT</div>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
       <div class="entry"><dt>Activity log / PNR history</dt><dd>the timestamped, sine-stamped record of every action taken on a PNR, viewed with *H, separate from the record-locator lookup done with *{LOCATOR}</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 13</span><span class="stage-name">Queues</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">QE{N}</td><td>Place the saved PNR on queue N; clears the work area</td></tr>
+        <tr><td class="mono">QC</td><td>Show a count of PNRs on every non-empty queue</td></tr>
+        <tr><td class="mono">QC{N}</td><td>Show the count of PNRs on queue N specifically</td></tr>
+        <tr><td class="mono">QN{N}</td><td>Retrieve the next (first-in) PNR off queue N into the work area</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Queue</dt><dd>a numbered bucket of PNRs awaiting follow-up work (schedule change, ticketing, general review); the backbone of real-world agent workflow, distinct from *{LOCATOR} retrieval which requires already knowing the exact record locator</dd></div>
+      <div class="entry"><dt>Queue count</dt><dd>how many PNRs are currently sitting on a given queue, shown by QC</dd></div>
+      <div class="entry"><dt>Working a queue</dt><dd>repeatedly entering QN{N} to pull PNRs off a queue one at a time, in the order they were placed there</dd></div>
     </dl>
   </div>
 </div>

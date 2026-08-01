@@ -51,6 +51,13 @@
     "VI": "VISA", "CA": "MASTERCARD", "AX": "AMERICAN EXPRESS",
     "DC": "DINERS CLUB", "DS": "DISCOVER", "JC": "JCB"
   },
+  "queueCategories": {
+    "0": "GENERAL WORK QUEUE",
+    "1": "SCHEDULE CHANGE",
+    "18": "WAITLIST CLEARED",
+    "25": "TICKETING FOLLOW-UP",
+    "97": "QUEUE MINIMUM CONNECT TIME"
+  },
   "phoneLocationCodes": ["A", "H", "B", "C", "M", "F", "HTL"],
   "documentTypes": {
     "P": "PASSPORT"

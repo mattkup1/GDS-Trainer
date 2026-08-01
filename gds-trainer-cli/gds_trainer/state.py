@@ -43,6 +43,7 @@ class AppState:
         self.pnr: dict[str, Any] = fresh_pnr()
         self.last_display: list[dict[str, Any]] = []
         self.history: dict[str, dict[str, Any]] = {}
+        self.queues: dict[str, list[str]] = {}
 
 
 # Single shared instance, mirroring script.js's module-level `state`.

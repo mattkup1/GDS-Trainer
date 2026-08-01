@@ -14,5 +14,8 @@
     {"field": "ticketing", "check": "present", "message": "UNABLE TO TICKET - NO TICKETING ARRANGEMENT ON FILE"},
     {"field": "form_of_payment", "check": "present", "message": "UNABLE TO TICKET - NO FORM OF PAYMENT ON FILE"},
     {"field": "tickets", "check": "empty", "message": "PNR ALREADY TICKETED - TICKET NUMBERS ON FILE (SEE *R)"}
+  ],
+  "queue_place": [
+    {"field": "locator", "check": "present", "message": "UNABLE TO QUEUE - END TRANSACT (ER OR ET) BEFORE QUEUING"}
   ]
 }

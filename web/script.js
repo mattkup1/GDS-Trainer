@@ -52,6 +52,7 @@
   const FARE_FORMULA = REFERENCE_DATA.fareFormula;
   const SSR_CODES = REFERENCE_DATA.ssrCodes;
   const CARD_TYPES = REFERENCE_DATA.cardTypes;
+  const QUEUE_CATEGORIES = REFERENCE_DATA.queueCategories;
   const PHONE_LOC_CODES = REFERENCE_DATA.phoneLocationCodes;
   const DOCUMENT_TYPES = REFERENCE_DATA.documentTypes;
   const LOYALTY_TIERS = REFERENCE_DATA.loyaltyTiers;
@@ -101,6 +102,7 @@
     pnr: freshPNR(),
     lastDisplay: [],   // numbered element map for X{n}
     history: {},        // locator -> saved pnr snapshot
+    queues: {},          // queue number -> [locator, ...] FIFO
     cmdHistory: [],
     cmdHistoryIdx: -1
   };
@@ -531,6 +533,54 @@
     print(`PNR ${loc} RETRIEVED`);
     logActivity(`PNR RETRIEVED - RLOC ${loc}`);
     refreshAndPrintPNR();
+  }
+
+  // ---------- queues (QE/QN/QC) ----------
+  function queueEnqueue(numStr){
+    const p = state.pnr;
+    const incomplete = firstIncompleteMessage('queue_place');
+    if(incomplete){ printErr(incomplete); return; }
+
+    const num = String(parseInt(numStr, 10));
+    if(!state.queues[num]) state.queues[num] = [];
+    if(!state.queues[num].includes(p.locator)) state.queues[num].push(p.locator);
+
+    print(`PNR ${p.locator} QUEUED TO QUEUE ${num}`);
+    logActivity(`QUEUED TO QUEUE ${num}`);
+
+    state.pnr = freshPNR();
+    state.lastDisplay = [];
+    print('WORK AREA CLEARED - READY FOR NEXT ENTRY', 'dim');
+  }
+
+  function queueNext(numStr){
+    const num = String(parseInt(numStr, 10));
+    const q = state.queues[num] || [];
+    if(q.length === 0){ print(`END OF QUEUE ${num} - NO PNRS REMAINING`, 'dim'); return; }
+
+    const loc = q.shift();
+    const rec = state.history[loc];
+    if(!rec){ printErr(`QUEUE ${num} REFERENCED UNKNOWN RECORD ${loc}`); return; }
+
+    state.pnr = JSON.parse(JSON.stringify(rec));
+    print(`PNR ${loc} RETRIEVED FROM QUEUE ${num} - ${q.length} REMAINING`);
+    logActivity(`RETRIEVED FROM QUEUE ${num}`);
+    refreshAndPrintPNR();
+  }
+
+  function queueCount(numStr){
+    const nums = numStr
+      ? [String(parseInt(numStr, 10))]
+      : Object.keys(state.queues).filter(n => state.queues[n].length > 0).sort((a, b) => Number(a) - Number(b));
+
+    if(nums.length === 0){ print('NO QUEUES WITH PNRS ON FILE', 'dim'); return; }
+
+    print(`QUEUE COUNT - PCC ${state.pcc || '----'}`, 'hd');
+    for(const n of nums){
+      const count = (state.queues[n] || []).length;
+      const label = QUEUE_CATEGORIES[n] ? `  ${QUEUE_CATEGORIES[n]}` : '';
+      print(`  Q${pad(n, 4)}${pad(String(count), 4)}${label}`);
+    }
   }
 
   // ---------- ticketing (TKTT) ----------
@@ -975,6 +1025,9 @@
     PNR_REDISPLAY: () => refreshAndPrintPNR(),
     PNR_HISTORY: () => showHistory(),
     PNR_RETRIEVE: (raw, loc) => retrieveByLocator(loc),
+    QUEUE_ENQUEUE: (raw, n) => queueEnqueue(n),
+    QUEUE_NEXT: (raw, n) => queueNext(n),
+    QUEUE_COUNT: (raw, n) => queueCount(n),
     CANCEL_ITINERARY: () => cancelItinerary(),
     CANCEL_ELEMENTS: (raw, rangeStr) => handleCancel(rangeStr),
     IGNORE: () => ignorePnr(),
@@ -1049,7 +1102,7 @@
     outputEl.innerHTML = '';
     state.signedIn = false; state.sine = null; state.pcc = null;
     state.lastAvail = null; state.pnr = freshPNR(); state.lastDisplay = [];
-    state.history = {}; state.cmdHistory = []; state.cmdHistoryIdx = -1;
+    state.history = {}; state.queues = {}; state.cmdHistory = []; state.cmdHistoryIdx = -1;
     boot();
     inputEl.focus();
   });

@@ -51,5 +51,6 @@ def cli_console(monkeypatch):
     STATE.pnr = fresh_pnr()
     STATE.last_display = []
     STATE.history = {}
+    STATE.queues = {}
 
     return buf

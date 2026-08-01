@@ -18,4 +18,5 @@ def reset_state():
     STATE.pnr = fresh_pnr()
     STATE.last_display = []
     STATE.history = {}
+    STATE.queues = {}
     yield

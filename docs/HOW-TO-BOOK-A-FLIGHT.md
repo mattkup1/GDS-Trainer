@@ -219,6 +219,34 @@ To see the full chronological history of everything that's been added, changed, 
 
 ---
 
+### 16. Queue the PNR for follow-up (optional)
+
+Format: `QE` + queue number (once the PNR has been saved with `ER`/`ET`)
+
+```
+QE25
+```
+Places the saved PNR on queue **25** for later work — real agencies route PNRs to numbered queues for things like ticketing follow-up or schedule changes, rather than an agent handling everything in one sitting. Queuing clears the work area, the same as `ET`.
+
+To see how many PNRs are waiting on each queue:
+
+```
+QC
+```
+Or check one specific queue:
+```
+QC25
+```
+
+To pull the next PNR off a queue and load it into the work area:
+
+```
+QN25
+```
+This works one PNR at a time, first-in-first-out — exactly how an agent works a real queue. An empty or unused queue number just reports there's nothing there.
+
+---
+
 ## Quick reference
 
 | Step | Command | Example |
@@ -248,6 +276,9 @@ To see the full chronological history of everything that's been added, changed, 
 | Redisplay PNR | `*R` or `*` | `*R` |
 | Show PNR activity history | `*H` | `*H` |
 | Retrieve saved PNR | `*{LOCATOR}` | `*ABC123` |
+| Place PNR on a queue | `QE{N}` | `QE25` |
+| Show queue counts | `QC` or `QC{N}` | `QC` or `QC25` |
+| Retrieve next PNR from a queue | `QN{N}` | `QN25` |
 | Cancel an item | `X{N}`, `X{N}-{M}`, `X{N},{M}` | `X2` |
 | Cancel entire itinerary | `XI` | `XI` |
 | Discard unsaved work | `IG` | `IG` |
@@ -441,3 +472,17 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 
 **Terminology**
 - **Activity log / PNR history** — the timestamped, sine-stamped record of every action taken on a PNR, viewed with `*H`, separate from the record-locator lookup done with `*{LOCATOR}`
+
+### 13. Queues
+
+| Command | Does |
+|---|---|
+| `QE{N}` | Place the saved PNR on queue `N`; clears the work area |
+| `QC` | Show a count of PNRs on every non-empty queue |
+| `QC{N}` | Show the count of PNRs on queue `N` specifically |
+| `QN{N}` | Retrieve the next (first-in) PNR off queue `N` into the work area |
+
+**Terminology**
+- **Queue** — a numbered bucket of PNRs awaiting follow-up work (schedule change, ticketing, general review); the backbone of real-world agent workflow, distinct from `*{LOCATOR}` retrieval which requires already knowing the exact record locator
+- **Queue count** — how many PNRs are currently sitting on a given queue, shown by `QC`
+- **Working a queue** — repeatedly entering `QN{N}` to pull PNRs off a queue one at a time, in the order they were placed there

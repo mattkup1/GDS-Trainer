@@ -33,6 +33,7 @@ from .data import (
     LOYALTY_TIERS,
     MONTHS,
     PHONE_LOC_CODES,
+    QUEUE_CATEGORIES,
     SSR_CODES,
     TAX_POOL,
 )
@@ -1016,6 +1017,64 @@ def retrieve_by_locator(loc: str) -> None:
     print_line(f"PNR {loc} RETRIEVED")
     log_activity(STATE, f"PNR RETRIEVED - RLOC {loc}")
     refresh_and_print_pnr()
+
+
+# ---------- queues (QE/QN/QC) ----------
+
+def queue_enqueue(num_str: str) -> None:
+    p = STATE.pnr
+    incomplete = _first_incomplete_message("queue_place")
+    if incomplete:
+        print_err(incomplete)
+        return
+
+    num = str(int(num_str))
+    STATE.queues.setdefault(num, [])
+    if p["locator"] not in STATE.queues[num]:
+        STATE.queues[num].append(p["locator"])
+
+    print_line(f"PNR {p['locator']} QUEUED TO QUEUE {num}")
+    log_activity(STATE, f"QUEUED TO QUEUE {num}")
+
+    STATE.pnr = fresh_pnr()
+    STATE.last_display = []
+    print_line("WORK AREA CLEARED - READY FOR NEXT ENTRY", "dim")
+
+
+def queue_next(num_str: str) -> None:
+    num = str(int(num_str))
+    q = STATE.queues.get(num, [])
+    if not q:
+        print_line(f"END OF QUEUE {num} - NO PNRS REMAINING", "dim")
+        return
+
+    loc = q.pop(0)
+    rec = STATE.history.get(loc)
+    if not rec:
+        print_err(f"QUEUE {num} REFERENCED UNKNOWN RECORD {loc}")
+        return
+
+    STATE.pnr = copy.deepcopy(rec)
+    print_line(f"PNR {loc} RETRIEVED FROM QUEUE {num} - {len(q)} REMAINING")
+    log_activity(STATE, f"RETRIEVED FROM QUEUE {num}")
+    refresh_and_print_pnr()
+
+
+def queue_count(num_str: str | None) -> None:
+    if num_str:
+        nums = [str(int(num_str))]
+    else:
+        nums = sorted((n for n in STATE.queues if STATE.queues[n]), key=int)
+
+    if not nums:
+        print_line("NO QUEUES WITH PNRS ON FILE", "dim")
+        return
+
+    print_line(f"QUEUE COUNT - PCC {STATE.pcc or '----'}", "hd")
+    for n in nums:
+        count = len(STATE.queues.get(n, []))
+        label = f"  {QUEUE_CATEGORIES[n]}" if QUEUE_CATEGORIES.get(n) else ""
+        print_line(f"  Q{pad(n, 4)}{pad(str(count), 4)}{label}")
 
 
 # ---------- ticketing (TKTT) ----------

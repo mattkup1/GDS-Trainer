@@ -10,18 +10,45 @@
   <div id="housing">
     <div id="bar">
       <span class="title"><span class="led"></span> GDS TRAINER</span>
+      <span class="toolbtns actions">
+        <button id="btnSignIn">SIGN IN</button>
+        <button id="btnSignOut" data-require-signed-in="1">SIGN OUT</button>
+        <button id="btnShowPnr" data-require-signed-in="1">DISPLAY PNR</button>
+        <button id="btnPrice" data-require-signed-in="1">PRICE (WP)</button>
+        <button id="btnEndTransact" data-require-signed-in="1">END TRANSACT</button>
+        <button id="btnHelp">HELP</button>
+      </span>
       <span class="toolbtns">
+        <button id="btnToggleDock" title="Show/hide PNR panel">&#9776; PANEL</button>
         <button id="btnSettings" title="Display settings">&#9881; SETTINGS</button>
         <button id="btnClear">CLEAR SCREEN</button>
         <button id="btnReset">RESET SESSION</button>
       </span>
     </div>
-    <div id="crt">
-      <div id="screen">
-        <div id="output"></div>
-        <div id="inputrow">
-          <span id="prompt">&gt;</span>
-          <input id="cmdline" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" />
+    <div id="mainrow">
+      <div id="crt">
+        <div id="screen">
+          <div id="output"></div>
+          <div id="inputrow">
+            <span id="prompt">&gt;</span>
+            <input id="cmdline" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          </div>
+        </div>
+      </div>
+      <div id="dock">
+        <div class="segmented" id="dockTabs">
+          <button id="dockTabPnr" data-value="pnr">PNR</button>
+          <button id="dockTabSeat" data-value="seat">SEAT MAP</button>
+        </div>
+        <div id="dockPnrTab">
+          <div id="dockStatus" class="dim"></div>
+          <div id="dockRloc"></div>
+          <div id="dockPnrBody"></div>
+        </div>
+        <div id="seatMapPanel" class="hidden">
+          <div id="seatMapTitle">SEAT MAP</div>
+          <div id="seatMapGrid"></div>
+          <div id="seatMapLegend" class="dim">NO SEAT MAP DISPLAYED YET - USE 4{N} TO VIEW A SEGMENT</div>
         </div>
       </div>
     </div>

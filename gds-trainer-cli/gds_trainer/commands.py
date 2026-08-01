@@ -34,6 +34,7 @@ from .data import (
     MONTHS,
     PHONE_LOC_CODES,
     QUEUE_CATEGORIES,
+    SEAT_LAYOUTS,
     SSR_CODES,
     TAX_POOL,
 )
@@ -507,7 +508,17 @@ def add_ticketing_time_limit(day: str, mon: str, time: str) -> None:
 
 # ---------- seat maps ----------
 
+def get_seat_layout(equip: str | None) -> dict:
+    return SEAT_LAYOUTS.get(equip, SEAT_LAYOUTS["_default"])
+
+
+def _seat_cell(s: str) -> str:
+    return f" {s} "
+
+
 def get_seat_map(seg: dict) -> dict:
+    layout = get_seat_layout(seg.get("equip"))
+    cols = list("".join(layout["cols"]))
     dinfo = seg["dinfo"]
     seed = hash_str(
         f"{seg['airline']}{seg['flight_num']}{dinfo.day}{dinfo.mon}{seg['orig']}{seg['dest']}SEATMAP"
@@ -515,15 +526,34 @@ def get_seat_map(seg: dict) -> dict:
     rng = mulberry32(seed)
     rows = []
     occupied: set[str] = set()
-    for r in range(1, 31):
+    for r in range(1, layout["rows"] + 1):
         seats = []
-        for col in "ABCDEF":
+        for col in cols:
             occ = rng() < 0.4
             if occ:
                 occupied.add(f"{r}{col}")
             seats.append(occ)
         rows.append({"num": r, "seats": seats})
-    return {"rows": rows, "occupied": occupied}
+    return {"rows": rows, "occupied": occupied, "layout": layout}
+
+
+def _seat_map_header_line(layout: dict) -> str:
+    groups = ["".join(_seat_cell(letter) for letter in group) for group in layout["cols"]]
+    return "      " + "   ".join(groups)
+
+
+def _seat_map_row_line(row: dict, layout: dict, mine: set[str]) -> str:
+    pos = 0
+    groups = []
+    for group in layout["cols"]:
+        cells = []
+        for i, col in enumerate(group):
+            seat_id = f"{row['num']}{col}"
+            occ = row["seats"][pos + i]
+            cells.append(_seat_cell("*" if seat_id in mine else ("X" if occ else ".")))
+        groups.append("".join(cells))
+        pos += len(group)
+    return f" {pad(row['num'], 3)}  " + "   ".join(groups)
 
 
 def show_seat_map(n: int) -> None:
@@ -540,13 +570,9 @@ def show_seat_map(n: int) -> None:
         "hd",
     )
     print_blank()
-    print_line("      A  B  C     D  E  F", "dim")
+    print_line(_seat_map_header_line(smap["layout"]), "dim")
     for row in smap["rows"]:
-        cols = []
-        for i, occ in enumerate(row["seats"]):
-            seat_id = f"{row['num']}{'ABCDEF'[i]}"
-            cols.append(" * " if seat_id in mine else (" X " if occ else " . "))
-        print_line(f" {pad(row['num'], 3)}  {''.join(cols[:3])}   {''.join(cols[3:])}")
+        print_line(_seat_map_row_line(row, smap["layout"], mine))
     print_blank()
     print_line(". OPEN   X OCCUPIED   * YOUR ASSIGNMENT", "dim")
     print_line(f"ASSIGN WITH: 4{n}-{{SEAT}}   e.g. 4{n}-14A", "dim")
@@ -558,12 +584,17 @@ def assign_seat(n: int, seat_str: str) -> None:
         print_err("INVALID SEGMENT NUMBER - CHECK ITINERARY")
         return
     seg = segments[n - 1]
-    row_match = re.match(r"^(\d{1,2})([A-F])$", seat_str)
+    row_match = re.match(r"^(\d{1,2})([A-HJ])$", seat_str)
     row = int(row_match.group(1))
-    if row < 1 or row > 30:
-        print_err("INVALID SEAT ROW - VALID RANGE 1-30")
-        return
+    letter = row_match.group(2)
     smap = get_seat_map(seg)
+    layout = smap["layout"]
+    if row < 1 or row > layout["rows"]:
+        print_err(f"INVALID SEAT ROW - VALID RANGE 1-{layout['rows']}")
+        return
+    if letter not in "".join(layout["cols"]):
+        print_err(f"INVALID SEAT LETTER {letter} - VALID: {' '.join(layout['cols'])}")
+        return
     if seat_str in smap["occupied"]:
         print_err(f"SEAT {seat_str} NOT AVAILABLE - SELECT ANOTHER (SEE SEAT MAP: 4{n})")
         return

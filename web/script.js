@@ -46,6 +46,7 @@
   const AIRLINES = REFERENCE_DATA.airlines;
   const AIRLINE_NUMERIC_CODES = REFERENCE_DATA.airlineNumericCodes;
   const EQUIP = REFERENCE_DATA.equipment;
+  const SEAT_LAYOUTS = REFERENCE_DATA.seatLayouts;
   const CLASSES = REFERENCE_DATA.classes;
   const CLASS_FARE_MULT = REFERENCE_DATA.classFareMultipliers;
   const TAX_POOL = REFERENCE_DATA.taxPool;
@@ -311,20 +312,49 @@
   // ---------- special service requests / other service info ----------
 
   // ---------- seat maps ----------
+  function getSeatLayout(equip){
+    return SEAT_LAYOUTS[equip] || SEAT_LAYOUTS._default;
+  }
+
+  // Shared 3-char cell template - used for both the header letters and the
+  // row symbols so they can't drift out of alignment with each other.
+  function seatCell(s){ return ` ${s} `; }
+
   function getSeatMap(seg){
+    const layout = getSeatLayout(seg.equip);
+    const cols = layout.cols.join('').split('');
     const seed = hashStr(`${seg.airline}${seg.flightNum}${seg.dinfo.day}${seg.dinfo.mon}${seg.orig}${seg.dest}SEATMAP`);
     const rng = mulberry32(seed);
     const rows = [];
     const occupied = new Set();
-    for(let r=1; r<=30; r++){
-      const seats = 'ABCDEF'.split('').map(col => {
+    for(let r=1; r<=layout.rows; r++){
+      const seats = cols.map(col => {
         const occ = rng() < 0.4;
         if(occ) occupied.add(`${r}${col}`);
         return occ;
       });
       rows.push({ num:r, seats });
     }
-    return { rows, occupied };
+    return { rows, occupied, layout };
+  }
+
+  function seatMapHeaderLine(layout){
+    const groups = layout.cols.map(group => group.split('').map(seatCell).join(''));
+    return '      ' + groups.join('   ');
+  }
+
+  function seatMapRowLine(row, layout, mine){
+    let pos = 0;
+    const groups = layout.cols.map(group => {
+      const line = group.split('').map((col, i) => {
+        const seatId = `${row.num}${col}`;
+        const occ = row.seats[pos + i];
+        return seatCell(mine.has(seatId) ? '*' : (occ ? 'X' : '.'));
+      }).join('');
+      pos += group.length;
+      return line;
+    });
+    return ` ${pad(row.num,3)}  ${groups.join('   ')}`;
   }
 
   function showSeatMap(n){
@@ -334,32 +364,98 @@
     const mine = new Set(state.pnr.seats.filter(s => s.segIdx === n-1).map(s => s.seat));
     print(`SEAT MAP - ${seg.airline}${seg.flightNum}  ${seg.equip || ''}  ${seg.dinfo.day}${seg.dinfo.mon}  ${seg.orig}-${seg.dest}`, 'hd');
     printBlank();
-    print('      A  B  C     D  E  F', 'dim');
+    print(seatMapHeaderLine(map.layout), 'dim');
     for(const row of map.rows){
-      const cols = row.seats.map((occ, i) => {
-        const seatId = `${row.num}${'ABCDEF'[i]}`;
-        return mine.has(seatId) ? ' * ' : (occ ? ' X ' : ' . ');
-      });
-      print(` ${pad(row.num,3)}  ${cols.slice(0,3).join('')}   ${cols.slice(3).join('')}`);
+      print(seatMapRowLine(row, map.layout, mine));
     }
     printBlank();
     print('. OPEN   X OCCUPIED   * YOUR ASSIGNMENT', 'dim');
     print(`ASSIGN WITH: 4${n}-{SEAT}   e.g. 4${n}-14A`, 'dim');
+    renderSeatMapPanel(n, seg, map, mine);
+    switchDockTab('seat');
   }
 
   function assignSeat(n, seatStr){
     const seg = state.pnr.segments[n-1];
     if(!seg){ printErr('INVALID SEGMENT NUMBER - CHECK ITINERARY'); return; }
-    const rowMatch = seatStr.match(/^(\d{1,2})([A-F])$/);
+    const rowMatch = seatStr.match(/^(\d{1,2})([A-HJ])$/);
     const row = parseInt(rowMatch[1],10);
-    if(row < 1 || row > 30){ printErr('INVALID SEAT ROW - VALID RANGE 1-30'); return; }
+    const letter = rowMatch[2];
     const map = getSeatMap(seg);
+    if(row < 1 || row > map.layout.rows){ printErr(`INVALID SEAT ROW - VALID RANGE 1-${map.layout.rows}`); return; }
+    if(!map.layout.cols.join('').includes(letter)){ printErr(`INVALID SEAT LETTER ${letter} - VALID: ${map.layout.cols.join(' ')}`); return; }
     if(map.occupied.has(seatStr)){ printErr(`SEAT ${seatStr} NOT AVAILABLE - SELECT ANOTHER (SEE SEAT MAP: 4${n})`); return; }
     if(state.pnr.seats.some(s => s.segIdx === n-1 && s.seat === seatStr)){ printErr(`SEAT ${seatStr} ALREADY ASSIGNED ON THIS SEGMENT`); return; }
     state.pnr.seats.push({ segIdx: n-1, seat: seatStr });
     print(`SEAT ASSIGNED - SEG${n} ${seatStr}`);
     logActivity(`SEAT ASSIGNED - SEG${n} ${seatStr}`);
     refreshAndPrintPNR();
+    if(!seatMapPanel.classList.contains('hidden') && seatMapPanel.dataset.segIdx === String(n-1)){
+      const mine = new Set(state.pnr.seats.filter(s => s.segIdx === n-1).map(s => s.seat));
+      renderSeatMapPanel(n, seg, map, mine);
+    }
+  }
+
+  // ---------- seat map panel (GUI, browser-only) ----------
+  // Supplementary to the ASCII map printed above - clicking an open seat types
+  // the real 4{n}-{seat} command and submits it through submitCommand(), it
+  // never mutates state directly. See notes/GUI Expansion Scope-Out.md.
+  function renderSeatMapPanel(n, seg, map, mine){
+    const layout = map.layout;
+    seatMapPanel.dataset.segIdx = String(n-1);
+    seatMapTitle.textContent = `SEAT MAP - ${seg.airline}${seg.flightNum} ${seg.equip || ''} SEG${n}`;
+    seatMapGrid.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.className = 'seatmap-header';
+    header.appendChild(Object.assign(document.createElement('div'), { className: 'seatmap-headnum' }));
+    for(const group of layout.cols){
+      const g = document.createElement('div');
+      g.className = 'seatgroup';
+      for(const letter of group){
+        const l = document.createElement('div');
+        l.className = 'seatmap-headletter';
+        l.textContent = letter;
+        g.appendChild(l);
+      }
+      header.appendChild(g);
+    }
+    seatMapGrid.appendChild(header);
+
+    for(const row of map.rows){
+      const rowEl = document.createElement('div');
+      rowEl.className = 'seatrow';
+      const numEl = document.createElement('div');
+      numEl.className = 'seatmap-rownum';
+      numEl.textContent = row.num;
+      rowEl.appendChild(numEl);
+
+      let idx = 0;
+      for(const group of layout.cols){
+        const g = document.createElement('div');
+        g.className = 'seatgroup';
+        for(const letter of group){
+          const seatId = `${row.num}${letter}`;
+          const occ = row.seats[idx];
+          const isMine = mine.has(seatId);
+          const btn = document.createElement('button');
+          btn.className = 'seatcell ' + (isMine ? 'mine' : (occ ? 'occupied' : 'open'));
+          btn.textContent = isMine ? '*' : letter;
+          btn.title = seatId;
+          if(occ || isMine){
+            btn.disabled = true;
+          } else {
+            btn.addEventListener('click', () => submitCommand(`4${n}-${seatId}`));
+          }
+          g.appendChild(btn);
+          idx++;
+        }
+        rowEl.appendChild(g);
+      }
+      seatMapGrid.appendChild(rowEl);
+    }
+
+    seatMapLegend.textContent = 'CLICK AN OPEN SEAT TO ASSIGN IT   -   GREEN = OPEN   DIM = OCCUPIED   FILLED = YOUR ASSIGNMENT';
   }
 
   // ---------- form of payment ----------
@@ -399,8 +495,30 @@
     return els;
   }
 
+  // ---------- PNR dock panel (GUI, browser-only) ----------
+  // Mirrors buildElements()/state.lastDisplay into the persistent side dock -
+  // pure rendering, no state mutation. See notes/GUI Expansion Scope-Out.md.
+  function renderPnrPanel(){
+    dockStatus.textContent = state.signedIn
+      ? `SIGNED IN - SINE ${state.sine}  PCC ${state.pcc}`
+      : 'NOT SIGNED IN';
+    dockRloc.textContent = `RLOC: ${state.pnr.locator || '(NOT SAVED)'}`;
+    dockPnrBody.innerHTML = '';
+    if(state.lastDisplay.length === 0){
+      dockPnrBody.textContent = 'PNR IS EMPTY';
+      return;
+    }
+    for(const e of state.lastDisplay){
+      const row = document.createElement('div');
+      row.className = 'docklinerow';
+      row.textContent = `${pad(e.num,2)} ${pad(e.label,5)} ${e.text}`;
+      dockPnrBody.appendChild(row);
+    }
+  }
+
   function refreshAndPrintPNR(){
     state.lastDisplay = buildElements();
+    renderPnrPanel();
     printBlank();
     print(`RLOC: ${state.pnr.locator || '(NOT SAVED - END TRANSACT TO STORE)'}`, 'hd');
     if(state.lastDisplay.length === 0){
@@ -520,6 +638,7 @@
     if(mode === 'ET'){
       state.pnr = freshPNR();
       state.lastDisplay = [];
+      renderPnrPanel();
       print('WORK AREA CLEARED - READY FOR NEXT ENTRY', 'dim');
     } else {
       refreshAndPrintPNR();
@@ -550,6 +669,7 @@
 
     state.pnr = freshPNR();
     state.lastDisplay = [];
+    renderPnrPanel();
     print('WORK AREA CLEARED - READY FOR NEXT ENTRY', 'dim');
   }
 
@@ -726,6 +846,8 @@
     print(`  AGENT SINE: ${sine}   PCC: ${pcc}   ${MONTHS[now.getMonth()]}${pad(now.getDate(),2).trim()} ${now.getFullYear()}`);
     printBlank();
     print('TYPE HELP FOR COMMAND REFERENCE', 'dim');
+    renderPnrPanel();
+    updateToolbarState();
   }
 
   function signOut(){
@@ -733,6 +855,8 @@
     state.signedIn = false;
     state.sine = null;
     state.pcc = null;
+    renderPnrPanel();
+    updateToolbarState();
   }
 
   // ---------- boot ----------
@@ -743,8 +867,11 @@
     printBlank();
     print('NOT SIGNED IN', 'dim');
     print('TYPE SI TO SIGN IN   ·   HELP FOR COMMAND REFERENCE', 'dim');
+    renderPnrPanel();
+    updateToolbarState();
   }
-  boot();
+  // called at the bottom of this file, once the dock/toolbar DOM refs below
+  // are declared - boot() touches both via renderPnrPanel()/updateToolbarState().
 
   // ---------- command handlers (dispatched via COMMAND_GRAMMAR, see spec/README.md) ----------
   function handleName(u){
@@ -990,6 +1117,7 @@
   function ignorePnr(){
     state.pnr = freshPNR();
     state.lastDisplay = [];
+    renderPnrPanel();
     print('IGNORED - PNR NOT SAVED');
   }
 
@@ -1066,17 +1194,24 @@
   }
 
   // ---------- input handling ----------
+  // Shared by the Enter-key handler and any GUI affordance (e.g. clicking a seat
+  // in the seat map panel) that wants to submit a command through the real
+  // dispatcher, rather than mutating state directly - see notes/GUI Expansion
+  // Scope-Out.md's guiding constraint.
+  function submitCommand(raw){
+    print('> ' + raw.toUpperCase(), 'echo');
+    if(raw.trim().length){
+      state.cmdHistory.push(raw);
+      state.cmdHistoryIdx = state.cmdHistory.length;
+    }
+    inputEl.value = '';
+    try{ processCommand(raw); } catch(err){ printErr('SYSTEM ERROR - ' + err.message); }
+    screenEl.scrollTop = screenEl.scrollHeight;
+  }
+
   inputEl.addEventListener('keydown', (e) => {
     if(e.key === 'Enter'){
-      const raw = inputEl.value;
-      print('> ' + raw.toUpperCase(), 'echo');
-      if(raw.trim().length){
-        state.cmdHistory.push(raw);
-        state.cmdHistoryIdx = state.cmdHistory.length;
-      }
-      inputEl.value = '';
-      try{ processCommand(raw); } catch(err){ printErr('SYSTEM ERROR - ' + err.message); }
-      screenEl.scrollTop = screenEl.scrollHeight;
+      submitCommand(inputEl.value);
     } else if(e.key === 'ArrowUp'){
       if(state.cmdHistoryIdx > 0){
         state.cmdHistoryIdx--;
@@ -1096,6 +1231,22 @@
     }
   });
 
+  // ---------- toolbar: quick-action buttons ----------
+  // Each button submits a real zero-argument command through submitCommand() -
+  // never a shortcut around the dispatcher. See notes/GUI Expansion Scope-Out.md.
+  const btnSignIn = document.getElementById('btnSignIn');
+  btnSignIn.addEventListener('click', () => submitCommand('SI'));
+  document.getElementById('btnSignOut').addEventListener('click', () => submitCommand('SO'));
+  document.getElementById('btnShowPnr').addEventListener('click', () => submitCommand('*R'));
+  document.getElementById('btnPrice').addEventListener('click', () => submitCommand('WP'));
+  document.getElementById('btnEndTransact').addEventListener('click', () => submitCommand('ER'));
+  document.getElementById('btnHelp').addEventListener('click', () => submitCommand('HELP'));
+
+  function updateToolbarState(){
+    document.querySelectorAll('[data-require-signed-in="1"]').forEach(b => { b.disabled = !state.signedIn; });
+    btnSignIn.disabled = state.signedIn;
+  }
+
   // ---------- toolbar ----------
   document.getElementById('btnClear').addEventListener('click', () => { outputEl.innerHTML = ''; });
   document.getElementById('btnReset').addEventListener('click', () => {
@@ -1111,8 +1262,9 @@
   const shellEl = document.getElementById('shell');
   const settingsPanel = document.getElementById('settingsPanel');
   const btnSettings = document.getElementById('btnSettings');
+  const btnToggleDock = document.getElementById('btnToggleDock');
   const SETTINGS_KEY = 'gdsTrainerSettings';
-  const DEFAULT_SETTINGS = { theme:'green', scanlines:true, glow:'med', vignette:true, fontSize:'md' };
+  const DEFAULT_SETTINGS = { theme:'green', scanlines:true, glow:'med', vignette:true, fontSize:'md', dockVisible:true };
 
   function loadSettings(){
     try{
@@ -1133,6 +1285,8 @@
     shellEl.dataset.fontsize = settings.fontSize;
     shellEl.classList.toggle('scanlines-off', !settings.scanlines);
     shellEl.classList.toggle('vignette-off', !settings.vignette);
+    shellEl.classList.toggle('dock-hidden', !settings.dockVisible);
+    btnToggleDock.classList.toggle('active', settings.dockVisible);
     syncPanelUI();
   }
 
@@ -1194,6 +1348,10 @@
   document.getElementById('btnCloseSettings').addEventListener('click', () => {
     settingsPanel.classList.add('hidden');
   });
+  btnToggleDock.addEventListener('click', () => {
+    settings.dockVisible = !settings.dockVisible;
+    applySettings(); saveSettings();
+  });
   document.addEventListener('click', (e) => {
     if(!settingsPanel.classList.contains('hidden') &&
        !settingsPanel.contains(e.target) && e.target !== btnSettings){
@@ -1207,6 +1365,29 @@
     if(!settingsPanel.classList.contains('hidden')) positionPanel();
   });
 
+  // ---------- dock wiring (PNR panel / seat map tab) ----------
+  const dockPnrTab = document.getElementById('dockPnrTab');
+  const dockStatus = document.getElementById('dockStatus');
+  const dockRloc = document.getElementById('dockRloc');
+  const dockPnrBody = document.getElementById('dockPnrBody');
+  const dockTabPnr = document.getElementById('dockTabPnr');
+  const dockTabSeat = document.getElementById('dockTabSeat');
+  const seatMapPanel = document.getElementById('seatMapPanel');
+  const seatMapTitle = document.getElementById('seatMapTitle');
+  const seatMapGrid = document.getElementById('seatMapGrid');
+  const seatMapLegend = document.getElementById('seatMapLegend');
+
+  function switchDockTab(tab){
+    dockPnrTab.classList.toggle('hidden', tab !== 'pnr');
+    seatMapPanel.classList.toggle('hidden', tab !== 'seat');
+    dockTabPnr.classList.toggle('active', tab === 'pnr');
+    dockTabSeat.classList.toggle('active', tab === 'seat');
+  }
+  dockTabPnr.addEventListener('click', () => switchDockTab('pnr'));
+  dockTabSeat.addEventListener('click', () => switchDockTab('seat'));
+  switchDockTab('pnr');
+
   applySettings();
+  boot();
 
 })();

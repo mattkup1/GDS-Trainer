@@ -524,16 +524,27 @@
     print(`SEAT ASSIGNED - SEG${n} ${seatStr}`);
     logActivity(`SEAT ASSIGNED - SEG${n} ${seatStr}`);
     refreshAndPrintPNR();
-    if(!seatMapPanel.classList.contains('hidden') && seatMapPanel.dataset.segIdx === String(n-1)){
-      const mine = new Set(state.pnr.seats.filter(s => s.segIdx === n-1).map(s => s.seat));
-      renderSeatMapPanel(n, seg, map, mine);
-    }
   }
 
   // ---------- seat map panel (GUI, browser-only) ----------
   // Supplementary to the ASCII map printed above - clicking an open seat types
   // the real 4{n}-{seat} command and submits it through submitCommand(), it
   // never mutates state directly. See notes/GUI Expansion Scope-Out.md.
+  //
+  // Re-renders the open seat-map panel (if any) against current PNR state -
+  // called from refreshAndPrintPNR() so a seat cancelled via X{N} (or a segment
+  // cancelled out from under it) stops showing as "mine"/occupied in the GUI,
+  // the same way the ASCII map only ever reflected state at the moment 4{N} was run.
+  function refreshSeatMapPanelIfOpen(){
+    if(seatMapPanel.classList.contains('hidden')) return;
+    const segIdx = parseInt(seatMapPanel.dataset.segIdx, 10);
+    const seg = state.pnr.segments[segIdx];
+    if(!seg){ switchDockTab('pnr'); return; }
+    const map = getSeatMap(seg);
+    const mine = new Set(state.pnr.seats.filter(s => s.segIdx === segIdx).map(s => s.seat));
+    renderSeatMapPanel(segIdx + 1, seg, map, mine);
+  }
+
   function renderSeatMapPanel(n, seg, map, mine){
     const layout = map.layout;
     seatMapPanel.dataset.segIdx = String(n-1);
@@ -576,8 +587,14 @@
           btn.className = 'seatcell ' + (isMine ? 'mine' : (occ ? 'occupied' : 'open'));
           btn.textContent = isMine ? '*' : letter;
           btn.title = seatId;
-          if(occ || isMine){
+          if(occ){
             btn.disabled = true;
+          } else if(isMine){
+            btn.addEventListener('click', () => {
+              const seatArrIdx = state.pnr.seats.findIndex(s => s.segIdx === n-1 && s.seat === seatId);
+              const el = state.lastDisplay.find(e => e.kind === 'seat' && e.idx === seatArrIdx);
+              if(el) submitCommand(`X${el.num}`);
+            });
           } else {
             btn.addEventListener('click', () => submitCommand(`4${n}-${seatId}`));
           }
@@ -589,7 +606,7 @@
       seatMapGrid.appendChild(rowEl);
     }
 
-    seatMapLegend.textContent = 'CLICK AN OPEN SEAT TO ASSIGN IT   -   GREEN = OPEN   DIM = OCCUPIED   FILLED = YOUR ASSIGNMENT';
+    seatMapLegend.textContent = 'CLICK AN OPEN SEAT TO ASSIGN IT, CLICK YOUR SEAT TO CANCEL IT   -   GREEN = OPEN   DIM = OCCUPIED   FILLED = YOUR ASSIGNMENT';
   }
 
   // ---------- form of payment ----------
@@ -653,6 +670,7 @@
   function refreshAndPrintPNR(){
     state.lastDisplay = buildElements();
     renderPnrPanel();
+    refreshSeatMapPanelIfOpen();
     printBlank();
     print(`RLOC: ${state.pnr.locator || '(NOT SAVED - END TRANSACT TO STORE)'}`, 'hd');
     if(state.lastDisplay.length === 0){

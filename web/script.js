@@ -943,6 +943,7 @@
       state.pnr = freshPNR();
       state.lastDisplay = [];
       renderPnrPanel();
+      refreshSeatMapPanelIfOpen();
       print('WORK AREA CLEARED - READY FOR NEXT ENTRY', 'dim');
     } else {
       refreshAndPrintPNR();
@@ -974,6 +975,7 @@
     state.pnr = freshPNR();
     state.lastDisplay = [];
     renderPnrPanel();
+    refreshSeatMapPanelIfOpen();
     print('WORK AREA CLEARED - READY FOR NEXT ENTRY', 'dim');
   }
 
@@ -1160,6 +1162,7 @@
     state.sine = null;
     state.pcc = null;
     renderPnrPanel();
+    switchDockTab('pnr');
     updateToolbarState();
   }
 
@@ -1172,6 +1175,7 @@
     print('NOT SIGNED IN', 'dim');
     print('TYPE SI TO SIGN IN   ·   HELP FOR COMMAND REFERENCE', 'dim');
     renderPnrPanel();
+    refreshSeatMapPanelIfOpen();
     updateToolbarState();
   }
   // called at the bottom of this file, once the dock/toolbar DOM refs below
@@ -1422,6 +1426,7 @@
     state.pnr = freshPNR();
     state.lastDisplay = [];
     renderPnrPanel();
+    refreshSeatMapPanelIfOpen();
     print('IGNORED - PNR NOT SAVED');
   }
 
@@ -1684,7 +1689,16 @@
   const seatMapGrid = document.getElementById('seatMapGrid');
   const seatMapLegend = document.getElementById('seatMapLegend');
 
+  // Guards the 'seat' tab against showing stale content - a click on the tab
+  // button itself (unlike showSeatMap/refreshSeatMapPanelIfOpen) never re-checks
+  // whether a PNR/segment is actually behind whatever was last rendered there,
+  // so without this a signed-out or freshly-cleared session could still flip
+  // the panel back open showing a previous PNR's seat map.
   function switchDockTab(tab){
+    if(tab === 'seat'){
+      const segIdx = parseInt(seatMapPanel.dataset.segIdx, 10);
+      if(!state.signedIn || !state.pnr.segments[segIdx]) tab = 'pnr';
+    }
     dockPnrTab.classList.toggle('hidden', tab !== 'pnr');
     seatMapPanel.classList.toggle('hidden', tab !== 'seat');
     dockTabPnr.classList.toggle('active', tab === 'pnr');

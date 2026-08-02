@@ -85,29 +85,60 @@ def test_pnr_dock_panel_reflects_pnr_state(web_session):
     assert "NOT SAVED" in empty_state["rloc"]
 
 
-def test_toolbar_sign_in_button_submits_real_command(web_session):
-    """Confirms the toolbar's quick-action buttons go through the real
-    command dispatcher (submitCommand -> processCommand), never a shortcut
-    that bypasses it - the guiding constraint in notes/GUI Expansion
-    Scope-Out.md. web_session starts signed-out (see conftest.web_session).
+def test_lookup_panel_decode_click_runs_real_command(web_session):
+    """GUI-only regression guard for the ENCODE/DECODE dock tab. Confirms an
+    exact code match ranks first (searching "ORD" among thousands of airports
+    should surface Chicago O'Hare, not an unrelated city whose name merely
+    contains "ord" like Alamogordo), and that clicking a result runs the real
+    DC{code} command through submitCommand()/processCommand() rather than
+    rendering decoded info directly from state - the guiding constraint in
+    notes/GUI Expansion Scope-Out.md.
     """
-    before = web_session.evaluate(
-        "({signInDisabled: document.getElementById('btnSignIn').disabled,"
-        " priceDisabled: document.getElementById('btnPrice').disabled})"
+    web_session.run_commands(["SI"])
+    web_session.evaluate("document.getElementById('dockTabLookup').click()")
+    web_session.evaluate(
+        "(() => {"
+        "const input = document.getElementById('lookupInput');"
+        "input.value = 'ORD';"
+        "input.dispatchEvent(new Event('input', { bubbles: true }));"
+        "})()"
     )
-    assert before["signInDisabled"] is False
-    assert before["priceDisabled"] is True
 
-    web_session.evaluate("document.getElementById('btnSignIn').click()")
+    first_code = web_session.evaluate("document.querySelector('.lookup-code').textContent")
+    assert first_code == "ORD"
 
+    web_session.evaluate("document.querySelector('.lookup-row').click()")
+    output = web_session.evaluate("document.getElementById('output').textContent")
+    assert "DCORD" in output
+    assert "O'HARE" in output.upper()
+
+
+def test_format_finder_click_inserts_without_submitting(web_session):
+    """GUI-only regression guard for the FORMAT FINDER dock tab. Per the
+    guiding constraint in notes/GUI Expansion Scope-Out.md, GUI affordances
+    must not become a point-and-click alternative to typing a PNR-mutating
+    entry - clicking a result should only insert its example into #cmdline
+    for the user to review and submit themselves, never auto-submit it.
+    """
+    web_session.run_commands(["SI"])
+    web_session.evaluate("document.getElementById('dockTabFormats').click()")
+    web_session.evaluate(
+        "(() => {"
+        "const input = document.getElementById('formatsInput');"
+        "input.value = 'seat map';"
+        "input.dispatchEvent(new Event('input', { bubbles: true }));"
+        "})()"
+    )
+
+    before_output = web_session.evaluate("document.getElementById('output').textContent")
+    web_session.evaluate("document.querySelector('.format-row').click()")
     after = web_session.evaluate(
-        "({output: document.getElementById('output').textContent,"
-        " signInDisabled: document.getElementById('btnSignIn').disabled,"
-        " priceDisabled: document.getElementById('btnPrice').disabled})"
+        "({cmdline: document.getElementById('cmdline').value,"
+        " output: document.getElementById('output').textContent})"
     )
-    assert "SIGN IN COMPLETE" in after["output"]
-    assert after["signInDisabled"] is True
-    assert after["priceDisabled"] is False
+
+    assert after["cmdline"] == "41"
+    assert after["output"] == before_output  # nothing was submitted
 
 
 _FULL_BOOKING_COMMANDS = [

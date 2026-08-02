@@ -81,7 +81,6 @@ body{
 }
 #bar button:disabled{ opacity:.35; cursor:not-allowed; }
 #bar button:disabled:hover{ background:linear-gradient(#202020,#141414); border-color:#3c3c3c; color:#ccc; }
-.toolbtns.actions{ margin-right:14px; padding-right:14px; border-right:1px solid rgba(255,255,255,.08); }
 
 /* ---------- main row: screen + dock ---------- */
 #mainrow{ flex:1; min-height:0; display:flex; gap:12px; align-items:stretch; }
@@ -154,9 +153,9 @@ body{
 #shell[data-fontsize="md"] #cmdline{ font-size:15px; }
 #shell[data-fontsize="lg"] #cmdline{ font-size:17px; }
 
-/* ---------- dock (persistent PNR / seat-map side panel) ---------- */
+/* ---------- dock (persistent PNR / seat-map / lookup / format finder side panel) ---------- */
 #dock{
-  flex:0 0 300px; min-height:0;
+  flex:0 0 340px; min-height:0;
   display:flex; flex-direction:column;
   background:#000804; border-radius:9px; overflow:hidden;
   box-shadow:
@@ -166,20 +165,27 @@ body{
 }
 #shell.dock-hidden #dock{ display:none; }
 
+/* 2x2 grid (rather than .segmented's default single row) so 4 tabs with
+   longer labels (ENCODE/DECODE, FORMAT FINDER) stay legible at dock width. */
 #dockTabs{
   flex:0 0 auto; margin:10px 10px 0;
+  display:grid; grid-template-columns:1fr 1fr;
 }
-#dockTabs button{ font-size:10px; padding:7px 0; }
+#dockTabs button{ font-size:10px; padding:7px 2px; border-left:none; border-top:none; }
+#dockTabs button:nth-child(odd){ border-right:1px solid #3c3c3c; }
+#dockTabs button:nth-child(-n+2){ border-bottom:1px solid #3c3c3c; }
 
-#dockPnrTab, #seatMapPanel{
+#dockPnrTab, #seatMapPanel, #lookupPanel, #formatsPanel{
   flex:1; min-height:0; overflow-y:auto;
   padding:12px 14px;
   color:var(--fg); text-shadow:var(--glow);
   font-size:12px; line-height:1.45;
   transition: color .3s ease, text-shadow .3s ease;
 }
-#dockPnrTab::-webkit-scrollbar, #seatMapPanel::-webkit-scrollbar{ width:8px; }
-#dockPnrTab::-webkit-scrollbar-thumb, #seatMapPanel::-webkit-scrollbar-thumb{
+#dockPnrTab::-webkit-scrollbar, #seatMapPanel::-webkit-scrollbar,
+#lookupPanel::-webkit-scrollbar, #formatsPanel::-webkit-scrollbar{ width:8px; }
+#dockPnrTab::-webkit-scrollbar-thumb, #seatMapPanel::-webkit-scrollbar-thumb,
+#lookupPanel::-webkit-scrollbar-thumb, #formatsPanel::-webkit-scrollbar-thumb{
   background:rgba(var(--fg-rgb),.25); border-radius:4px;
 }
 
@@ -191,6 +197,41 @@ body{
   #mainrow{ flex-direction:column; }
   #dock{ flex:0 0 auto; height:280px; }
 }
+
+/* ---------- lookup (encode/decode) + format finder panels ---------- */
+#lookupInput, #formatsInput{
+  width:100%; background:#0a0f0a; border:1px solid rgba(var(--fg-rgb),.3); border-radius:5px;
+  color:var(--fg); text-shadow:var(--glow); font-family:inherit; font-size:12px;
+  padding:7px 9px; margin-bottom:10px; outline:none;
+}
+#lookupInput:focus, #formatsInput:focus{ border-color:rgba(var(--fg-rgb),.7); }
+#lookupInput::placeholder, #formatsInput::placeholder{ color:var(--fg-dim); opacity:.7; }
+
+.dock-section-head{
+  font-size:10px; font-weight:bold; letter-spacing:1px; color:var(--fg-dim);
+  text-shadow:none; margin:12px 0 4px;
+}
+.dock-section-head:first-child{ margin-top:0; }
+.lookup-hint{ font-size:11px; }
+
+.lookup-row, .format-row{
+  display:flex; width:100%; text-align:left; background:transparent; border:none;
+  border-radius:5px; padding:6px 7px; margin-bottom:2px; cursor:pointer;
+  color:var(--fg); text-shadow:var(--glow); font-family:inherit;
+}
+.lookup-row:hover, .format-row:hover{ background:rgba(var(--fg-rgb),.1); }
+.lookup-row-static{ cursor:default; }
+.lookup-row-static:hover{ background:transparent; }
+
+.lookup-row{ gap:8px; align-items:baseline; }
+.lookup-code{ flex:0 0 30px; font-weight:bold; }
+.lookup-main{ flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+.lookup-name{ font-size:11px; }
+.lookup-sub{ font-size:10px; color:var(--fg-dim); text-shadow:none; }
+
+.format-row{ flex-direction:column; gap:2px; }
+.format-example{ font-size:12px; font-weight:bold; }
+.format-desc{ font-size:10px; color:var(--fg-dim); text-shadow:none; }
 
 #hint{
   position:relative; z-index:1; flex:0 0 auto;

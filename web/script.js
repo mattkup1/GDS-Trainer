@@ -1184,7 +1184,6 @@
     printBlank();
     print('TYPE HELP FOR COMMAND REFERENCE', 'dim');
     renderPnrPanel();
-    updateToolbarState();
   }
 
   function signOut(){
@@ -1194,7 +1193,6 @@
     state.pcc = null;
     renderPnrPanel();
     switchDockTab('pnr');
-    updateToolbarState();
   }
 
   // ---------- boot ----------
@@ -1207,10 +1205,9 @@
     print('TYPE SI TO SIGN IN   ·   HELP FOR COMMAND REFERENCE', 'dim');
     renderPnrPanel();
     refreshSeatMapPanelIfOpen();
-    updateToolbarState();
   }
-  // called at the bottom of this file, once the dock/toolbar DOM refs below
-  // are declared - boot() touches both via renderPnrPanel()/updateToolbarState().
+  // called at the bottom of this file, once the dock DOM refs below are
+  // declared - boot() touches them via renderPnrPanel()/refreshSeatMapPanelIfOpen().
 
   // ---------- command handlers (dispatched via COMMAND_GRAMMAR, see spec/README.md) ----------
   function handleName(u){
@@ -1574,22 +1571,6 @@
     }
   });
 
-  // ---------- toolbar: quick-action buttons ----------
-  // Each button submits a real zero-argument command through submitCommand() -
-  // never a shortcut around the dispatcher. See notes/GUI Expansion Scope-Out.md.
-  const btnSignIn = document.getElementById('btnSignIn');
-  btnSignIn.addEventListener('click', () => submitCommand('SI'));
-  document.getElementById('btnSignOut').addEventListener('click', () => submitCommand('SO'));
-  document.getElementById('btnShowPnr').addEventListener('click', () => submitCommand('*R'));
-  document.getElementById('btnPrice').addEventListener('click', () => submitCommand('WP'));
-  document.getElementById('btnEndTransact').addEventListener('click', () => submitCommand('ER'));
-  document.getElementById('btnHelp').addEventListener('click', () => submitCommand('HELP'));
-
-  function updateToolbarState(){
-    document.querySelectorAll('[data-require-signed-in="1"]').forEach(b => { b.disabled = !state.signedIn; });
-    btnSignIn.disabled = state.signedIn;
-  }
-
   // ---------- toolbar ----------
   document.getElementById('btnClear').addEventListener('click', () => { outputEl.innerHTML = ''; });
   document.getElementById('btnReset').addEventListener('click', () => {
@@ -1708,17 +1689,30 @@
     if(!settingsPanel.classList.contains('hidden')) positionPanel();
   });
 
-  // ---------- dock wiring (PNR panel / seat map tab) ----------
+  // ---------- dock wiring (PNR / seat map / lookup / format finder tabs) ----------
   const dockPnrTab = document.getElementById('dockPnrTab');
   const dockStatus = document.getElementById('dockStatus');
   const dockRloc = document.getElementById('dockRloc');
   const dockPnrBody = document.getElementById('dockPnrBody');
-  const dockTabPnr = document.getElementById('dockTabPnr');
-  const dockTabSeat = document.getElementById('dockTabSeat');
   const seatMapPanel = document.getElementById('seatMapPanel');
   const seatMapTitle = document.getElementById('seatMapTitle');
   const seatMapGrid = document.getElementById('seatMapGrid');
   const seatMapLegend = document.getElementById('seatMapLegend');
+  const lookupPanel = document.getElementById('lookupPanel');
+  const lookupInput = document.getElementById('lookupInput');
+  const lookupResults = document.getElementById('lookupResults');
+  const formatsPanel = document.getElementById('formatsPanel');
+  const formatsInput = document.getElementById('formatsInput');
+  const formatsResults = document.getElementById('formatsResults');
+
+  // Data-driven so adding another dock tab is a one-line addition here rather
+  // than another parallel if/else + classList.toggle pair.
+  const DOCK_TABS = {
+    pnr:     { btn: document.getElementById('dockTabPnr'),     panel: dockPnrTab },
+    seat:    { btn: document.getElementById('dockTabSeat'),    panel: seatMapPanel },
+    lookup:  { btn: document.getElementById('dockTabLookup'),  panel: lookupPanel },
+    formats: { btn: document.getElementById('dockTabFormats'), panel: formatsPanel },
+  };
 
   // Guards the 'seat' tab against showing stale content - a click on the tab
   // button itself (unlike showSeatMap/refreshSeatMapPanelIfOpen) never re-checks
@@ -1730,14 +1724,149 @@
       const segIdx = parseInt(seatMapPanel.dataset.segIdx, 10);
       if(!state.signedIn || !state.pnr.segments[segIdx]) tab = 'pnr';
     }
-    dockPnrTab.classList.toggle('hidden', tab !== 'pnr');
-    seatMapPanel.classList.toggle('hidden', tab !== 'seat');
-    dockTabPnr.classList.toggle('active', tab === 'pnr');
-    dockTabSeat.classList.toggle('active', tab === 'seat');
+    for(const key in DOCK_TABS){
+      DOCK_TABS[key].panel.classList.toggle('hidden', key !== tab);
+      DOCK_TABS[key].btn.classList.toggle('active', key === tab);
+    }
   }
-  dockTabPnr.addEventListener('click', () => switchDockTab('pnr'));
-  dockTabSeat.addEventListener('click', () => switchDockTab('seat'));
+  for(const key in DOCK_TABS){
+    DOCK_TABS[key].btn.addEventListener('click', () => switchDockTab(key));
+  }
   switchDockTab('pnr');
+
+  function dockSectionHead(text){
+    const h = document.createElement('div');
+    h.className = 'dock-section-head';
+    h.textContent = text;
+    return h;
+  }
+
+  // ---------- encode/decode lookup panel (GUI, browser-only) ----------
+  // Live search over the same AIRPORTS/AIRLINES data DC/DAN already use -
+  // mirrors real Sabre's "Encode/Decode" sidebar tool. Airport rows run the
+  // real DC{code} command via submitCommand() when clicked - safe to do
+  // without violating the "GUI must not offer a point-and-click alternative
+  // to typing the entry" rule in notes/GUI Expansion Scope-Out.md, since DC
+  // is read-only and mutates no state, unlike PNR-building commands. Airline
+  // rows have no backing decode command, so they're display-only.
+  // Ranks a code/name/city match so an exact or prefix code match (what
+  // someone decoding a known 3-letter code is almost always after) always
+  // surfaces above an incidental substring hit elsewhere - e.g. searching
+  // "ORD" should rank Chicago O'Hare first, not bury it past the result cap
+  // behind unrelated cities that merely contain "ord" (Alamogordo, Oxford...).
+  function lookupMatchRank(code, term, ...names){
+    if(code === term) return 0;
+    if(code.startsWith(term)) return 1;
+    if(names.some(n => n.startsWith(term))) return 2;
+    if(code.includes(term)) return 3;
+    if(names.some(n => n.includes(term))) return 4;
+    return null;
+  }
+
+  function renderLookupResults(rawTerm){
+    const term = rawTerm.trim().toUpperCase();
+    lookupResults.innerHTML = '';
+    if(term.length < 2){
+      lookupResults.innerHTML = '<div class="dim lookup-hint">TYPE AT LEAST 2 CHARACTERS - A 3-LETTER CODE OR A CITY/AIRPORT/AIRLINE NAME</div>';
+      return;
+    }
+    let airportMatches = [];
+    if(typeof AIRPORTS !== 'undefined'){
+      for(const code in AIRPORTS){
+        const a = AIRPORTS[code];
+        const rank = lookupMatchRank(code, term, a[0].toUpperCase(), a[1].toUpperCase());
+        if(rank !== null) airportMatches.push({ code, name:a[0], city:a[1], country:a[2], rank });
+      }
+      airportMatches.sort((x,y) => x.rank - y.rank);
+      airportMatches = airportMatches.slice(0, 20);
+    }
+    let airlineMatches = [];
+    if(typeof AIRLINES !== 'undefined'){
+      for(const code of AIRLINES){
+        const name = AIRLINE_NAMES[code] || '';
+        const rank = lookupMatchRank(code, term, name.toUpperCase());
+        if(rank !== null) airlineMatches.push({ code, name, numeric: AIRLINE_NUMERIC_CODES[code], rank });
+      }
+      airlineMatches.sort((x,y) => x.rank - y.rank);
+      airlineMatches = airlineMatches.slice(0, 20);
+    }
+    if(airportMatches.length === 0 && airlineMatches.length === 0){
+      lookupResults.innerHTML = `<div class="dim lookup-hint">NO MATCH FOUND FOR "${escapeHtml(term)}"</div>`;
+      return;
+    }
+    if(airportMatches.length){
+      lookupResults.appendChild(dockSectionHead(`AIRPORTS/CITIES (${airportMatches.length}${airportMatches.length===20?'+':''})`));
+      for(const r of airportMatches){
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'lookup-row';
+        row.title = `Run DC${r.code}`;
+        row.innerHTML = `<span class="lookup-code">${escapeHtml(r.code)}</span><span class="lookup-main"><span class="lookup-name">${escapeHtml(r.name.toUpperCase())}</span><span class="lookup-sub">${escapeHtml(r.city.toUpperCase())}, ${escapeHtml(r.country.toUpperCase())}</span></span>`;
+        row.addEventListener('click', () => submitCommand(`DC${r.code}`));
+        lookupResults.appendChild(row);
+      }
+    }
+    if(airlineMatches.length){
+      lookupResults.appendChild(dockSectionHead(`AIRLINES (${airlineMatches.length}${airlineMatches.length===20?'+':''})`));
+      for(const r of airlineMatches){
+        const row = document.createElement('div');
+        row.className = 'lookup-row lookup-row-static';
+        row.innerHTML = `<span class="lookup-code">${escapeHtml(r.code)}</span><span class="lookup-main"><span class="lookup-name">${escapeHtml(r.name.toUpperCase())}</span><span class="lookup-sub">NUMERIC CODE ${escapeHtml(r.numeric)}</span></span>`;
+        lookupResults.appendChild(row);
+      }
+    }
+  }
+  lookupInput.addEventListener('input', () => renderLookupResults(lookupInput.value));
+  renderLookupResults('');
+
+  // ---------- format finder panel (GUI, browser-only) ----------
+  // Filterable reference over COMMAND_GRAMMAR (spec/command-grammar.json),
+  // mirroring real Sabre's "Format Finder" tool. Clicking an entry only
+  // inserts its example into #cmdline and focuses it - it never submits.
+  // Per notes/GUI Expansion Scope-Out.md, GUI affordances must not become a
+  // point-and-click alternative to typing the entry (most of these mutate
+  // PNR state); this only saves the trip to HELP - the user still reviews
+  // and presses Enter themselves, same as real Sabre's Format Finder dropping
+  // the format into the entry line for the agent to fill in blanks.
+  function renderFormatsResults(rawTerm){
+    const term = rawTerm.trim().toUpperCase();
+    formatsResults.innerHTML = '';
+    const matches = COMMAND_GRAMMAR.filter(entry => {
+      if(!term) return true;
+      return (entry.category||'').toUpperCase().includes(term)
+        || (entry.desc||'').toUpperCase().includes(term)
+        || (entry.example||'').toUpperCase().includes(term)
+        || entry.name.toUpperCase().includes(term);
+    });
+    if(matches.length === 0){
+      formatsResults.innerHTML = `<div class="dim lookup-hint">NO COMMANDS MATCH "${escapeHtml(term)}"</div>`;
+      return;
+    }
+    const byCategory = new Map();
+    for(const entry of matches){
+      const cat = entry.category || 'OTHER';
+      if(!byCategory.has(cat)) byCategory.set(cat, []);
+      byCategory.get(cat).push(entry);
+    }
+    for(const [cat, entries] of byCategory){
+      formatsResults.appendChild(dockSectionHead(cat));
+      for(const entry of entries){
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'format-row';
+        row.title = `Insert "${entry.example||''}" into the command line`;
+        row.innerHTML = `<span class="format-example">${escapeHtml(entry.example||'')}</span><span class="format-desc">${escapeHtml(entry.desc||'')}</span>`;
+        row.addEventListener('click', () => {
+          inputEl.value = entry.example || '';
+          inputEl.focus();
+          inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+        });
+        formatsResults.appendChild(row);
+      }
+    }
+  }
+  formatsInput.addEventListener('input', () => renderFormatsResults(formatsInput.value));
+  renderFormatsResults('');
 
   applySettings();
   boot();

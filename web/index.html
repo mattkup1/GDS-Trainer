@@ -10,14 +10,6 @@
   <div id="housing">
     <div id="bar">
       <span class="title"><span class="led"></span> GDS TRAINER</span>
-      <span class="toolbtns actions">
-        <button id="btnSignIn">SIGN IN</button>
-        <button id="btnSignOut" data-require-signed-in="1">SIGN OUT</button>
-        <button id="btnShowPnr" data-require-signed-in="1">DISPLAY PNR</button>
-        <button id="btnPrice" data-require-signed-in="1">PRICE (WP)</button>
-        <button id="btnEndTransact" data-require-signed-in="1">END TRANSACT</button>
-        <button id="btnHelp">HELP</button>
-      </span>
       <span class="toolbtns">
         <button id="btnToggleDock" title="Show/hide PNR panel">&#9776; PANEL</button>
         <button id="btnSettings" title="Display settings">&#9881; SETTINGS</button>
@@ -39,6 +31,8 @@
         <div class="segmented" id="dockTabs">
           <button id="dockTabPnr" data-value="pnr">PNR</button>
           <button id="dockTabSeat" data-value="seat">SEAT MAP</button>
+          <button id="dockTabLookup" data-value="lookup">ENCODE/DECODE</button>
+          <button id="dockTabFormats" data-value="formats">FORMAT FINDER</button>
         </div>
         <div id="dockPnrTab">
           <div id="dockStatus" class="dim"></div>
@@ -49,6 +43,14 @@
           <div id="seatMapTitle">SEAT MAP</div>
           <div id="seatMapGrid"></div>
           <div id="seatMapLegend" class="dim">NO SEAT MAP DISPLAYED YET - USE 4{N} TO VIEW A SEGMENT</div>
+        </div>
+        <div id="lookupPanel" class="hidden">
+          <input id="lookupInput" type="text" placeholder="SEARCH CODE OR NAME..." autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <div id="lookupResults"></div>
+        </div>
+        <div id="formatsPanel" class="hidden">
+          <input id="formatsInput" type="text" placeholder="SEARCH COMMANDS..." autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <div id="formatsResults"></div>
         </div>
       </div>
     </div>

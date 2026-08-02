@@ -644,13 +644,25 @@ def get_seat_layout(equip: str | None) -> dict:
     return SEAT_LAYOUTS.get(equip, SEAT_LAYOUTS["_default"])
 
 
+def layout_decks(layout: dict) -> list[dict]:
+    """Normalizes a layout into its deck list. Most aircraft are single-deck,
+    so they're wrapped as one unlabeled deck - everything downstream (map
+    generation, printing, seat validation) only ever has to handle the
+    multi-deck shape. Double-deckers (747/A380) supply their own `decks`
+    list in spec/reference-data.json with non-overlapping row ranges, so a
+    seat's row number alone is enough to find its deck."""
+    return layout.get("decks") or [
+        {"label": None, "rowStart": 1, "rows": layout["rows"], "cols": layout["cols"]}
+    ]
+
+
 def _seat_cell(s: str) -> str:
     return f" {s} "
 
 
 def get_seat_map(seg: dict) -> dict:
     layout = get_seat_layout(seg.get("equip"))
-    cols = list("".join(layout["cols"]))
+    decks = layout_decks(layout)
     dinfo = seg["dinfo"]
     seed = hash_str(
         f"{seg['airline']}{seg['flight_num']}{dinfo.day}{dinfo.mon}{seg['orig']}{seg['dest']}SEATMAP"
@@ -658,26 +670,29 @@ def get_seat_map(seg: dict) -> dict:
     rng = mulberry32(seed)
     rows = []
     occupied: set[str] = set()
-    for r in range(1, layout["rows"] + 1):
-        seats = []
-        for col in cols:
-            occ = rng() < 0.4
-            if occ:
-                occupied.add(f"{r}{col}")
-            seats.append(occ)
-        rows.append({"num": r, "seats": seats})
-    return {"rows": rows, "occupied": occupied, "layout": layout}
+    for deck in decks:
+        cols = list("".join(deck["cols"]))
+        for i in range(deck["rows"]):
+            r = deck["rowStart"] + i
+            seats = []
+            for col in cols:
+                occ = rng() < 0.4
+                if occ:
+                    occupied.add(f"{r}{col}")
+                seats.append(occ)
+            rows.append({"num": r, "seats": seats, "deck": deck})
+    return {"rows": rows, "occupied": occupied, "layout": layout, "decks": decks}
 
 
-def _seat_map_header_line(layout: dict) -> str:
-    groups = ["".join(_seat_cell(letter) for letter in group) for group in layout["cols"]]
+def _seat_map_header_line(deck: dict) -> str:
+    groups = ["".join(_seat_cell(letter) for letter in group) for group in deck["cols"]]
     return "      " + "   ".join(groups)
 
 
-def _seat_map_row_line(row: dict, layout: dict, mine: set[str]) -> str:
+def _seat_map_row_line(row: dict, mine: set[str]) -> str:
     pos = 0
     groups = []
-    for group in layout["cols"]:
+    for group in row["deck"]["cols"]:
         cells = []
         for i, col in enumerate(group):
             seat_id = f"{row['num']}{col}"
@@ -702,10 +717,14 @@ def show_seat_map(n: int) -> None:
         "hd",
     )
     print_blank()
-    print_line(_seat_map_header_line(smap["layout"]), "dim")
-    for row in smap["rows"]:
-        print_line(_seat_map_row_line(row, smap["layout"], mine))
-    print_blank()
+    for deck in smap["decks"]:
+        if deck["label"]:
+            print_line(deck["label"], "dim")
+        print_line(_seat_map_header_line(deck), "dim")
+        for row in smap["rows"]:
+            if row["deck"] is deck:
+                print_line(_seat_map_row_line(row, mine))
+        print_blank()
     print_line(". OPEN   X OCCUPIED   * YOUR ASSIGNMENT", "dim")
     print_line(f"ASSIGN WITH: 4{n}-{{SEAT}}   e.g. 4{n}-14A", "dim")
 
@@ -716,16 +735,20 @@ def assign_seat(n: int, seat_str: str) -> None:
         print_err("INVALID SEGMENT NUMBER - CHECK ITINERARY")
         return
     seg = segments[n - 1]
-    row_match = re.match(r"^(\d{1,2})([A-HJ])$", seat_str)
+    row_match = re.match(r"^(\d{1,2})([A-HJK])$", seat_str)
     row = int(row_match.group(1))
     letter = row_match.group(2)
     smap = get_seat_map(seg)
-    layout = smap["layout"]
-    if row < 1 or row > layout["rows"]:
-        print_err(f"INVALID SEAT ROW - VALID RANGE 1-{layout['rows']}")
+    deck = next(
+        (d for d in smap["decks"] if row >= d["rowStart"] and row < d["rowStart"] + d["rows"]),
+        None,
+    )
+    if deck is None:
+        max_row = max(d["rowStart"] + d["rows"] - 1 for d in smap["decks"])
+        print_err(f"INVALID SEAT ROW - VALID RANGE 1-{max_row}")
         return
-    if letter not in "".join(layout["cols"]):
-        print_err(f"INVALID SEAT LETTER {letter} - VALID: {' '.join(layout['cols'])}")
+    if letter not in "".join(deck["cols"]):
+        print_err(f"INVALID SEAT LETTER {letter} - VALID: {' '.join(deck['cols'])}")
         return
     if seat_str in smap["occupied"]:
         print_err(f"SEAT {seat_str} NOT AVAILABLE - SELECT ANOTHER (SEE SEAT MAP: 4{n})")

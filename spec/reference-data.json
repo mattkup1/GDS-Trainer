@@ -1,7 +1,11 @@
 {
   "months": ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"],
   "weekdays": ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"],
-  "equipment": ["738", "73G", "320", "321", "32N", "E75", "CR9", "777", "788", "319"],
+  "equipment": [
+    "738", "73G", "320", "321", "32N", "E75", "CR9", "777", "788", "319",
+    "332", "789", "359", "351", "343", "752", "763", "AT7", "DH4", "E90",
+    "744", "748", "388"
+  ],
   "seatLayouts": {
     "_default": {"rows": 30, "cols": ["ABC", "DEF"]},
     "738": {"rows": 30, "cols": ["ABC", "DEF"]},
@@ -13,7 +17,35 @@
     "E75": {"rows": 20, "cols": ["AB", "CD"]},
     "CR9": {"rows": 19, "cols": ["AB", "CD"]},
     "777": {"rows": 40, "cols": ["ABC", "DEF", "GHJ"]},
-    "788": {"rows": 30, "cols": ["ABC", "DEF", "GHJ"]}
+    "788": {"rows": 30, "cols": ["ABC", "DEF", "GHJ"]},
+    "332": {"rows": 35, "cols": ["AC", "DEFG", "HK"]},
+    "789": {"rows": 33, "cols": ["ABC", "DEF", "GHJ"]},
+    "359": {"rows": 33, "cols": ["ABC", "DEF", "GHJ"]},
+    "351": {"rows": 36, "cols": ["ABC", "DEF", "GHJ"]},
+    "343": {"rows": 33, "cols": ["AC", "DEFG", "HK"]},
+    "752": {"rows": 26, "cols": ["ABC", "DEF"]},
+    "763": {"rows": 30, "cols": ["AC", "DEF", "HK"]},
+    "AT7": {"rows": 18, "cols": ["AB", "CD"]},
+    "DH4": {"rows": 19, "cols": ["AB", "CD"]},
+    "E90": {"rows": 25, "cols": ["AB", "CD"]},
+    "744": {
+      "decks": [
+        {"label": "UPPER DECK", "rowStart": 1, "rows": 8, "cols": ["AB", "JK"]},
+        {"label": "MAIN DECK", "rowStart": 9, "rows": 47, "cols": ["ABC", "DEFG", "HJK"]}
+      ]
+    },
+    "748": {
+      "decks": [
+        {"label": "UPPER DECK", "rowStart": 1, "rows": 10, "cols": ["AB", "JK"]},
+        {"label": "MAIN DECK", "rowStart": 11, "rows": 51, "cols": ["ABC", "DEFG", "HJK"]}
+      ]
+    },
+    "388": {
+      "decks": [
+        {"label": "UPPER DECK", "rowStart": 1, "rows": 15, "cols": ["AB", "DEFG", "HK"]},
+        {"label": "MAIN DECK", "rowStart": 16, "rows": 55, "cols": ["ABC", "DEFG", "HJK"]}
+      ]
+    }
   },
   "classes": ["F", "J", "C", "Y", "B", "M"],
   "classFareMultipliers": {

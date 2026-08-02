@@ -22,7 +22,7 @@
   {"name": "osi", "pattern": "^3OSI([A-Z]{2})\\s*(.+)$", "handler": "OSI"},
   {"name": "ssr", "pattern": "^3([A-Z]{4})(?:-(\\d{1,2}))?(?:/(.+))?$", "handler": "SSR"},
   {"name": "seat_map", "pattern": "^4(\\d{1,2})$", "handler": "SEAT_MAP"},
-  {"name": "seat_assign", "pattern": "^4(\\d{1,2})-(\\d{1,2}[A-HJ])$", "handler": "SEAT_ASSIGN"},
+  {"name": "seat_assign", "pattern": "^4(\\d{1,2})-(\\d{1,2}[A-HJK])$", "handler": "SEAT_ASSIGN"},
   {"name": "decode_airport", "pattern": "^DC([A-Z]{3})$", "handler": "DECODE_AIRPORT"},
   {"name": "search_airports", "pattern": "^DAN(.+)$", "handler": "SEARCH_AIRPORTS"},
   {"name": "pnr_redisplay", "pattern": "^\\*R?$", "handler": "PNR_REDISPLAY"},

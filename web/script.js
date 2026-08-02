@@ -595,36 +595,50 @@
     return SEAT_LAYOUTS[equip] || SEAT_LAYOUTS._default;
   }
 
+  // Normalizes a layout into its deck list. Most aircraft are single-deck,
+  // so they're wrapped as one unlabeled deck - everything downstream (map
+  // generation, printing, the GUI grid, seat validation) only ever has to
+  // handle the multi-deck shape. Double-deckers (747/A380) supply their own
+  // `decks` array in spec/reference-data.json with non-overlapping row
+  // ranges, so a seat's row number alone is enough to find its deck.
+  function layoutDecks(layout){
+    return layout.decks || [{ label:null, rowStart:1, rows:layout.rows, cols:layout.cols }];
+  }
+
   // Shared 3-char cell template - used for both the header letters and the
   // row symbols so they can't drift out of alignment with each other.
   function seatCell(s){ return ` ${s} `; }
 
   function getSeatMap(seg){
     const layout = getSeatLayout(seg.equip);
-    const cols = layout.cols.join('').split('');
+    const decks = layoutDecks(layout);
     const seed = hashStr(`${seg.airline}${seg.flightNum}${seg.dinfo.day}${seg.dinfo.mon}${seg.orig}${seg.dest}SEATMAP`);
     const rng = mulberry32(seed);
     const rows = [];
     const occupied = new Set();
-    for(let r=1; r<=layout.rows; r++){
-      const seats = cols.map(col => {
-        const occ = rng() < 0.4;
-        if(occ) occupied.add(`${r}${col}`);
-        return occ;
-      });
-      rows.push({ num:r, seats });
+    for(const deck of decks){
+      const cols = deck.cols.join('').split('');
+      for(let i=0; i<deck.rows; i++){
+        const r = deck.rowStart + i;
+        const seats = cols.map(col => {
+          const occ = rng() < 0.4;
+          if(occ) occupied.add(`${r}${col}`);
+          return occ;
+        });
+        rows.push({ num:r, seats, deck });
+      }
     }
-    return { rows, occupied, layout };
+    return { rows, occupied, layout, decks };
   }
 
-  function seatMapHeaderLine(layout){
-    const groups = layout.cols.map(group => group.split('').map(seatCell).join(''));
+  function seatMapHeaderLine(deck){
+    const groups = deck.cols.map(group => group.split('').map(seatCell).join(''));
     return '      ' + groups.join('   ');
   }
 
-  function seatMapRowLine(row, layout, mine){
+  function seatMapRowLine(row, mine){
     let pos = 0;
-    const groups = layout.cols.map(group => {
+    const groups = row.deck.cols.map(group => {
       const line = group.split('').map((col, i) => {
         const seatId = `${row.num}${col}`;
         const occ = row.seats[pos + i];
@@ -643,11 +657,14 @@
     const mine = new Set(state.pnr.seats.filter(s => s.segIdx === n-1).map(s => s.seat));
     print(`SEAT MAP - ${seg.airline}${seg.flightNum}  ${seg.equip || ''}  ${seg.dinfo.day}${seg.dinfo.mon}  ${seg.orig}-${seg.dest}`, 'hd');
     printBlank();
-    print(seatMapHeaderLine(map.layout), 'dim');
-    for(const row of map.rows){
-      print(seatMapRowLine(row, map.layout, mine));
+    for(const deck of map.decks){
+      if(deck.label) print(deck.label, 'dim');
+      print(seatMapHeaderLine(deck), 'dim');
+      for(const row of map.rows){
+        if(row.deck === deck) print(seatMapRowLine(row, mine));
+      }
+      printBlank();
     }
-    printBlank();
     print('. OPEN   X OCCUPIED   * YOUR ASSIGNMENT', 'dim');
     print(`ASSIGN WITH: 4${n}-{SEAT}   e.g. 4${n}-14A`, 'dim');
     renderSeatMapPanel(n, seg, map, mine);
@@ -657,12 +674,17 @@
   function assignSeat(n, seatStr){
     const seg = state.pnr.segments[n-1];
     if(!seg){ printErr('INVALID SEGMENT NUMBER - CHECK ITINERARY'); return; }
-    const rowMatch = seatStr.match(/^(\d{1,2})([A-HJ])$/);
+    const rowMatch = seatStr.match(/^(\d{1,2})([A-HJK])$/);
     const row = parseInt(rowMatch[1],10);
     const letter = rowMatch[2];
     const map = getSeatMap(seg);
-    if(row < 1 || row > map.layout.rows){ printErr(`INVALID SEAT ROW - VALID RANGE 1-${map.layout.rows}`); return; }
-    if(!map.layout.cols.join('').includes(letter)){ printErr(`INVALID SEAT LETTER ${letter} - VALID: ${map.layout.cols.join(' ')}`); return; }
+    const deck = map.decks.find(d => row >= d.rowStart && row < d.rowStart + d.rows);
+    if(!deck){
+      const maxRow = Math.max(...map.decks.map(d => d.rowStart + d.rows - 1));
+      printErr(`INVALID SEAT ROW - VALID RANGE 1-${maxRow}`);
+      return;
+    }
+    if(!deck.cols.join('').includes(letter)){ printErr(`INVALID SEAT LETTER ${letter} - VALID: ${deck.cols.join(' ')}`); return; }
     if(map.occupied.has(seatStr)){ printErr(`SEAT ${seatStr} NOT AVAILABLE - SELECT ANOTHER (SEE SEAT MAP: 4${n})`); return; }
     if(state.pnr.seats.some(s => s.segIdx === n-1 && s.seat === seatStr)){ printErr(`SEAT ${seatStr} ALREADY ASSIGNED ON THIS SEGMENT`); return; }
     state.pnr.seats.push({ segIdx: n-1, seat: seatStr });
@@ -691,64 +713,73 @@
   }
 
   function renderSeatMapPanel(n, seg, map, mine){
-    const layout = map.layout;
     seatMapPanel.dataset.segIdx = String(n-1);
     seatMapTitle.textContent = `SEAT MAP - ${seg.airline}${seg.flightNum} ${seg.equip || ''} SEG${n}`;
     seatMapGrid.innerHTML = '';
 
-    const header = document.createElement('div');
-    header.className = 'seatmap-header';
-    header.appendChild(Object.assign(document.createElement('div'), { className: 'seatmap-headnum' }));
-    for(const group of layout.cols){
-      const g = document.createElement('div');
-      g.className = 'seatgroup';
-      for(const letter of group){
-        const l = document.createElement('div');
-        l.className = 'seatmap-headletter';
-        l.textContent = letter;
-        g.appendChild(l);
+    for(const deck of map.decks){
+      if(deck.label){
+        const label = document.createElement('div');
+        label.className = 'seatmap-decklabel';
+        label.textContent = deck.label;
+        seatMapGrid.appendChild(label);
       }
-      header.appendChild(g);
-    }
-    seatMapGrid.appendChild(header);
 
-    for(const row of map.rows){
-      const rowEl = document.createElement('div');
-      rowEl.className = 'seatrow';
-      const numEl = document.createElement('div');
-      numEl.className = 'seatmap-rownum';
-      numEl.textContent = row.num;
-      rowEl.appendChild(numEl);
-
-      let idx = 0;
-      for(const group of layout.cols){
+      const header = document.createElement('div');
+      header.className = 'seatmap-header';
+      header.appendChild(Object.assign(document.createElement('div'), { className: 'seatmap-headnum' }));
+      for(const group of deck.cols){
         const g = document.createElement('div');
         g.className = 'seatgroup';
         for(const letter of group){
-          const seatId = `${row.num}${letter}`;
-          const occ = row.seats[idx];
-          const isMine = mine.has(seatId);
-          const btn = document.createElement('button');
-          btn.className = 'seatcell ' + (isMine ? 'mine' : (occ ? 'occupied' : 'open'));
-          btn.textContent = isMine ? '*' : letter;
-          btn.title = seatId;
-          if(occ){
-            btn.disabled = true;
-          } else if(isMine){
-            btn.addEventListener('click', () => {
-              const seatArrIdx = state.pnr.seats.findIndex(s => s.segIdx === n-1 && s.seat === seatId);
-              const el = state.lastDisplay.find(e => e.kind === 'seat' && e.idx === seatArrIdx);
-              if(el) submitCommand(`X${el.num}`);
-            });
-          } else {
-            btn.addEventListener('click', () => submitCommand(`4${n}-${seatId}`));
-          }
-          g.appendChild(btn);
-          idx++;
+          const l = document.createElement('div');
+          l.className = 'seatmap-headletter';
+          l.textContent = letter;
+          g.appendChild(l);
         }
-        rowEl.appendChild(g);
+        header.appendChild(g);
       }
-      seatMapGrid.appendChild(rowEl);
+      seatMapGrid.appendChild(header);
+
+      for(const row of map.rows){
+        if(row.deck !== deck) continue;
+        const rowEl = document.createElement('div');
+        rowEl.className = 'seatrow';
+        const numEl = document.createElement('div');
+        numEl.className = 'seatmap-rownum';
+        numEl.textContent = row.num;
+        rowEl.appendChild(numEl);
+
+        let idx = 0;
+        for(const group of deck.cols){
+          const g = document.createElement('div');
+          g.className = 'seatgroup';
+          for(const letter of group){
+            const seatId = `${row.num}${letter}`;
+            const occ = row.seats[idx];
+            const isMine = mine.has(seatId);
+            const btn = document.createElement('button');
+            btn.className = 'seatcell ' + (isMine ? 'mine' : (occ ? 'occupied' : 'open'));
+            btn.textContent = isMine ? '*' : letter;
+            btn.title = seatId;
+            if(occ){
+              btn.disabled = true;
+            } else if(isMine){
+              btn.addEventListener('click', () => {
+                const seatArrIdx = state.pnr.seats.findIndex(s => s.segIdx === n-1 && s.seat === seatId);
+                const el = state.lastDisplay.find(e => e.kind === 'seat' && e.idx === seatArrIdx);
+                if(el) submitCommand(`X${el.num}`);
+              });
+            } else {
+              btn.addEventListener('click', () => submitCommand(`4${n}-${seatId}`));
+            }
+            g.appendChild(btn);
+            idx++;
+          }
+          rowEl.appendChild(g);
+        }
+        seatMapGrid.appendChild(rowEl);
+      }
     }
 
     seatMapLegend.textContent = 'CLICK AN OPEN SEAT TO ASSIGN IT, CLICK YOUR SEAT TO CANCEL IT   -   GREEN = OPEN   DIM = OCCUPIED   FILLED = YOUR ASSIGNMENT';

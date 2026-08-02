@@ -1,47 +1,370 @@
 {
-  "AA": { "name": "American Airlines", "numericCode": "001" },
-  "UA": { "name": "United Airlines", "numericCode": "016" },
-  "DL": { "name": "Delta Air Lines", "numericCode": "006" },
-  "WN": { "name": "Southwest Airlines", "numericCode": "526" },
-  "B6": { "name": "JetBlue Airways", "numericCode": "279" },
-  "AS": { "name": "Alaska Airlines", "numericCode": "027" },
-  "NK": { "name": "Spirit Airlines", "numericCode": "487" },
-  "F9": { "name": "Frontier Airlines", "numericCode": "351" },
-  "AC": { "name": "Air Canada", "numericCode": "014" },
-  "CA": { "name": "Air China", "numericCode": "999" },
-  "AF": { "name": "Air France", "numericCode": "057" },
-  "AI": { "name": "Air India", "numericCode": "098" },
-  "NZ": { "name": "Air New Zealand", "numericCode": "086" },
-  "EI": { "name": "Aer Lingus", "numericCode": "053" },
-  "AM": { "name": "Aeromexico", "numericCode": "139" },
-  "G4": { "name": "Allegiant Air", "numericCode": "337" },
-  "NH": { "name": "All Nippon Airways", "numericCode": "205" },
-  "AV": { "name": "Avianca", "numericCode": "134" },
-  "BA": { "name": "British Airways", "numericCode": "125" },
-  "CX": { "name": "Cathay Pacific", "numericCode": "160" },
-  "CZ": { "name": "China Southern Airlines", "numericCode": "784" },
-  "U2": { "name": "easyJet", "numericCode": "888" },
-  "EK": { "name": "Emirates", "numericCode": "176" },
-  "EY": { "name": "Etihad Airways", "numericCode": "607" },
-  "AY": { "name": "Finnair", "numericCode": "105" },
-  "6E": { "name": "IndiGo", "numericCode": "312" },
-  "HA": { "name": "Hawaiian Airlines", "numericCode": "173" },
-  "IB": { "name": "Iberia", "numericCode": "075" },
-  "JL": { "name": "Japan Airlines", "numericCode": "131" },
-  "KL": { "name": "KLM", "numericCode": "074" },
-  "KE": { "name": "Korean Air", "numericCode": "180" },
-  "LA": { "name": "LATAM Airlines", "numericCode": "045" },
-  "LH": { "name": "Lufthansa", "numericCode": "220" },
-  "MH": { "name": "Malaysia Airlines", "numericCode": "232" },
-  "QF": { "name": "Qantas", "numericCode": "081" },
-  "QR": { "name": "Qatar Airways", "numericCode": "157" },
-  "FR": { "name": "Ryanair", "numericCode": "617" },
-  "SQ": { "name": "Singapore Airlines", "numericCode": "618" },
-  "LX": { "name": "Swiss International Air Lines", "numericCode": "724" },
-  "TG": { "name": "Thai Airways", "numericCode": "217" },
-  "TK": { "name": "Turkish Airlines", "numericCode": "235" },
-  "VS": { "name": "Virgin Atlantic", "numericCode": "932" },
-  "VA": { "name": "Virgin Australia", "numericCode": "795" },
-  "VY": { "name": "Vueling", "numericCode": "996" },
-  "W6": { "name": "Wizz Air", "numericCode": "026" }
+  "6E": {
+    "name": "IndiGo",
+    "numericCode": "312"
+  },
+  "6H": {
+    "name": "Israir Airlines",
+    "numericCode": "293"
+  },
+  "7C": {
+    "name": "Jeju Air",
+    "numericCode": "806"
+  },
+  "AA": {
+    "name": "American Airlines",
+    "numericCode": "001"
+  },
+  "AC": {
+    "name": "Air Canada",
+    "numericCode": "014"
+  },
+  "AD": {
+    "name": "Azul",
+    "numericCode": "577"
+  },
+  "AF": {
+    "name": "Air France",
+    "numericCode": "057"
+  },
+  "AI": {
+    "name": "Air India",
+    "numericCode": "098"
+  },
+  "AK": {
+    "name": "AirAsia",
+    "numericCode": "457"
+  },
+  "AM": {
+    "name": "Aeromexico",
+    "numericCode": "139"
+  },
+  "AR": {
+    "name": "Aerolineas Argentinas",
+    "numericCode": "044"
+  },
+  "AS": {
+    "name": "Alaska Airlines",
+    "numericCode": "027"
+  },
+  "AT": {
+    "name": "Royal Air Maroc",
+    "numericCode": "147"
+  },
+  "AV": {
+    "name": "Avianca",
+    "numericCode": "134"
+  },
+  "AY": {
+    "name": "Finnair",
+    "numericCode": "105"
+  },
+  "AZ": {
+    "name": "ITA Airways",
+    "numericCode": "055"
+  },
+  "B6": {
+    "name": "JetBlue Airways",
+    "numericCode": "279"
+  },
+  "BA": {
+    "name": "British Airways",
+    "numericCode": "125"
+  },
+  "BR": {
+    "name": "EVA Air",
+    "numericCode": "695"
+  },
+  "BT": {
+    "name": "airBaltic",
+    "numericCode": "657"
+  },
+  "CA": {
+    "name": "Air China",
+    "numericCode": "999"
+  },
+  "CI": {
+    "name": "China Airlines",
+    "numericCode": "297"
+  },
+  "CM": {
+    "name": "Copa Airlines",
+    "numericCode": "230"
+  },
+  "CX": {
+    "name": "Cathay Pacific",
+    "numericCode": "160"
+  },
+  "CZ": {
+    "name": "China Southern Airlines",
+    "numericCode": "784"
+  },
+  "DE": {
+    "name": "Condor",
+    "numericCode": "881"
+  },
+  "DL": {
+    "name": "Delta Air Lines",
+    "numericCode": "006"
+  },
+  "DY": {
+    "name": "Norwegian Air Shuttle",
+    "numericCode": "943"
+  },
+  "EI": {
+    "name": "Aer Lingus",
+    "numericCode": "053"
+  },
+  "EK": {
+    "name": "Emirates",
+    "numericCode": "176"
+  },
+  "ET": {
+    "name": "Ethiopian Airlines",
+    "numericCode": "071"
+  },
+  "EW": {
+    "name": "Eurowings",
+    "numericCode": "104"
+  },
+  "EY": {
+    "name": "Etihad Airways",
+    "numericCode": "607"
+  },
+  "F9": {
+    "name": "Frontier Airlines",
+    "numericCode": "351"
+  },
+  "FI": {
+    "name": "Icelandair",
+    "numericCode": "108"
+  },
+  "FJ": {
+    "name": "Fiji Airways",
+    "numericCode": "260"
+  },
+  "FR": {
+    "name": "Ryanair",
+    "numericCode": "617"
+  },
+  "FZ": {
+    "name": "flydubai",
+    "numericCode": "141"
+  },
+  "G4": {
+    "name": "Allegiant Air",
+    "numericCode": "337"
+  },
+  "GF": {
+    "name": "Gulf Air",
+    "numericCode": "072"
+  },
+  "H2": {
+    "name": "Sky Airline",
+    "numericCode": "907"
+  },
+  "HA": {
+    "name": "Hawaiian Airlines",
+    "numericCode": "173"
+  },
+  "IB": {
+    "name": "Iberia",
+    "numericCode": "075"
+  },
+  "IZ": {
+    "name": "Arkia Israeli Airlines",
+    "numericCode": "238"
+  },
+  "JL": {
+    "name": "Japan Airlines",
+    "numericCode": "131"
+  },
+  "JQ": {
+    "name": "Jetstar Airways",
+    "numericCode": "041"
+  },
+  "KE": {
+    "name": "Korean Air",
+    "numericCode": "180"
+  },
+  "KL": {
+    "name": "KLM",
+    "numericCode": "074"
+  },
+  "KQ": {
+    "name": "Kenya Airways",
+    "numericCode": "706"
+  },
+  "KU": {
+    "name": "Kuwait Airways",
+    "numericCode": "229"
+  },
+  "LA": {
+    "name": "LATAM Airlines",
+    "numericCode": "045"
+  },
+  "LH": {
+    "name": "Lufthansa",
+    "numericCode": "220"
+  },
+  "LO": {
+    "name": "LOT Polish Airlines",
+    "numericCode": "080"
+  },
+  "LX": {
+    "name": "Swiss International Air Lines",
+    "numericCode": "724"
+  },
+  "LY": {
+    "name": "El Al",
+    "numericCode": "114"
+  },
+  "MH": {
+    "name": "Malaysia Airlines",
+    "numericCode": "232"
+  },
+  "MS": {
+    "name": "EgyptAir",
+    "numericCode": "077"
+  },
+  "MU": {
+    "name": "China Eastern Airlines",
+    "numericCode": "781"
+  },
+  "NH": {
+    "name": "All Nippon Airways",
+    "numericCode": "205"
+  },
+  "NX": {
+    "name": "Air Macau",
+    "numericCode": "675"
+  },
+  "NZ": {
+    "name": "Air New Zealand",
+    "numericCode": "086"
+  },
+  "OS": {
+    "name": "Austrian Airlines",
+    "numericCode": "257"
+  },
+  "OZ": {
+    "name": "Asiana Airlines",
+    "numericCode": "988"
+  },
+  "PC": {
+    "name": "Pegasus Airlines",
+    "numericCode": "250"
+  },
+  "PG": {
+    "name": "Bangkok Airways",
+    "numericCode": "829"
+  },
+  "PR": {
+    "name": "Philippine Airlines",
+    "numericCode": "079"
+  },
+  "QF": {
+    "name": "Qantas",
+    "numericCode": "081"
+  },
+  "QR": {
+    "name": "Qatar Airways",
+    "numericCode": "157"
+  },
+  "RJ": {
+    "name": "Royal Jordanian",
+    "numericCode": "512"
+  },
+  "SA": {
+    "name": "South African Airways",
+    "numericCode": "083"
+  },
+  "SG": {
+    "name": "SpiceJet",
+    "numericCode": "803"
+  },
+  "SN": {
+    "name": "Brussels Airlines",
+    "numericCode": "082"
+  },
+  "SQ": {
+    "name": "Singapore Airlines",
+    "numericCode": "618"
+  },
+  "SU": {
+    "name": "Aeroflot",
+    "numericCode": "555"
+  },
+  "SV": {
+    "name": "Saudia",
+    "numericCode": "065"
+  },
+  "TG": {
+    "name": "Thai Airways",
+    "numericCode": "217"
+  },
+  "TK": {
+    "name": "Turkish Airlines",
+    "numericCode": "235"
+  },
+  "TP": {
+    "name": "TAP Air Portugal",
+    "numericCode": "047"
+  },
+  "TR": {
+    "name": "Scoot",
+    "numericCode": "802"
+  },
+  "U2": {
+    "name": "easyJet",
+    "numericCode": "888"
+  },
+  "UA": {
+    "name": "United Airlines",
+    "numericCode": "016"
+  },
+  "VA": {
+    "name": "Virgin Australia",
+    "numericCode": "795"
+  },
+  "VB": {
+    "name": "Viva Aerobus",
+    "numericCode": "583"
+  },
+  "VN": {
+    "name": "Vietnam Airlines",
+    "numericCode": "738"
+  },
+  "VS": {
+    "name": "Virgin Atlantic",
+    "numericCode": "932"
+  },
+  "VY": {
+    "name": "Vueling",
+    "numericCode": "996"
+  },
+  "W6": {
+    "name": "Wizz Air",
+    "numericCode": "026"
+  },
+  "WB": {
+    "name": "RwandAir",
+    "numericCode": "785"
+  },
+  "WN": {
+    "name": "Southwest Airlines",
+    "numericCode": "526"
+  },
+  "WS": {
+    "name": "WestJet",
+    "numericCode": "838"
+  },
+  "WY": {
+    "name": "Oman Air",
+    "numericCode": "910"
+  },
+  "Y4": {
+    "name": "Volaris",
+    "numericCode": "402"
+  }
 }

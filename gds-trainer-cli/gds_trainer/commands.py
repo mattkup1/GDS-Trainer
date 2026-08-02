@@ -500,6 +500,8 @@ def build_itinerary_document(mode: str) -> dict:
         "passengers": passengers,
         "segments": p["segments"] if has("segments") else [],
         "seats": p["seats"] if has("seats") else [],
+        "ssrs": p["ssrs"] if has("ssrs") else [],
+        "osis": p["osis"] if has("osis") else [],
         "pricing": p["pricing"] if has("pricing") else None,
         "form_of_payment": p["form_of_payment"] if has("form_of_payment") else None,
         "tickets": p["tickets"] if has("tickets") else None,
@@ -544,6 +546,18 @@ def print_itinerary_document(doc: dict) -> None:
                 f"{city_name(s['orig'])} ({s['orig']}) {minutes_to_clock(s['dep'])} -> "
                 f"{city_name(s['dest'])} ({s['dest']}) {minutes_to_clock(s['arr'])}  {status_label}  SEAT {seat_list}"
             )
+
+    if doc["ssrs"]:
+        print_blank()
+        print_line("SPECIAL SERVICE REQUESTS", "hd")
+        for r in doc["ssrs"]:
+            print_line(f"  {r['text']}")
+
+    if doc["osis"]:
+        print_blank()
+        print_line("OTHER SERVICE INFORMATION", "hd")
+        for o in doc["osis"]:
+            print_line(f"  {o['text']}")
 
     if doc["pricing"]:
         pr = doc["pricing"]

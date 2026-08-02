@@ -335,6 +335,8 @@
       passengers: p.names.map(n => ({ name: n, infants: p.infants.filter(inf => inf.adult === n) })),
       segments: has('segments') ? p.segments : [],
       seats: has('seats') ? p.seats : [],
+      ssrs: has('ssrs') ? p.ssrs : [],
+      osis: has('osis') ? p.osis : [],
       pricing: has('pricing') ? p.pricing : null,
       formOfPayment: has('formOfPayment') ? p.formOfPayment : null,
       tickets: has('tickets') ? p.tickets : null,
@@ -427,6 +429,24 @@
         </div>`;
     }).join('');
 
+    let ssrBlock = '';
+    if(doc.ssrs && doc.ssrs.length){
+      ssrBlock = `
+        <div class="doc-card">
+          <div class="doc-card-head">SPECIAL SERVICE REQUESTS</div>
+          <div class="doc-card-body req-list">${doc.ssrs.map(r => `<div class="req-row">${e(r.text)}</div>`).join('')}</div>
+        </div>`;
+    }
+
+    let osiBlock = '';
+    if(doc.osis && doc.osis.length){
+      osiBlock = `
+        <div class="doc-card">
+          <div class="doc-card-head">OTHER SERVICE INFORMATION</div>
+          <div class="doc-card-body req-list">${doc.osis.map(o => `<div class="req-row">${e(o.text)}</div>`).join('')}</div>
+        </div>`;
+    }
+
     let pricingBlock = '';
     if(doc.pricing){
       const pr = doc.pricing;
@@ -513,6 +533,8 @@
   .doc-card{ margin:0 22px 18px; border:1px solid #d7dee6; border-radius:8px; overflow:hidden; }
   .doc-card-head{ background:#0b5fae; color:#fff; font-size:11px; font-weight:700; letter-spacing:1px; padding:8px 14px; }
   .doc-card-body{ padding:12px 14px; font-size:12px; }
+  .req-list .req-row{ padding:6px 0; }
+  .req-list .req-row + .req-row{ border-top:1px solid #e5e9ef; }
   table.doc-table{ width:100%; border-collapse:collapse; font-size:12px; }
   table.doc-table td, table.doc-table th{ padding:8px 14px; text-align:left; border-bottom:1px solid #e5e9ef; }
   table.doc-table th{ font-size:10px; letter-spacing:.5px; color:#5b6472; background:#f7f9fb; }
@@ -547,6 +569,8 @@
       <h2>Itinerary</h2>
       ${segmentsHtml || '<div class="dim">NO ITINERARY SEGMENTS</div>'}
     </section>
+    ${ssrBlock}
+    ${osiBlock}
     ${pricingBlock}
     ${paymentBlock}
     ${ticketsBlock}

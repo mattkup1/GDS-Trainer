@@ -86,9 +86,9 @@
     "GLOBEX1": {"label": "GLOBEX INDUSTRIES", "discount": 0.15}
   },
   "emailDocuments": {
-    "EM":  {"label": "ITINERARY", "sections": ["passengers", "segments", "seats"]},
-    "EMI": {"label": "INVOICE", "sections": ["passengers", "segments", "seats", "pricing", "formOfPayment", "tickets"]},
-    "EMT": {"label": "E-TICKET NOTIFICATION", "sections": ["passengers", "tickets", "segments"]}
+    "EM":  {"label": "ITINERARY", "sections": ["passengers", "segments", "seats", "ssrs", "osis"]},
+    "EMI": {"label": "INVOICE", "sections": ["passengers", "segments", "seats", "ssrs", "osis", "pricing", "formOfPayment", "tickets"]},
+    "EMT": {"label": "E-TICKET NOTIFICATION", "sections": ["passengers", "segments", "seats", "ssrs", "osis", "tickets"]}
   },
   "segmentStatusLabels": {
     "HK": "CONFIRMED",

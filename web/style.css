@@ -1,17 +1,13 @@
-:root{
-  --panel-w: min(1400px, 94vw);
-  --crt-h: min(74vh, 820px);
-}
 *{box-sizing:border-box;}
 .hidden{ display:none; }
 html,body{
-  height:100%; margin:0; padding:0;
+  height:100%; margin:0; padding:0; overflow:hidden;
   font-family: 'Courier New', 'IBM Plex Mono', Consolas, monospace;
 }
 body{
   background:
     radial-gradient(ellipse 70% 55% at 50% 28%, #171b1a 0%, #0a0c0b 55%, #030404 100%);
-  min-height:100%;
+  height:100%;
 }
 
 /* ---------- theme tokens ---------- */
@@ -29,8 +25,8 @@ body{
 /* ---------- page shell ---------- */
 #shell{
   position:relative;
-  display:flex; flex-direction:column; align-items:center;
-  justify-content:center; min-height:100%; padding:32px 18px;
+  display:flex; flex-direction:column;
+  width:100vw; height:100vh;
 }
 #shell::before{
   content:""; position:absolute; inset:-15% -5%; z-index:0; pointer-events:none;
@@ -41,15 +37,13 @@ body{
 /* ---------- housing (unifies bar + screen into one appliance) ---------- */
 #housing{
   position:relative; z-index:1;
-  width:100%; max-width:var(--panel-w);
+  flex:1; min-height:0; width:100%;
+  display:flex; flex-direction:column;
   background: linear-gradient(160deg, #333 0%, #232323 45%, #161616 100%);
-  border-radius:16px;
-  padding:14px 14px 18px;
+  padding:10px 14px;
   box-shadow:
     0 1px 0 rgba(255,255,255,.07) inset,
-    0 0 0 1px rgba(0,0,0,.6),
-    0 25px 60px rgba(0,0,0,.55),
-    0 2px 0 rgba(0,0,0,.4);
+    0 -1px 0 rgba(0,0,0,.5) inset;
 }
 
 #bar{
@@ -90,11 +84,11 @@ body{
 .toolbtns.actions{ margin-right:14px; padding-right:14px; border-right:1px solid rgba(255,255,255,.08); }
 
 /* ---------- main row: screen + dock ---------- */
-#mainrow{ display:flex; gap:12px; align-items:stretch; }
+#mainrow{ flex:1; min-height:0; display:flex; gap:12px; align-items:stretch; }
 
 /* ---------- screen ---------- */
 #crt{
-  flex:1; min-width:0; height:var(--crt-h); min-height:400px;
+  flex:1; min-width:0; min-height:0;
   background: #000804;
   border-radius:9px;
   box-shadow:
@@ -162,7 +156,7 @@ body{
 
 /* ---------- dock (persistent PNR / seat-map side panel) ---------- */
 #dock{
-  flex:0 0 300px; height:var(--crt-h); min-height:400px;
+  flex:0 0 300px; min-height:0;
   display:flex; flex-direction:column;
   background:#000804; border-radius:9px; overflow:hidden;
   box-shadow:
@@ -199,8 +193,8 @@ body{
 }
 
 #hint{
-  position:relative; z-index:1;
-  width:100%; max-width:var(--panel-w); color:#666; font-size:11px; margin-top:10px;
+  position:relative; z-index:1; flex:0 0 auto;
+  width:100%; color:#666; font-size:11px; padding:8px 18px;
   font-family:Consolas,monospace; text-align:center;
 }
 

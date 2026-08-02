@@ -6,6 +6,10 @@
     "AA": "001", "UA": "016", "DL": "006", "WN": "526",
     "B6": "279", "AS": "027", "NK": "487", "F9": "351"
   },
+  "airlineNames": {
+    "AA": "American Airlines", "UA": "United Airlines", "DL": "Delta Air Lines", "WN": "Southwest Airlines",
+    "B6": "JetBlue Airways", "AS": "Alaska Airlines", "NK": "Spirit Airlines", "F9": "Frontier Airlines"
+  },
   "equipment": ["738", "73G", "320", "321", "32N", "E75", "CR9", "777", "788", "319"],
   "seatLayouts": {
     "_default": {"rows": 30, "cols": ["ABC", "DEF"]},

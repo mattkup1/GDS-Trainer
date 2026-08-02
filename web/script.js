@@ -45,6 +45,7 @@
   const WEEKDAYS = REFERENCE_DATA.weekdays;
   const AIRLINES = REFERENCE_DATA.airlines;
   const AIRLINE_NUMERIC_CODES = REFERENCE_DATA.airlineNumericCodes;
+  const AIRLINE_NAMES = REFERENCE_DATA.airlineNames;
   const EQUIP = REFERENCE_DATA.equipment;
   const SEAT_LAYOUTS = REFERENCE_DATA.seatLayouts;
   const CLASSES = REFERENCE_DATA.classes;
@@ -337,100 +338,206 @@
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  // Deterministic per-carrier accent color/badge - stands in for a real airline logo
+  // (which this simulator deliberately never reproduces, see root CLAUDE.md branding
+  // note) while still giving the document the "who's operating this flight" glance
+  // a real e-ticket/itinerary email leads with.
+  function airlineBadgeColor(code){
+    return `hsl(${hashStr(code) % 360} 62% 40%)`;
+  }
+  function airlineBadgeSVG(code){
+    const label = escapeHtml(code);
+    return `<svg class="carrier-badge" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${label}">
+      <rect width="44" height="44" rx="10" fill="${airlineBadgeColor(code)}"/>
+      <path d="M22 7 L25.4 18.5 L36 22 L25.4 24 L23 35 L21 24 L9 22 L20.6 18.5 Z" fill="#ffffff" opacity=".22"/>
+      <text x="22" y="27" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#fff">${label}</text>
+    </svg>`;
+  }
+  function formatDuration(mins){
+    return `${Math.floor(mins/60)}H ${String(mins%60).padStart(2,'0')}M`;
+  }
+
   function renderItineraryDocumentHTML(doc){
     const e = escapeHtml;
     const issuedStr = `${doc.issued.getDate()} ${MONTHS[doc.issued.getMonth()]} ${doc.issued.getFullYear()}`;
 
     const passengersHtml = doc.passengers.map(p => {
-      const infantsHtml = p.infants.map(inf => `<div class="sub">+ INFANT: ${e(inf.surname)}/${e(inf.given)}  DOB ${e(inf.dob)}</div>`).join('');
-      return `<div class="pax">${e(p.name)}</div>${infantsHtml}`;
+      const infantsHtml = p.infants.map(inf => `<div class="pax-sub">+ INFANT ${e(inf.surname)}/${e(inf.given)} &nbsp; DOB ${e(inf.dob)}</div>`).join('');
+      return `<div class="pax-row"><div class="pax-name">${e(p.name)}</div>${infantsHtml}</div>`;
     }).join('') || '<div class="dim">NO PASSENGERS ON FILE</div>';
 
     const seatsBySeg = {};
     for(const s of doc.seats){
       (seatsBySeg[s.segIdx] = seatsBySeg[s.segIdx] || []).push(s.seat);
     }
+    const airportBlock = (code) => {
+      const a = typeof AIRPORTS !== 'undefined' ? AIRPORTS[code] : null;
+      return a
+        ? `<div class="leg-airport">${e(a[0])} (${e(code)})</div><div class="leg-sub">${e(a[1])}, ${e(a[2])}</div>`
+        : `<div class="leg-airport">${e(cityName(code))}</div>`;
+    };
     const segmentsHtml = doc.segments.map((s, i) => {
       const statusLabel = SEGMENT_STATUS_LABELS[s.status] || s.status;
+      const statusClass = s.status === 'HK' ? 'ok' : 'wait';
       const seatList = (seatsBySeg[i] || []).join(', ');
+      const airlineFull = AIRLINE_NAMES[s.airline] || s.airline;
       return `
-        <tr>
-          <td>${e(s.airline)}${e(s.flightNum)}</td>
-          <td>${e(s.cls)}</td>
-          <td>${e(s.dinfo.day)}${e(s.dinfo.mon)} ${e(s.dinfo.weekday)}</td>
-          <td>${e(cityName(s.orig))} (${e(s.orig)}) ${minutesToClock(s.dep)}</td>
-          <td>${e(cityName(s.dest))} (${e(s.dest)}) ${minutesToClock(s.arr)}</td>
-          <td>${e(statusLabel)}</td>
-          <td>${e(seatList) || '&mdash;'}</td>
-        </tr>`;
+        <div class="flight-card">
+          <div class="flight-card-head">
+            <span>FLIGHT ${i+1} &mdash; ${e(s.dinfo.weekday)}, ${e(s.dinfo.day)} ${e(s.dinfo.mon)} ${e(s.dinfo.year)}</span>
+            <span class="status-pill ${statusClass}">${e(statusLabel)}</span>
+          </div>
+          <div class="flight-card-route">${e(cityName(s.orig))} to ${e(cityName(s.dest))}</div>
+          <div class="flight-card-body">
+            <div class="carrier-col">
+              ${airlineBadgeSVG(s.airline)}
+              <div class="carrier-name">${e(airlineFull)}</div>
+              <div class="flight-num">${e(s.airline)}${e(s.flightNum)} &nbsp; CLASS ${e(s.cls)}</div>
+            </div>
+            <div class="leg-col">
+              <div class="leg-label">DEPART</div>
+              ${airportBlock(s.orig)}
+              <div class="leg-time">${minutesToClock(s.dep)}</div>
+            </div>
+            <div class="leg-col">
+              <div class="leg-label">ARRIVE</div>
+              ${airportBlock(s.dest)}
+              <div class="leg-time">${minutesToClock(s.arr)}</div>
+            </div>
+            <div class="info-col">
+              <div>DURATION <strong>${formatDuration(s.arr - s.dep)}</strong></div>
+              <div>AIRCRAFT <strong>${s.equip ? e(s.equip) : '&mdash;'}</strong></div>
+              <div>SEAT(S) <strong>${e(seatList) || '&mdash;'}</strong></div>
+            </div>
+          </div>
+        </div>`;
     }).join('');
-    const segmentsBlock = doc.segments.length ? `
-      <table class="doc-table">
-        <thead><tr><th>FLIGHT</th><th>CLASS</th><th>DATE</th><th>DEPARTS</th><th>ARRIVES</th><th>STATUS</th><th>SEAT</th></tr></thead>
-        <tbody>${segmentsHtml}</tbody>
-      </table>` : '';
 
     let pricingBlock = '';
     if(doc.pricing){
       const pr = doc.pricing;
       const taxRows = pr.taxes.map(t => `<tr><td>${e(t.code)} ${e(t.label)}</td><td class="amt">USD ${t.amount.toFixed(2)}</td></tr>`).join('');
       const rulesHtml = pr.rules ? `
-        <div class="sub">CHANGE FEE: USD ${pr.rules.changeFee.toFixed(2)} &nbsp; REFUNDABLE: ${pr.rules.refundable ? 'YES' : 'NO'} &nbsp; ADVANCE PURCHASE: ${pr.rules.advancePurchaseDays} DAYS</div>` : '';
+        <div class="rules-line">CHANGE FEE USD ${pr.rules.changeFee.toFixed(2)} &nbsp; REFUNDABLE ${pr.rules.refundable ? 'YES' : 'NO'} &nbsp; ADVANCE PURCHASE ${pr.rules.advancePurchaseDays} DAYS</div>` : '';
       pricingBlock = `
-        <h2>FARE SUMMARY</h2>
-        <table class="doc-table">
-          <tbody>
-            <tr><td>BASE FARE</td><td class="amt">USD ${pr.baseFare.toFixed(2)}</td></tr>
-            ${taxRows}
-            <tr><td>TAXES/FEES</td><td class="amt">USD ${pr.taxTotal.toFixed(2)}</td></tr>
-            <tr class="total"><td>TOTAL</td><td class="amt">USD ${pr.total.toFixed(2)}</td></tr>
-          </tbody>
-        </table>
-        ${rulesHtml}`;
+        <div class="doc-card">
+          <div class="doc-card-head">FARE SUMMARY</div>
+          <table class="doc-table">
+            <tbody>
+              <tr><td>BASE FARE</td><td class="amt">USD ${pr.baseFare.toFixed(2)}</td></tr>
+              ${taxRows}
+              <tr><td>TAXES / FEES</td><td class="amt">USD ${pr.taxTotal.toFixed(2)}</td></tr>
+              <tr class="total"><td>TOTAL</td><td class="amt">USD ${pr.total.toFixed(2)}</td></tr>
+            </tbody>
+          </table>
+          ${rulesHtml}
+        </div>`;
     }
 
     let paymentBlock = '';
     if(doc.formOfPayment){
-      paymentBlock = `<h2>FORM OF PAYMENT</h2><div>${e(doc.formOfPayment.display)}</div>`;
+      paymentBlock = `
+        <div class="doc-card">
+          <div class="doc-card-head">FORM OF PAYMENT</div>
+          <div class="doc-card-body">${e(doc.formOfPayment.display)}</div>
+        </div>`;
     }
 
     let ticketsBlock = '';
     if(doc.tickets !== null){
-      ticketsBlock = doc.tickets.length
-        ? `<h2>TICKET NUMBERS</h2><table class="doc-table"><tbody>${doc.tickets.map(t => `<tr><td>${e(t.passenger)}${t.isInfant ? ' (INFANT)' : ''}</td><td>${e(t.ticketNum)}</td></tr>`).join('')}</tbody></table>`
-        : `<h2>TICKET NUMBERS</h2><div class="dim">NOT YET TICKETED</div>`;
+      ticketsBlock = `
+        <div class="doc-card">
+          <div class="doc-card-head">TICKETING INFORMATION</div>
+          ${doc.tickets.length ? `
+          <table class="doc-table">
+            <thead><tr><th>ISSUE DATE</th><th>PASSENGER NAME</th><th>TRANSACTION TYPE</th><th>DOCUMENT NUMBER</th></tr></thead>
+            <tbody>${doc.tickets.map(t => `<tr><td>${issuedStr}</td><td>${e(t.passenger)}${t.isInfant ? ' (INFANT)' : ''}</td><td>Electronic Ticket</td><td class="mono">${e(t.ticketNum)}</td></tr>`).join('')}</tbody>
+          </table>` : `<div class="doc-card-body dim">NOT YET TICKETED${doc.mode === 'EMT' ? ' &mdash; RUN TKTT BEFORE THIS DOCUMENT REFLECTS ISSUED TICKETS' : ''}</div>`}
+        </div>`;
     }
 
     return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${e(doc.label)} - ${e(doc.locator || 'GDS TRAINER')}</title>
 <style>
-  body{ font-family:'Courier New',Consolas,monospace; color:#111; max-width:760px; margin:32px auto; padding:0 16px; }
-  h1{ font-size:20px; letter-spacing:1px; margin-bottom:2px; }
-  h2{ font-size:13px; letter-spacing:1px; margin:22px 0 8px; border-bottom:1px solid #999; padding-bottom:4px; }
-  .meta{ color:#555; font-size:12px; margin-bottom:18px; }
-  .pax{ font-weight:bold; }
-  .sub{ color:#555; font-size:12px; margin:2px 0 8px 12px; }
-  .dim{ color:#777; }
-  table.doc-table{ width:100%; border-collapse:collapse; font-size:12px; margin-bottom:6px; }
-  table.doc-table td, table.doc-table th{ border:1px solid #ccc; padding:5px 8px; text-align:left; }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:#1c2430; background:#f4f6f8; margin:0; padding:28px 16px 60px; }
+  .doc{ max-width:760px; margin:0 auto; background:#fff; border:1px solid #d7dee6; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .doc-head{ display:flex; align-items:center; justify-content:space-between; background:#0b5fae; color:#fff; padding:16px 22px; }
+  .brand{ display:flex; align-items:center; gap:8px; font-weight:700; letter-spacing:.5px; font-size:15px; }
+  .brand-mark{ width:20px; height:20px; }
+  .doc-type{ font-size:11px; font-weight:700; letter-spacing:1.5px; background:rgba(255,255,255,.18); padding:5px 10px; border-radius:4px; }
+  .doc-meta{ display:flex; flex-wrap:wrap; gap:22px; padding:14px 22px; background:#eaf3fc; border-bottom:1px solid #d7dee6; font-size:12px; }
+  .meta-label{ display:block; color:#5b6472; font-size:10px; letter-spacing:.5px; margin-bottom:2px; }
+  .meta-value{ font-weight:600; color:#1c2430; }
+  .meta-value.mono{ font-family:'Courier New',monospace; letter-spacing:1px; }
+  #printBtn{ margin:16px 22px 0; padding:8px 16px; font:inherit; font-weight:600; color:#0b5fae; background:#fff; border:1px solid #0b5fae; border-radius:5px; cursor:pointer; }
+  #printBtn:hover{ background:#eaf3fc; }
+  section{ padding:18px 22px 4px; }
+  h2{ font-size:11px; letter-spacing:1px; color:#5b6472; margin:0 0 10px; text-transform:uppercase; }
+  .pax-list{ display:flex; flex-direction:column; gap:6px; }
+  .pax-row{ font-size:13px; }
+  .pax-name{ font-weight:700; }
+  .pax-sub{ color:#5b6472; font-size:11px; margin-left:12px; }
+  .dim{ color:#8a93a1; font-size:12px; }
+  .flight-card{ border:1px solid #d7dee6; border-radius:8px; margin-bottom:14px; overflow:hidden; }
+  .flight-card-head{ display:flex; justify-content:space-between; align-items:center; background:#0b5fae; color:#fff; padding:9px 14px; font-size:12px; font-weight:600; letter-spacing:.4px; }
+  .status-pill{ font-size:10px; font-weight:700; letter-spacing:.5px; padding:3px 9px; border-radius:20px; }
+  .status-pill.ok{ background:#e6f4ea; color:#1e7e34; }
+  .status-pill.wait{ background:#fff4e0; color:#946200; }
+  .flight-card-route{ background:#eaf3fc; color:#33414f; font-size:11px; padding:7px 14px; border-bottom:1px solid #d7dee6; }
+  .flight-card-body{ display:grid; grid-template-columns:110px 1fr 1fr 130px; gap:14px; padding:14px; }
+  .carrier-col{ display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
+  .carrier-badge{ width:40px; height:40px; }
+  .carrier-name{ font-size:10px; font-weight:600; color:#33414f; line-height:1.3; }
+  .flight-num{ font-size:10px; color:#5b6472; }
+  .leg-label{ font-size:9px; letter-spacing:1px; color:#8a93a1; margin-bottom:2px; }
+  .leg-airport{ font-size:12px; font-weight:600; }
+  .leg-sub{ font-size:10px; color:#5b6472; }
+  .leg-time{ font-size:15px; font-weight:700; color:#0b5fae; margin-top:4px; }
+  .info-col{ font-size:10px; color:#5b6472; display:flex; flex-direction:column; gap:5px; }
+  .info-col strong{ color:#1c2430; }
+  .doc-card{ margin:0 22px 18px; border:1px solid #d7dee6; border-radius:8px; overflow:hidden; }
+  .doc-card-head{ background:#0b5fae; color:#fff; font-size:11px; font-weight:700; letter-spacing:1px; padding:8px 14px; }
+  .doc-card-body{ padding:12px 14px; font-size:12px; }
+  table.doc-table{ width:100%; border-collapse:collapse; font-size:12px; }
+  table.doc-table td, table.doc-table th{ padding:8px 14px; text-align:left; border-bottom:1px solid #e5e9ef; }
+  table.doc-table th{ font-size:10px; letter-spacing:.5px; color:#5b6472; background:#f7f9fb; }
   table.doc-table .amt{ text-align:right; }
-  table.doc-table tr.total td{ font-weight:bold; border-top:2px solid #333; }
-  .disclaimer{ margin-top:32px; padding-top:12px; border-top:1px solid #ccc; color:#888; font-size:11px; }
-  #printBtn{ margin:18px 0; padding:8px 16px; font-family:inherit; cursor:pointer; }
-  @media print{ #printBtn{ display:none; } body{ margin:0; } }
+  table.doc-table .mono{ font-family:'Courier New',monospace; }
+  table.doc-table tr.total td{ font-weight:700; border-top:2px solid #0b5fae; border-bottom:none; }
+  .rules-line{ padding:0 14px 12px; font-size:10px; color:#5b6472; }
+  .disclaimer{ margin:22px; padding-top:12px; border-top:1px solid #e5e9ef; color:#8a93a1; font-size:10px; }
+  @media print{ body{ background:#fff; padding:0; } .doc{ border:none; box-shadow:none; max-width:100%; border-radius:0; } #printBtn{ display:none; } }
+  @media (max-width:640px){ .flight-card-body{ grid-template-columns:1fr 1fr; } .info-col{ grid-column:1 / -1; flex-direction:row; flex-wrap:wrap; gap:14px; } }
 </style></head>
 <body>
-  <h1>GDS TRAINER &mdash; ${e(doc.label)}</h1>
-  <div class="meta">ISSUED ${issuedStr} &nbsp; AGENT ${e(doc.sine || '----')} &nbsp; PCC ${e(doc.pcc || '----')} &nbsp; RLOC ${e(doc.locator || '(NOT SAVED)')}</div>
-  <button id="printBtn" onclick="window.print()">PRINT / SAVE AS PDF</button>
-  <h2>PASSENGER(S)</h2>
-  ${passengersHtml}
-  <h2>ITINERARY</h2>
-  ${segmentsBlock}
-  ${pricingBlock}
-  ${paymentBlock}
-  ${ticketsBlock}
-  <div class="disclaimer">This is an educational simulation, not connected to any real airline or GDS network - not a real travel document.</div>
+  <div class="doc">
+    <div class="doc-head">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2 21l21-9L2 3v7l15 2-15 2z" fill="#fff"/></svg>
+        <span>GDS TRAINER</span>
+      </div>
+      <div class="doc-type">${e(doc.label)}</div>
+    </div>
+    <div class="doc-meta">
+      <div><span class="meta-label">RECORD LOCATOR</span><span class="meta-value mono">${e(doc.locator || 'NOT SAVED')}</span></div>
+      <div><span class="meta-label">ISSUED</span><span class="meta-value">${issuedStr}</span></div>
+      <div><span class="meta-label">AGENT / PCC</span><span class="meta-value">${e(doc.sine || '----')} / ${e(doc.pcc || '----')}</span></div>
+    </div>
+    <button id="printBtn" onclick="window.print()">PRINT / SAVE AS PDF</button>
+    <section>
+      <h2>Passenger(s)</h2>
+      <div class="pax-list">${passengersHtml}</div>
+    </section>
+    <section>
+      <h2>Itinerary</h2>
+      ${segmentsHtml || '<div class="dim">NO ITINERARY SEGMENTS</div>'}
+    </section>
+    ${pricingBlock}
+    ${paymentBlock}
+    ${ticketsBlock}
+    <div class="disclaimer">This is an educational simulation, not connected to any real airline or GDS network - not a real travel document. Carrier badges are generated placeholders, not airline logos.</div>
+  </div>
 </body></html>`;
   }
 

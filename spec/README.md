@@ -6,12 +6,24 @@ Edit files here; don't hand-edit the generated `.js` copies in `../web/generated
 
 ## Files
 
-- **`reference-data.json`** — SSR codes, card types, airlines/numeric codes,
-  equipment, classes, class-fare multipliers, tax pool, phone location codes,
-  months/weekdays, and the fare-pricing formula's tunable constants
-  (`fareFormula`). The pricing *algorithm* (multiply/round/accumulate against
-  each edition's own seeded RNG) still lives in each codebase — only its
-  numbers live here.
+- **`reference-data.json`** — SSR codes, card types, equipment, classes,
+  class-fare multipliers, tax pool, phone location codes, months/weekdays,
+  and the fare-pricing formula's tunable constants (`fareFormula`). The
+  pricing *algorithm* (multiply/round/accumulate against each edition's own
+  seeded RNG) still lives in each codebase — only its numbers live here.
+- **`airlines.json`** — IATA code → `{name, numericCode}`, one object per
+  carrier this sim generates flights for. Kept separate from
+  `reference-data.json` (it used to be three parallel structures in there —
+  a code list plus two side maps keyed by the same codes — which only grows
+  more error-prone to keep in sync as more per-airline fields get added).
+- **`airline-logos/`** — optional real airline logo images, one per carrier,
+  named by lowercase IATA code (`aa.svg`, `dl.png`, ...). **Gitignored except
+  for its own `README.md`** — these are real trademarked/copyrighted assets,
+  not something this repo distributes. `spec/build.py` inlines whatever's
+  present as base64 data URIs into `web/generated/airline-logos.js` (also
+  gitignored); any carrier without a file there just gets the generated
+  colored-badge placeholder instead (`airlineBadgeSVG` in `web/script.js`).
+  Browser-only — the CLI edition has no GUI to show a logo in.
 - **`pnr-completeness.json`** — the ordered `{field, check, message}` rules
   `endTransaction`/`end_transaction` and `issueTickets`/`issue_tickets` walk
   to decide whether a PNR is complete. `check` is one of `non_empty` (array
@@ -51,6 +63,13 @@ python3 spec/build.py
 ```
 
 This writes `web/generated/airports.js`, `web/generated/reference-data.js`,
-`web/generated/command-grammar.js`, and `web/generated/pnr-completeness.js`.
-Commit the regenerated files alongside your `spec/` edit — there's no CI
-step that does this for you.
+`web/generated/airlines.js`, `web/generated/command-grammar.js`, and
+`web/generated/pnr-completeness.js`. Commit the regenerated files alongside
+your `spec/` edit — there's no CI step that does this for you.
+
+It also writes `web/generated/airline-logos.js` from whatever's in
+`spec/airline-logos/`, but **don't commit that one** — it's gitignored
+along with its source images (see `airline-logos/README.md` above). Run
+the build after adding/removing a logo file same as any other `spec/`
+edit; the app just works with fewer real logos (falls back to the
+placeholder badge) if you don't.

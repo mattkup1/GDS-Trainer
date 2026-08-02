@@ -10,12 +10,15 @@ from pathlib import Path
 
 _SPEC_DIR = Path(__file__).resolve().parents[2] / "spec"
 _DATA = json.loads((_SPEC_DIR / "reference-data.json").read_text(encoding="utf-8"))
+_AIRLINES_DATA = json.loads((_SPEC_DIR / "airlines.json").read_text(encoding="utf-8"))
 
 MONTHS = _DATA["months"]
 WEEKDAYS = _DATA["weekdays"]
-AIRLINES = _DATA["airlines"]
-AIRLINE_NUMERIC_CODES = _DATA["airlineNumericCodes"]
-AIRLINE_NAMES = _DATA["airlineNames"]
+# spec/airlines.json (code -> {name, numericCode}) - kept as three derived
+# views since that's how callers already import these names.
+AIRLINES = list(_AIRLINES_DATA.keys())
+AIRLINE_NUMERIC_CODES = {code: info["numericCode"] for code, info in _AIRLINES_DATA.items()}
+AIRLINE_NAMES = {code: info["name"] for code, info in _AIRLINES_DATA.items()}
 EQUIP = _DATA["equipment"]
 SEAT_LAYOUTS = _DATA["seatLayouts"]
 CLASSES = _DATA["classes"]

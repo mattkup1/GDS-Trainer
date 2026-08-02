@@ -1,3 +1,9 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+# Real airline logos are trademarked/copyrighted third-party assets - see
+# spec/airline-logos/README.md. Keep them local, never distribute via git.
+spec/airline-logos/*
+!spec/airline-logos/README.md
+web/generated/airline-logos.js

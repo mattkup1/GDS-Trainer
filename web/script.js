@@ -43,9 +43,16 @@
   // touching everywhere they're used below.
   const MONTHS = REFERENCE_DATA.months;
   const WEEKDAYS = REFERENCE_DATA.weekdays;
-  const AIRLINES = REFERENCE_DATA.airlines;
-  const AIRLINE_NUMERIC_CODES = REFERENCE_DATA.airlineNumericCodes;
-  const AIRLINE_NAMES = REFERENCE_DATA.airlineNames;
+  // AIRLINES_DATA (code -> {name, numericCode}) is loaded globally from
+  // spec/airlines.json via airlines.js - see spec/README.md. Kept as three
+  // derived views since that's how the rest of this file already reads them.
+  const AIRLINES = Object.keys(AIRLINES_DATA);
+  const AIRLINE_NUMERIC_CODES = {};
+  const AIRLINE_NAMES = {};
+  for(const code of AIRLINES){
+    AIRLINE_NUMERIC_CODES[code] = AIRLINES_DATA[code].numericCode;
+    AIRLINE_NAMES[code] = AIRLINES_DATA[code].name;
+  }
   const EQUIP = REFERENCE_DATA.equipment;
   const SEAT_LAYOUTS = REFERENCE_DATA.seatLayouts;
   const CLASSES = REFERENCE_DATA.classes;
@@ -338,10 +345,11 @@
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  // Deterministic per-carrier accent color/badge - stands in for a real airline logo
-  // (which this simulator deliberately never reproduces, see root CLAUDE.md branding
-  // note) while still giving the document the "who's operating this flight" glance
-  // a real e-ticket/itinerary email leads with.
+  // Deterministic per-carrier accent color/badge - the default stand-in for a
+  // real airline logo. If a real logo was dropped into spec/airline-logos/ and
+  // baked in via spec/build.py (gitignored, see that folder's README - real
+  // airline logos are trademarked/copyrighted assets this repo doesn't ship),
+  // it's used instead; airlineLogoHTML() is what call sites actually use.
   function airlineBadgeColor(code){
     return `hsl(${hashStr(code) % 360} 62% 40%)`;
   }
@@ -352,6 +360,12 @@
       <path d="M22 7 L25.4 18.5 L36 22 L25.4 24 L23 35 L21 24 L9 22 L20.6 18.5 Z" fill="#ffffff" opacity=".22"/>
       <text x="22" y="27" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#fff">${label}</text>
     </svg>`;
+  }
+  function airlineLogoHTML(code){
+    const dataUri = typeof AIRLINE_LOGOS !== 'undefined' ? AIRLINE_LOGOS[code] : null;
+    return dataUri
+      ? `<img class="carrier-badge" src="${escapeHtml(dataUri)}" alt="${escapeHtml(code)}">`
+      : airlineBadgeSVG(code);
   }
   function formatDuration(mins){
     return `${Math.floor(mins/60)}H ${String(mins%60).padStart(2,'0')}M`;
@@ -390,7 +404,7 @@
           <div class="flight-card-route">${e(cityName(s.orig))} to ${e(cityName(s.dest))}</div>
           <div class="flight-card-body">
             <div class="carrier-col">
-              ${airlineBadgeSVG(s.airline)}
+              ${airlineLogoHTML(s.airline)}
               <div class="carrier-name">${e(airlineFull)}</div>
               <div class="flight-num">${e(s.airline)}${e(s.flightNum)} &nbsp; CLASS ${e(s.cls)}</div>
             </div>
@@ -487,7 +501,7 @@
   .flight-card-route{ background:#eaf3fc; color:#33414f; font-size:11px; padding:7px 14px; border-bottom:1px solid #d7dee6; }
   .flight-card-body{ display:grid; grid-template-columns:110px 1fr 1fr 130px; gap:14px; padding:14px; }
   .carrier-col{ display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
-  .carrier-badge{ width:40px; height:40px; }
+  .carrier-badge{ width:40px; height:40px; object-fit:contain; border-radius:6px; }
   .carrier-name{ font-size:10px; font-weight:600; color:#33414f; line-height:1.3; }
   .flight-num{ font-size:10px; color:#5b6472; }
   .leg-label{ font-size:9px; letter-spacing:1px; color:#8a93a1; margin-bottom:2px; }
@@ -536,7 +550,7 @@
     ${pricingBlock}
     ${paymentBlock}
     ${ticketsBlock}
-    <div class="disclaimer">This is an educational simulation, not connected to any real airline or GDS network - not a real travel document. Carrier badges are generated placeholders, not airline logos.</div>
+    <div class="disclaimer">This is an educational simulation, not connected to any real airline or GDS network - not a real travel document. Any carrier logos shown are for identification only and are not sponsored or endorsed by that airline.</div>
   </div>
 </body></html>`;
   }

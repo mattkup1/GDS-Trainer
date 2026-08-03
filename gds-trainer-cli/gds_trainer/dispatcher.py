@@ -25,6 +25,9 @@ HANDLERS = {
     "HELP": lambda raw, *g: c.show_help(),
     "AVAILABILITY": lambda raw, day, mon, orig, dest: c.gen_availability(day, mon, orig, dest),
     "SELL_FROM_AVAIL": lambda raw, line, cls, seats: c.sell_from_avail(int(line), cls, int(seats)),
+    "SELL_CONNECTION": lambda raw, seats, cls1, line1, cls2, line2: c.sell_connection(
+        int(seats), cls1, int(line1), cls2, int(line2)
+    ),
     "LONG_SELL": lambda raw, al, flt, cls, day, mon, orig, dest, status, seats: c.direct_sell(
         al, flt, cls, day, mon, orig, dest, status, int(seats)
     ),

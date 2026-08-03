@@ -424,4 +424,17 @@ SCENARIOS: list[Scenario] = [
             ),
         ],
     ),
+    Scenario(
+        "connecting_itinerary_sells_both_legs",
+        [
+            SIGN_IN,
+            # Generation always appends exactly 2 workable connections (4 lines: 2 legs
+            # each) after the random nonstops for this route/date - lines 7 and 8 are the
+            # legs of the first one (6 nonstops), matching real Sabre's model where each
+            # leg is its own separately-numbered line, not a single grouped line.
+            Step("A15AUGDFWORD", expect_contains=["AIR AVAILABILITY", "RTE"]),
+            Step("02Y7Y8", expect_contains=["SEGMENT SOLD"]),
+            Step("*R", expect_contains=["SEG1", "SEG2"]),
+        ],
+    ),
 ]

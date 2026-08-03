@@ -133,6 +133,21 @@
   }
 
   // ---------- availability ----------
+  // Matches real Sabre: every line is one ordinary flight leg, shown with its own
+  // origin/destination (a connection candidate leg's city pair differs from the
+  // overall search) - there is no "grouped" multi-leg line. Connections are built
+  // by the agent recognizing two lines whose cities/times line up and selling both
+  // together (see sellConnection below), never a single system-bundled line.
+  function genFlight(rng, dep, orig, dest){
+    const airline = AIRLINES[Math.floor(rng()*AIRLINES.length)];
+    const flightNum = 100 + Math.floor(rng()*2899);
+    const duration = 65 + Math.floor(rng()*220);
+    const arr = dep + duration;
+    const equip = EQUIP[Math.floor(rng()*EQUIP.length)];
+    const classAvail = CLASSES.map(c => ({ cls:c, seats: Math.floor(rng()*10) }));
+    return { airline, flightNum, dep, arr, duration, equip, classAvail, orig, dest };
+  }
+
   function genAvailability(dayStr, monStr, orig, dest){
     if(orig === dest){ printErr('FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME'); return; }
     const dinfo = parseDate(dayStr, monStr);
@@ -144,28 +159,48 @@
     const flights = [];
     let dep = 300 + Math.floor(rng()*90);
     for(let i=0;i<numFlights;i++){
-      const airline = AIRLINES[Math.floor(rng()*AIRLINES.length)];
-      const flightNum = 100 + Math.floor(rng()*2899);
-      const duration = 65 + Math.floor(rng()*220);
-      const arr = dep + duration;
-      const equip = EQUIP[Math.floor(rng()*EQUIP.length)];
-      const classAvail = CLASSES.map(c => ({ cls:c, seats: Math.floor(rng()*10) }));
-      flights.push({ line:i+1, airline, flightNum, dep, arr, duration, equip, classAvail });
+      flights.push({ line:i+1, ...genFlight(rng, dep, orig, dest) });
       dep += 55 + Math.floor(rng()*95);
       if(dep > 1380) dep = 300 + Math.floor(rng()*60);
+    }
+
+    // Always append exactly 2 workable connections (4 more lines: 2 legs each) after the
+    // nonstops, continuing to draw from the same RNG stream (search stays one deterministic
+    // sequence per orig/dest/date). Keeping them last means line 1 is always a nonstop for
+    // every route/date. Each pair of lines is a real, separately-numbered flight - nothing
+    // marks them as "connectable"; the agent reads the city pairs/times like on real Sabre.
+    const airportCodes = typeof AIRPORTS !== 'undefined' ? Object.keys(AIRPORTS) : [];
+    let nextLine = numFlights+1;
+    for(let i=0;i<2;i++){
+      let via = orig;
+      if(airportCodes.length){
+        for(let tries=0; tries<10 && (via===orig || via===dest); tries++){
+          via = airportCodes[Math.floor(rng()*airportCodes.length)];
+        }
+      }
+      const dep1 = 300 + Math.floor(rng()*600);
+      const leg1 = genFlight(rng, dep1, orig, via);
+      const layover = 45 + Math.floor(rng()*135);
+      const leg2 = genFlight(rng, leg1.arr + layover, via, dest);
+      flights.push({ line: nextLine++, ...leg1 });
+      flights.push({ line: nextLine++, ...leg2 });
     }
     state.lastAvail = { orig, dest, dinfo, flights };
 
     print(`** AIR AVAILABILITY **  ${orig}-${dest}  ${dinfo.day}${dinfo.mon}${dinfo.year}  ${dinfo.weekday}`, 'hd');
     print(`  ${cityName(orig)}  TO  ${cityName(dest)}`, 'dim');
     printBlank();
-    print(`LN  FLT       ${CLASSES.map(c=>pad(c,3)).join('')} DEP    ARR    EQP`, 'dim');
+    // Built from the same field widths as the data rows below (not hand-counted spaces)
+    // so the header can't drift out of alignment with them - see the seat map header's
+    // identical rationale.
+    print(` ${pad('LN',2)} ${pad('FLT',7)}  ${pad('RTE',6)}  ${CLASSES.map(c=>pad(c,3)).join('')} ${pad('DEP',6)} ${pad('ARR',6)} EQP`, 'dim');
     for(const f of flights){
       const classStr = f.classAvail.map(c => pad(c.cls + c.seats, 3)).join('');
-      print(` ${pad(f.line,2)} ${f.airline} ${pad(f.flightNum,4)}  ${classStr} ${pad(minutesToClock(f.dep),6)} ${pad(minutesToClock(f.arr),6)} ${f.equip}`);
+      print(` ${pad(f.line,2)} ${f.airline} ${pad(f.flightNum,4)}  ${f.orig}${f.dest}  ${classStr} ${pad(minutesToClock(f.dep),6)} ${pad(minutesToClock(f.arr),6)} ${f.equip}`);
     }
     printBlank();
     print('SELL WITH: 0{LINE}{CLASS}{SEATS}   e.g. 0' + flights[0].line + 'Y1', 'dim');
+    print('SELL CONNECTION: 0{SEATS}{CLASS}{LINE}{CLASS}{LINE}   e.g. 02Y' + flights[0].line + 'Y' + flights[flights.length-1].line, 'dim');
   }
 
   function sellFromAvail(lineNum, cls, seats){
@@ -182,7 +217,7 @@
     if(cinfo.seats === 0){
       const seg = {
         airline: f.airline, flightNum: f.flightNum, cls: cls.toUpperCase(), seats,
-        dinfo: state.lastAvail.dinfo, orig: state.lastAvail.orig, dest: state.lastAvail.dest,
+        dinfo: state.lastAvail.dinfo, orig: f.orig, dest: f.dest,
         dep: f.dep, arr: f.arr, status: 'HL', equip: f.equip
       };
       state.pnr.segments.push(seg);
@@ -196,13 +231,53 @@
 
     const seg = {
       airline: f.airline, flightNum: f.flightNum, cls: cls.toUpperCase(), seats,
-      dinfo: state.lastAvail.dinfo, orig: state.lastAvail.orig, dest: state.lastAvail.dest,
+      dinfo: state.lastAvail.dinfo, orig: f.orig, dest: f.dest,
       dep: f.dep, arr: f.arr, status: 'HK', equip: f.equip
     };
     state.pnr.segments.push(seg);
     cinfo.seats -= seats;
     print(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
     logActivity(`SEGMENT SOLD - ${formatSegmentShort(seg)}`);
+    invalidatePricing();
+    refreshAndPrintPNR();
+  }
+
+  // Real Sabre connection sell: "0{SEATS}{CLASS1}{LINE1}{CLASS2}{LINE2}" - the agent
+  // picks two lines from the display whose cities/times work as a connection (nothing
+  // in the display marks them as connectable) and sells both in one entry.
+  function sellConnection(seats, cls1, line1Num, cls2, line2Num){
+    if(!state.lastAvail){ printErr('NO AVAILABILITY DISPLAY IN CONTEXT - ENTER AVAIL FIRST'); return; }
+    const f1 = state.lastAvail.flights.find(fl => fl.line === line1Num);
+    const f2 = state.lastAvail.flights.find(fl => fl.line === line2Num);
+    if(!f1 || !f2){ printErr('INVALID LINE NUMBER - CHECK ENTRY AND REENTER'); return; }
+    if(f1.dest !== f2.orig){ printErr(`INVALID CONNECTION - ${f1.dest} DOES NOT MATCH ${f2.orig}`); return; }
+    if(f2.dep < f1.arr + 30){ printErr('UNABLE - INSUFFICIENT CONNECTION TIME'); return; }
+
+    const legs = [ {flight:f1, cls:cls1.toUpperCase()}, {flight:f2, cls:cls2.toUpperCase()} ];
+    // Validate both legs before mutating anything, so a shortfall on the second leg
+    // never leaves the PNR half-sold.
+    const cinfos = [];
+    for(const {flight, cls} of legs){
+      const cinfo = flight.classAvail.find(c => c.cls === cls);
+      if(!cinfo){ printErr(`CLASS ${cls} NOT OFFERED ON THIS FLIGHT`); return; }
+      if(cinfo.seats > 0 && seats > cinfo.seats){ printErr(`UNABLE - ONLY ${cinfo.seats} SEAT(S) AVAILABLE IN CLASS ${cls}`); return; }
+      cinfos.push(cinfo);
+    }
+
+    legs.forEach(({flight, cls}, i) => {
+      const cinfo = cinfos[i];
+      const waitlisted = cinfo.seats === 0;
+      const seg = {
+        airline: flight.airline, flightNum: flight.flightNum, cls, seats,
+        dinfo: state.lastAvail.dinfo, orig: flight.orig, dest: flight.dest,
+        dep: flight.dep, arr: flight.arr, status: waitlisted ? 'HL' : 'HK', equip: flight.equip
+      };
+      state.pnr.segments.push(seg);
+      if(!waitlisted) cinfo.seats -= seats;
+      const label = waitlisted ? 'SEGMENT WAITLISTED' : 'SEGMENT SOLD';
+      print(`${label} - ${formatSegmentShort(seg)}`);
+      logActivity(`${label} - ${formatSegmentShort(seg)}`);
+    });
     invalidatePricing();
     refreshAndPrintPNR();
   }
@@ -1099,6 +1174,7 @@
     printBlank();
     print('SELL', 'hd');
     print('  0{LN}{CLASS}{SEATS}                        Sell from avail line   e.g. 04Y1');
+    print('  0{SEATS}{CLASS}{LN}{CLASS}{LN}             Sell a connection (two avail lines)   e.g. 02Y1M2');
     print('  0{AL}{FLT}{CLASS}{DD}{MMM}{ORG}{DST}{STATUS}{SEATS}');
     print('                                              Direct/long sell   e.g. 0AA100Y15AUGDFWORDNN1');
     print('  A class at 0 remaining sells as a waitlist request (status HL) instead of', 'dim');
@@ -1466,6 +1542,7 @@
     HELP: () => showHelp(),
     AVAILABILITY: (raw, day, mon, orig, dest) => genAvailability(day, mon, orig, dest),
     SELL_FROM_AVAIL: (raw, line, cls, seats) => sellFromAvail(parseInt(line,10), cls, parseInt(seats,10)),
+    SELL_CONNECTION: (raw, seats, cls1, line1, cls2, line2) => sellConnection(parseInt(seats,10), cls1, parseInt(line1,10), cls2, parseInt(line2,10)),
     LONG_SELL: (raw, al, flt, cls, day, mon, orig, dest, status, seats) => directSell(al, flt, cls, day, mon, orig, dest, status, parseInt(seats,10)),
     NAME_FIELD: (raw) => handleName(raw),
     PHONE: (raw) => handlePhone(raw),

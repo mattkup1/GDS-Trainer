@@ -69,6 +69,31 @@ def _first_incomplete_message(rule_key: str) -> str | None:
 
 
 # ---------- availability ----------
+# Matches real Sabre: every line is one ordinary flight, shown with its own origin/
+# destination (a connection candidate leg's city pair differs from the overall search)
+# - there is no "grouped" multi-leg line. Connections are built by the agent recognizing
+# two lines whose cities/times line up and selling both together (see sell_connection
+# below), never a single system-bundled line.
+
+def _gen_flight(rng, dep: int, orig: str, dest: str) -> dict:
+    airline = AIRLINES[int(rng() * len(AIRLINES))]
+    flight_num = 100 + int(rng() * 2899)
+    duration = 65 + int(rng() * 220)
+    arr = dep + duration
+    equip = EQUIP[int(rng() * len(EQUIP))]
+    class_avail = [{"cls": c, "seats": int(rng() * 10)} for c in CLASSES]
+    return {
+        "airline": airline,
+        "flight_num": flight_num,
+        "dep": dep,
+        "arr": arr,
+        "duration": duration,
+        "equip": equip,
+        "class_avail": class_avail,
+        "orig": orig,
+        "dest": dest,
+    }
+
 
 def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
     if orig == dest:
@@ -85,27 +110,33 @@ def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
     flights = []
     dep = 300 + int(rng() * 90)
     for i in range(num_flights):
-        airline = AIRLINES[int(rng() * len(AIRLINES))]
-        flight_num = 100 + int(rng() * 2899)
-        duration = 65 + int(rng() * 220)
-        arr = dep + duration
-        equip = EQUIP[int(rng() * len(EQUIP))]
-        class_avail = [{"cls": c, "seats": int(rng() * 10)} for c in CLASSES]
-        flights.append(
-            {
-                "line": i + 1,
-                "airline": airline,
-                "flight_num": flight_num,
-                "dep": dep,
-                "arr": arr,
-                "duration": duration,
-                "equip": equip,
-                "class_avail": class_avail,
-            }
-        )
+        flights.append({"line": i + 1, **_gen_flight(rng, dep, orig, dest)})
         dep += 55 + int(rng() * 95)
         if dep > 1380:
             dep = 300 + int(rng() * 60)
+
+    # Always append exactly 2 workable connections (4 more lines: 2 legs each) after the
+    # nonstops, continuing to draw from the same RNG stream (search stays one deterministic
+    # sequence per orig/dest/date). Keeping them last means line 1 is always a nonstop for
+    # every route/date. Each pair of lines is a real, separately-numbered flight - nothing
+    # marks them as "connectable"; the agent reads the city pairs/times like on real Sabre.
+    airport_codes = list(AIRPORTS.keys())
+    next_line = num_flights + 1
+    for _ in range(2):
+        via = orig
+        if airport_codes:
+            for _ in range(10):
+                if via != orig and via != dest:
+                    break
+                via = airport_codes[int(rng() * len(airport_codes))]
+        dep1 = 300 + int(rng() * 600)
+        leg1 = _gen_flight(rng, dep1, orig, via)
+        layover = 45 + int(rng() * 135)
+        leg2 = _gen_flight(rng, leg1["arr"] + layover, via, dest)
+        flights.append({"line": next_line, **leg1})
+        next_line += 1
+        flights.append({"line": next_line, **leg2})
+        next_line += 1
     STATE.last_avail = {"orig": orig, "dest": dest, "dinfo": dinfo, "flights": flights}
 
     print_line(
@@ -114,15 +145,27 @@ def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
     )
     print_line(f"  {city_name(orig)}  TO  {city_name(dest)}", "dim")
     print_blank()
-    print_line(f"LN  FLT       {''.join(pad(c, 3) for c in CLASSES)} DEP    ARR    EQP", "dim")
+    # Built from the same field widths as the data rows below (not hand-counted spaces)
+    # so the header can't drift out of alignment with them - see the seat map header's
+    # identical rationale.
+    print_line(
+        f" {pad('LN', 2)} {pad('FLT', 7)}  {pad('RTE', 6)}  "
+        f"{''.join(pad(c, 3) for c in CLASSES)} {pad('DEP', 6)} {pad('ARR', 6)} EQP",
+        "dim",
+    )
     for f in flights:
         class_str = "".join(pad(c["cls"] + str(c["seats"]), 3) for c in f["class_avail"])
         print_line(
-            f" {pad(f['line'], 2)} {f['airline']} {pad(f['flight_num'], 4)}  {class_str} "
+            f" {pad(f['line'], 2)} {f['airline']} {pad(f['flight_num'], 4)}  {f['orig']}{f['dest']}  {class_str} "
             f"{pad(minutes_to_clock(f['dep']), 6)} {pad(minutes_to_clock(f['arr']), 6)} {f['equip']}"
         )
     print_blank()
     print_line(f"SELL WITH: 0{{LINE}}{{CLASS}}{{SEATS}}   e.g. 0{flights[0]['line']}Y1", "dim")
+    print_line(
+        "SELL CONNECTION: 0{SEATS}{CLASS}{LINE}{CLASS}{LINE}   e.g. "
+        f"02Y{flights[0]['line']}Y{flights[-1]['line']}",
+        "dim",
+    )
 
 
 def sell_from_avail(line_num: int, cls: str, seats: int) -> None:
@@ -149,8 +192,8 @@ def sell_from_avail(line_num: int, cls: str, seats: int) -> None:
             "cls": cls.upper(),
             "seats": seats,
             "dinfo": STATE.last_avail["dinfo"],
-            "orig": STATE.last_avail["orig"],
-            "dest": STATE.last_avail["dest"],
+            "orig": f["orig"],
+            "dest": f["dest"],
             "dep": f["dep"],
             "arr": f["arr"],
             "status": "HL",
@@ -172,8 +215,8 @@ def sell_from_avail(line_num: int, cls: str, seats: int) -> None:
         "cls": cls.upper(),
         "seats": seats,
         "dinfo": STATE.last_avail["dinfo"],
-        "orig": STATE.last_avail["orig"],
-        "dest": STATE.last_avail["dest"],
+        "orig": f["orig"],
+        "dest": f["dest"],
         "dep": f["dep"],
         "arr": f["arr"],
         "status": "HK",
@@ -183,6 +226,66 @@ def sell_from_avail(line_num: int, cls: str, seats: int) -> None:
     cinfo["seats"] -= seats
     print_line(f"SEGMENT SOLD - {format_segment_short(seg)}")
     log_activity(STATE, f"SEGMENT SOLD - {format_segment_short(seg)}")
+    invalidate_pricing()
+    refresh_and_print_pnr()
+
+
+def sell_connection(seats: int, cls1: str, line1_num: int, cls2: str, line2_num: int) -> None:
+    """Real Sabre connection sell: "0{SEATS}{CLASS1}{LINE1}{CLASS2}{LINE2}" - the agent
+    picks two lines from the display whose cities/times work as a connection (nothing in
+    the display marks them as connectable) and sells both in one entry.
+    """
+    if not STATE.last_avail:
+        print_err("NO AVAILABILITY DISPLAY IN CONTEXT - ENTER AVAIL FIRST")
+        return
+    flights = STATE.last_avail["flights"]
+    f1 = next((fl for fl in flights if fl["line"] == line1_num), None)
+    f2 = next((fl for fl in flights if fl["line"] == line2_num), None)
+    if not f1 or not f2:
+        print_err("INVALID LINE NUMBER - CHECK ENTRY AND REENTER")
+        return
+    if f1["dest"] != f2["orig"]:
+        print_err(f"INVALID CONNECTION - {f1['dest']} DOES NOT MATCH {f2['orig']}")
+        return
+    if f2["dep"] < f1["arr"] + 30:
+        print_err("UNABLE - INSUFFICIENT CONNECTION TIME")
+        return
+
+    legs = [(f1, cls1.upper()), (f2, cls2.upper())]
+    # Validate both legs before mutating anything, so a shortfall on the second leg
+    # never leaves the PNR half-sold.
+    cinfos = []
+    for flight, cls in legs:
+        cinfo = next((c for c in flight["class_avail"] if c["cls"] == cls), None)
+        if not cinfo:
+            print_err(f"CLASS {cls} NOT OFFERED ON THIS FLIGHT")
+            return
+        if cinfo["seats"] > 0 and seats > cinfo["seats"]:
+            print_err(f"UNABLE - ONLY {cinfo['seats']} SEAT(S) AVAILABLE IN CLASS {cls}")
+            return
+        cinfos.append(cinfo)
+
+    for (flight, cls), cinfo in zip(legs, cinfos):
+        waitlisted = cinfo["seats"] == 0
+        seg = {
+            "airline": flight["airline"],
+            "flight_num": flight["flight_num"],
+            "cls": cls,
+            "seats": seats,
+            "dinfo": STATE.last_avail["dinfo"],
+            "orig": flight["orig"],
+            "dest": flight["dest"],
+            "dep": flight["dep"],
+            "arr": flight["arr"],
+            "status": "HL" if waitlisted else "HK",
+            "equip": flight["equip"],
+        }
+        STATE.pnr["segments"].append(seg)
+        if not waitlisted:
+            cinfo["seats"] -= seats
+        label = "SEGMENT WAITLISTED" if waitlisted else "SEGMENT SOLD"
+        print_line(f"{label} - {format_segment_short(seg)}")
+        log_activity(STATE, f"{label} - {format_segment_short(seg)}")
     invalidate_pricing()
     refresh_and_print_pnr()
 
@@ -1337,6 +1440,7 @@ def show_help() -> None:
     print_blank()
     print_line("SELL", "hd")
     print_line("  0{LN}{CLASS}{SEATS}                        Sell from avail line   e.g. 04Y1")
+    print_line("  0{SEATS}{CLASS}{LN}{CLASS}{LN}             Sell a connection (two avail lines)   e.g. 02Y1M2")
     print_line("  0{AL}{FLT}{CLASS}{DD}{MMM}{ORG}{DST}{STATUS}{SEATS}")
     print_line("                                              Direct/long sell   e.g. 0AA100Y15AUGDFWORDNN1")
     print_line("  A class at 0 remaining sells as a waitlist request (status HL) instead of", "dim")

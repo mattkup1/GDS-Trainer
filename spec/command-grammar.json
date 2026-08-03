@@ -4,6 +4,7 @@
   {"name": "availability_a", "pattern": "^A(\\d{1,2})([A-Z]{3})([A-Z]{3})([A-Z]{3})$", "handler": "AVAILABILITY", "category": "AVAILABILITY", "desc": "Air availability search", "example": "A15AUGDFWORD"},
   {"name": "availability_1", "pattern": "^1(\\d{1,2})([A-Z]{3})([A-Z]{3})([A-Z]{3})$", "handler": "AVAILABILITY", "category": "AVAILABILITY", "desc": "Air availability search (alternate entry)", "example": "115AUGDFWORD"},
   {"name": "sell_from_avail", "pattern": "^0(\\d{1,2})([A-Z])(\\d{1,2})$", "handler": "SELL_FROM_AVAIL", "category": "SELL", "desc": "Sell a flight from the last availability display", "example": "04Y1"},
+  {"name": "sell_connection", "pattern": "^0(\\d{1,2})([A-Z])(\\d{1,2})([A-Z])(\\d{1,2})$", "handler": "SELL_CONNECTION", "category": "SELL", "desc": "Sell a connection: seats, then class+line for each of the two flights", "example": "02Y1M2"},
   {"name": "long_sell", "pattern": "^0([A-Z]{2})(\\d{1,4})([A-Z])(\\d{1,2})([A-Z]{3})([A-Z]{3})([A-Z]{3})([A-Z]{2})(\\d{1,2})$", "handler": "LONG_SELL", "category": "SELL", "desc": "Direct/long sell without an availability display", "example": "0AA100Y15AUGDFWORDNN1"},
   {"name": "name_field", "pattern": "^-", "handler": "NAME_FIELD", "category": "PNR BUILD", "desc": "Add passenger name(s), optionally with a lap infant", "example": "-SMITH/JOHN MR"},
   {"name": "phone", "pattern": "^9", "handler": "PHONE", "category": "PNR BUILD", "desc": "Add a contact phone number", "example": "9214555-1234-A"},

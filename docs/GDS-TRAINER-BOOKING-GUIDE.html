@@ -227,16 +227,28 @@
 <section class="step">
   <div class="step-num">2</div>
   <div>
-    <h2>Search flight availability</h2>
-    <p class="format">Format: <code>A</code> + day + month + origin + destination (or <code>1</code> in place of <code>A</code> — both are real GDS entries)</p>
-    <div class="cmdblock">A15AUGDFWORD</div>
-    <p class="note">This requests flights from <b>DFW</b> (Dallas/Ft Worth) to <b>ORD</b> (Chicago O'Hare) on <b>August 15</b>. You'll get back a numbered list of flights, each with airline, flight number, seats open per class (F/J/C/Y/B/M), departure/arrival times.</p>
-    <p class="aside">Any real-world IATA airport code works — the simulator ships with data for ~6,000 airports worldwide.</p>
+    <h2>Shop fares and check the schedule (optional, before booking)</h2>
+    <p class="format">Format: <code>FQ</code> + origin + destination, for an indicative fare quote independent of any booking</p>
+    <div class="cmdblock">FQDFWORD</div>
+    <p class="note">Shows a per-class table of indicative base fare, taxes, and total for that city pair — no PNR involved, nothing is booked. Useful for a quick "what would this cost" before searching availability.</p>
+    <p class="note">To see what flies a route across a whole week rather than one date — times and equipment only, no booking classes or seat counts, since it's not tied to sellable inventory:</p>
+    <div class="cmdblock">S15AUGDFWORD</div>
   </div>
 </section>
 
 <section class="step">
   <div class="step-num">3</div>
+  <div>
+    <h2>Search flight availability</h2>
+    <p class="format">Format: <code>A</code> + day + month + origin + destination (or <code>1</code> in place of <code>A</code> — both are real GDS entries)</p>
+    <div class="cmdblock">A15AUGDFWORD</div>
+    <p class="note">This requests flights from <b>DFW</b> (Dallas/Ft Worth) to <b>ORD</b> (Chicago O'Hare) on <b>August 15</b>. You'll get back a numbered list of flights, each with airline, flight number, seats open per class (F/J/C/Y/B/M), departure/arrival times. Most lines share the searched city pair, but a few may show a different one — that's a connecting flight's leg (see the next step).</p>
+    <p class="aside">Any real-world IATA airport code works — the simulator ships with data for ~6,000 airports worldwide.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">4</div>
   <div>
     <h2>Sell a seat from the list</h2>
     <p class="format">Format: <code>0</code> + line number + class letter + number of seats</p>
@@ -244,11 +256,14 @@
     <p class="note">Sells <b>1 seat in Y class from line 4</b> of the availability display you just pulled up. The simulator confirms the segment and shows your PNR so far (currently just that flight segment). Selling reduces that class's remaining seat count for the rest of the session — sell it down to 0 and the next sell in that class waitlists (status <code>HL</code>) instead of being blocked.</p>
     <p class="note">You can also sell a specific flight directly, without pulling up availability first (a "long sell"). Format: <code>0</code> + airline + flight number + class + date + origin/destination + status code + party size:</p>
     <div class="cmdblock">0AA100Y15AUGDFWORDNN1</div>
+    <p class="note">If two lines' cities and times line up (one line's destination matches another's origin, with a workable connection time), sell them together as a connecting itinerary in one entry: seats, then class + line number for each leg:</p>
+    <div class="cmdblock">02Y1M2</div>
+    <p class="note">Sells 2 seats — Y class on line 1, M class on line 2 — as two segments that are <b>married</b>: they were sold as one connection, so cancelling one later requires cancelling both together (<code>X1,2</code>), rather than silently leaving the other leg behind.</p>
   </div>
 </section>
 
 <section class="step">
-  <div class="step-num">4</div>
+  <div class="step-num">5</div>
   <div>
     <h2>Add the passenger's name</h2>
     <p class="format">Format: <code>-</code> + SURNAME + <code>/</code> + GIVEN NAME + TITLE</p>
@@ -258,11 +273,18 @@
     <p class="note">For passengers with different surnames, add a separate <code>-</code> entry for each. The number of named passengers can't exceed the number of seats sold.</p>
     <p class="note">To add a <b>lap infant</b> traveling with a passenger, append <code>(INF{SURNAME}/{GIVEN}/{DOB})</code> to that passenger's name entry (<code>DOB</code> is <code>DDMONYY</code>):</p>
     <div class="cmdblock">-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)</div>
+    <p class="note"><b>Booking a group (10 or more passengers):</b> if the names aren't finalized yet, add placeholder passengers in one entry instead of spelling out each one:</p>
+    <div class="cmdblock">-12TBA/TBA</div>
+    <p class="note">Adds 12 identical <code>TBA/TBA</code> placeholders — real groups are held this way, with names filled in closer to departure. A group needs a deposit on file before it can be saved:</p>
+    <div class="cmdblock">3DEPS</div>
+    <p class="note">To finalize a placeholder later, cancel it and add the real name — the same two entries you'd use to fix any other passenger's name:</p>
+    <div class="cmdblock">X5
+-SMITH/JOHN MR</div>
   </div>
 </section>
 
 <section class="step">
-  <div class="step-num">5</div>
+  <div class="step-num">6</div>
   <div>
     <h2>Add passenger travel documents (APIS) (optional)</h2>
     <p class="format">Format: <code>3DOCS</code> + document type + <code>/</code> + issuing country + <code>/</code> + number + <code>/</code> + nationality + <code>/</code> + date of birth + <code>/</code> + sex + <code>/</code> + expiry date + <code>-</code> + passenger number</p>
@@ -274,14 +296,14 @@
 </section>
 
 <section class="step">
-  <div class="step-num">6</div>
+  <div class="step-num">7</div>
   <div>
     <h2>Add special service requests / other service info (optional)</h2>
     <p class="format">Format: <code>3{SSRCODE}</code> for a service request (meals, wheelchair, etc.), optionally with a passenger number and free text: <code>3{SSRCODE}-{PAX#}/{TEXT}</code>. Format: <code>3OSI{AIRLINE}{TEXT}</code> for other-service-info free text to a carrier.</p>
     <div class="cmdblock">3VGML
 3WCHR-1/AISLE SEAT PREFERRED
 3OSIAA VIP PASSENGER</div>
-    <p class="note">Common SSR codes: <code>WCHR</code>/<code>WCHS</code>/<code>WCHC</code> (wheelchair), <code>VGML</code>/<code>BBML</code>/<code>CHML</code>/<code>KSML</code>/<code>MOML</code>/<code>DBML</code>/<code>SPML</code> (meals), <code>BLND</code>/<code>DEAF</code> (accessibility), <code>UMNR</code> (unaccompanied minor), <code>PETC</code> (pet in cabin), <code>BSCT</code> (bassinet), <code>XBAG</code> (extra baggage).</p>
+    <p class="note">Common SSR codes: <code>WCHR</code>/<code>WCHS</code>/<code>WCHC</code> (wheelchair), <code>VGML</code>/<code>BBML</code>/<code>CHML</code>/<code>KSML</code>/<code>MOML</code>/<code>DBML</code>/<code>SPML</code> (meals), <code>BLND</code>/<code>DEAF</code> (accessibility), <code>UMNR</code> (unaccompanied minor), <code>PETC</code> (pet in cabin), <code>BSCT</code> (bassinet), <code>XBAG</code> (extra baggage), <code>DEPS</code> (group deposit received — see step 5).</p>
     <p class="note">A frequent flyer number can optionally carry a loyalty tier:</p>
     <div class="cmdblock">3FQTVAA1234567/GLD</div>
     <p class="note">Tiers: <code>SLV</code> (Silver), <code>GLD</code> (Gold), <code>PLT</code> (Platinum), <code>DIA</code> (Diamond).</p>
@@ -291,7 +313,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">7</div>
+  <div class="step-num">8</div>
   <div>
     <h2>Assign a seat (optional)</h2>
     <p class="format">Format: <code>4{N}</code> to display the seat map for itinerary segment N, then <code>4{N}-{SEAT}</code> to assign one.</p>
@@ -301,7 +323,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">8</div>
+  <div class="step-num">9</div>
   <div>
     <h2>Price the itinerary</h2>
     <p class="format">Format: <code>WP</code> (once segments and at least one name are on the PNR)</p>
@@ -314,7 +336,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">9</div>
+  <div class="step-num">10</div>
   <div>
     <h2>Add a contact phone number</h2>
     <p class="format">Format: <code>9</code> + phone number + <code>-</code> + location code (<code>A</code>=Agency, <code>H</code>=Home, <code>B</code>=Business, <code>C</code>/<code>M</code>=Cell, <code>F</code>=Fax, <code>HTL</code>=Hotel)</p>
@@ -323,7 +345,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">10</div>
+  <div class="step-num">11</div>
   <div>
     <h2>Add "received from" (who the booking request came from)</h2>
     <p class="format">Format: <code>6</code> + text</p>
@@ -332,7 +354,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">11</div>
+  <div class="step-num">12</div>
   <div>
     <h2>Add a ticketing arrangement</h2>
     <div class="cmdblock">7TAW/</div>
@@ -341,7 +363,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">12</div>
+  <div class="step-num">13</div>
   <div>
     <h2>Add a form of payment</h2>
     <p class="format">Format: <code>FPCASH</code>, <code>FPCHECK</code>, or <code>FPCC{TYPE}{CARDNUMBER}/{MMYY}</code> for a credit card (<code>TYPE</code> is <code>VI</code>=Visa, <code>CA</code>=MasterCard, <code>AX</code>=Amex, <code>DC</code>=Diners Club, <code>DS</code>=Discover, <code>JC</code>=JCB).</p>
@@ -353,26 +375,26 @@
 </section>
 
 <section class="step">
-  <div class="step-num">13</div>
+  <div class="step-num">14</div>
   <div>
     <h2>End the transaction (save the booking)</h2>
     <div class="cmdblock">ER</div>
-    <p class="note">This saves the PNR and gives you a <b>6-character record locator</b> — your confirmation code. <code>ER</code> redisplays the saved PNR; <code>ET</code> saves it and clears the screen for a new booking.</p>
-  </div>
-</section>
-
-<section class="step">
-  <div class="step-num">14</div>
-  <div>
-    <h2>Issue the ticket (optional)</h2>
-    <div class="cmdblock">TKTT</div>
-    <p class="note">This is the step people often assume <code>ER</code> already did — it doesn't. Saving a PNR (<code>ER</code>/<code>ET</code>) and <b>ticketing</b> it are two different things in a real GDS, exactly like here: the "ticketing arrangement" you added in step 11 just sets a deadline (or "ticket at will"), it doesn't issue anything. <code>TKTT</code> is the actual ticketing entry — it requires the PNR to already be saved (has a record locator) and to have a fare quote, ticketing arrangement, and form of payment on file, and it generates a real-format ticket number (airline numeric code + serial) per passenger, including infants.</p>
-    <p class="note">If you change the itinerary after ticketing (sell or cancel a segment), the ticket(s) are automatically voided along with the fare quote — you'll need to <code>WP</code> and <code>TKTT</code> again before saving.</p>
+    <p class="note">This saves the PNR and gives you a <b>6-character record locator</b> — your confirmation code. <code>ER</code> redisplays the saved PNR; <code>ET</code> saves it and clears the screen for a new booking. (A group PNR — 10 or more names — additionally needs a deposit on file; see step 5.)</p>
   </div>
 </section>
 
 <section class="step">
   <div class="step-num">15</div>
+  <div>
+    <h2>Issue the ticket (optional)</h2>
+    <div class="cmdblock">TKTT</div>
+    <p class="note">This is the step people often assume <code>ER</code> already did — it doesn't. Saving a PNR (<code>ER</code>/<code>ET</code>) and <b>ticketing</b> it are two different things: the "ticketing arrangement" you added in step 12 just sets a deadline (or "ticket at will"), it doesn't issue anything. <code>TKTT</code> is the actual ticketing entry — it requires the PNR to already be saved (has a record locator) and to have a fare quote, ticketing arrangement, and form of payment on file, and it generates a real-format ticket number (airline numeric code + serial) per passenger, including infants.</p>
+    <p class="note">If you change the itinerary after ticketing (sell or cancel a segment), the ticket(s) are automatically voided along with the fare quote — you'll need to <code>WP</code> and <code>TKTT</code> again before saving. Three more entries handle a ticketed PNR from there: <code>TKTV</code> voids the ticket(s) same-day, no penalty, leaving the fare quote in place so <code>TKTT</code> can reissue right away; <code>TKTR</code> refunds them (blocked if the fare basis isn't refundable); <code>WFR{TICKET#}</code> exchanges an already-issued ticket after a later fare/itinerary change — applies its value toward the newly-priced total, shows an additional collection or a residual, and reissues.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">16</div>
   <div>
     <h2>Print or save the customer a copy of the itinerary/invoice (optional)</h2>
     <div class="cmdblock">EMI</div>
@@ -381,7 +403,7 @@
 </section>
 
 <section class="step">
-  <div class="step-num">16</div>
+  <div class="step-num">17</div>
   <div>
     <h2>Look up the booking again later</h2>
     <div class="cmdblock">*ABC123</div>
@@ -392,7 +414,17 @@
 </section>
 
 <section class="step">
-  <div class="step-num">17</div>
+  <div class="step-num">18</div>
+  <div>
+    <h2>Divide the PNR into two bookings (optional)</h2>
+    <p class="format">Format: <code>SP</code> + passenger number(s)</p>
+    <div class="cmdblock">SP2</div>
+    <p class="note">Splits passenger 2 out of the current PNR into a brand-new, separately-locatored PNR — the itinerary and contact/ticketing info are copied to both. Needs a saved PNR (<code>ER</code>/<code>ET</code> already run) to work from; both resulting PNRs need a fresh <code>WP</code> (and <code>TKTT</code> if already ticketed) before they can be saved again, since the party size changed on each side.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">19</div>
   <div>
     <h2>Queue the PNR for follow-up (optional)</h2>
     <p class="format">Format: <code>QE</code> + queue number (once the PNR has been saved with <code>ER</code>/<code>ET</code>)</p>
@@ -405,6 +437,7 @@
     <p class="note">To pull the next PNR off a queue and load it into the work area:</p>
     <div class="cmdblock">QN25</div>
     <p class="note">This works one PNR at a time, first-in-first-out — exactly how an agent works a real queue. An empty or unused queue number just reports there's nothing there.</p>
+    <p class="note">Two queues populate themselves automatically as you work a PNR, no entry required: queue <b>1</b> picks up a PNR whose flight time changed after booking (a schedule change), and queue <b>18</b> picks up one whose waitlisted segment cleared to confirmed. Both are discovered the same way — checking <code>QC</code>/<code>QN{N}</code>, or noticing the on-screen note the next time the PNR is redisplayed.</p>
   </div>
 </section>
 
@@ -413,12 +446,17 @@
   <thead><tr><th>Step</th><th>Command</th><th>Example</th></tr></thead>
   <tbody>
     <tr><td>Sign in</td><td class="mono">SI</td><td class="mono">SI</td></tr>
+    <tr><td>Shop fares by city pair (no PNR needed)</td><td class="mono">FQ{ORIG}{DEST}</td><td class="mono">FQDFWORD</td></tr>
+    <tr><td>Flight schedule, 7-day window (no booking classes/seats)</td><td class="mono">S{DD}{MON}{ORIG}{DEST}</td><td class="mono">S15AUGDFWORD</td></tr>
     <tr><td>Search flights</td><td class="mono">A{DD}{MON}{ORIG}{DEST}</td><td class="mono">A15AUGDFWORD</td></tr>
     <tr><td>Sell from list</td><td class="mono">0{LINE}{CLASS}{SEATS}</td><td class="mono">04Y1</td></tr>
+    <tr><td>Sell a connection (two avail lines)</td><td class="mono">0{SEATS}{CLASS}{LINE}{CLASS}{LINE}</td><td class="mono">02Y1M2</td></tr>
     <tr><td>Long/direct sell</td><td class="mono">0{AL}{FLT}{CLASS}{DD}{MON}{ORIG}{DEST}{STATUS}{SEATS}</td><td class="mono">0AA100Y15AUGDFWORDNN1</td></tr>
     <tr><td>Add name</td><td class="mono">-{SURNAME}/{GIVEN} {TITLE}</td><td class="mono">-SMITH/JOHN MR</td></tr>
     <tr><td>Add multiple passengers</td><td class="mono">-{N}{SURNAME}/{G1} {T1}/{G2} {T2}</td><td class="mono">-2SMITH/JOHN MR/JANE MRS</td></tr>
     <tr><td>Add lap infant</td><td class="mono">-...(INF{SURNAME}/{GIVEN}/{DOB})</td><td class="mono">-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)</td></tr>
+    <tr><td>Add a group of placeholder names (10+ = a group)</td><td class="mono">-{N}TBA/TBA</td><td class="mono">-12TBA/TBA</td></tr>
+    <tr><td>Record a group deposit (required to save a 10+ name PNR)</td><td class="mono">3DEPS</td><td class="mono">3DEPS</td></tr>
     <tr><td>Add travel document (APIS)</td><td class="mono">3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}[.{INFANT#}]</td><td class="mono">3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1 or ...-1.1</td></tr>
     <tr><td>Add SSR</td><td class="mono">3{SSRCODE}[-{PAX#}][/{TEXT}]</td><td class="mono">3VGML</td></tr>
     <tr><td>Add OSI</td><td class="mono">3OSI{AL}{TEXT}</td><td class="mono">3OSIAA VIP PASSENGER</td></tr>
@@ -434,13 +472,17 @@
     <tr><td>Add form of payment</td><td class="mono">FPCASH, FPCHECK, FPCC{TYPE}{NUM}/{MMYY}</td><td class="mono">FPCASH</td></tr>
     <tr><td>Save booking</td><td class="mono">ER or ET</td><td class="mono">ER</td></tr>
     <tr><td>Issue ticket</td><td class="mono">TKTT</td><td class="mono">TKTT</td></tr>
+    <tr><td>Void ticket (same-day, no penalty)</td><td class="mono">TKTV</td><td class="mono">TKTV</td></tr>
+    <tr><td>Refund ticket (blocked for nonrefundable fares)</td><td class="mono">TKTR</td><td class="mono">TKTR</td></tr>
+    <tr><td>Exchange ticket after a fare/itinerary change</td><td class="mono">WFR{TICKET#}</td><td class="mono">WFR045-1234567890</td></tr>
     <tr><td>Print/save itinerary, invoice, or e-ticket document</td><td class="mono">EM, EMI, EMT</td><td class="mono">EMI</td></tr>
     <tr><td>Redisplay PNR</td><td class="mono">*R or *</td><td class="mono">*R</td></tr>
     <tr><td>Show PNR activity history</td><td class="mono">*H</td><td class="mono">*H</td></tr>
     <tr><td>Retrieve saved PNR</td><td class="mono">*{LOCATOR}</td><td class="mono">*ABC123</td></tr>
+    <tr><td>Divide passenger(s) into a new PNR</td><td class="mono">SP{N} or SP{N},{M}</td><td class="mono">SP2</td></tr>
     <tr><td>Place PNR on a queue</td><td class="mono">QE{N}</td><td class="mono">QE25</td></tr>
     <tr><td>Show queue counts</td><td class="mono">QC or QC{N}</td><td class="mono">QC or QC25</td></tr>
-    <tr><td>Retrieve next PNR from a queue</td><td class="mono">QN{N}</td><td class="mono">QN25</td></tr>
+    <tr><td>Retrieve next PNR from a queue</td><td class="mono">QN{N}</td><td class="mono">QN25 (queue 1 auto-populates on a schedule change, queue 18 on a waitlist clearing)</td></tr>
     <tr><td>Cancel an item</td><td class="mono">X{N}, X{N}-{M}, X{N},{M}</td><td class="mono">X2</td></tr>
     <tr><td>Cancel entire itinerary</td><td class="mono">XI</td><td class="mono">XI</td></tr>
     <tr><td>Discard unsaved work</td><td class="mono">IG</td><td class="mono">IG</td></tr>
@@ -491,7 +533,25 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 02</span><span class="stage-name">Shop for availability</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 02</span><span class="stage-name">Shop for fares &amp; schedules</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">FQ{ORG}{DST}</td><td>Fare quote shop by city pair — indicative only, no PNR involved</td></tr>
+        <tr><td class="mono">S{DD}{MON}{ORG}{DST}</td><td>Flight schedule across a 7-day window — no booking classes or seats</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Fare shop</dt><dd>an indicative, per-class fare check by city pair, independent of any itinerary; distinct from <span class="mono">WP</span>, which prices an already-sold itinerary</dd></div>
+      <div class="entry"><dt>Schedule display</dt><dd>a several-day view of what flies a route, independent of sellable inventory; distinct from availability, which shows one date's bookable classes/seats</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 03</span><span class="stage-name">Shop for availability</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -513,12 +573,13 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 03</span><span class="stage-name">Sell the itinerary</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 04</span><span class="stage-name">Sell the itinerary</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
       <tbody>
         <tr><td class="mono">0{LINE}{CLASS}{SEATS}</td><td>Sell from an availability line</td></tr>
+        <tr><td class="mono">0{SEATS}{CLASS}{LINE}{CLASS}{LINE}</td><td>Sell a connection — both legs in one entry</td></tr>
         <tr><td class="mono">0{AL}{FLT}{CLASS}{DD}{MON}{ORG}{DST}{STATUS}{SEATS}</td><td>Long/direct sell (no availability display needed)</td></tr>
         <tr><td class="mono">X{N}</td><td>Cancel element N</td></tr>
         <tr><td class="mono">X{N}-{M}, X{N},{M}</td><td>Cancel a range or list of elements</td></tr>
@@ -532,12 +593,13 @@ TKTT</div>
       <div class="entry"><dt>Status code</dt><dd>the two-letter segment status: HK = holds confirmed; HL = waitlisted (a class sold down to 0 remaining sells as a waitlist request instead of being blocked); NN = need/request, used when typing a long-sell entry by hand</dd></div>
       <div class="entry"><dt>Party size</dt><dd>the number of seats requested in a sell entry; caps how many passenger names the PNR can carry</dd></div>
       <div class="entry"><dt>PNR element</dt><dd>any single numbered line on the PNR display (a name, a segment, a phone, etc.) — what X{N} cancels</dd></div>
+      <div class="entry"><dt>Married segments</dt><dd>two segments sold together as one connection; the PNR display notes each one's pairing, and cancelling either alone is blocked — both must be cancelled in the same X entry</dd></div>
     </dl>
   </div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 04</span><span class="stage-name">Add passenger data (name field &amp; documents)</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 05</span><span class="stage-name">Add passenger data (name field &amp; documents)</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -545,6 +607,8 @@ TKTT</div>
         <tr><td class="mono">-{SURNAME}/{GIVEN} {TITLE}</td><td>Add a name</td></tr>
         <tr><td class="mono">-{N}{SURNAME}/{G1} {T1}/{G2} {T2}</td><td>Add multiple passengers sharing a surname in one entry</td></tr>
         <tr><td class="mono">-...(INF{SURNAME}/{GIVEN}/{DOB})</td><td>Attach a lap infant to the name just added</td></tr>
+        <tr><td class="mono">-{N}TBA/TBA</td><td>Add N identical group-placeholder passengers in one entry (N &gt; 1)</td></tr>
+        <tr><td class="mono">3DEPS</td><td>Record a group deposit received (required to save a 10+ name PNR)</td></tr>
         <tr><td class="mono">3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}[.{INFANT#}]</td><td>Add a travel document (APIS) for a passenger, or for their infant</td></tr>
       </tbody>
     </table>
@@ -553,13 +617,14 @@ TKTT</div>
       <div class="entry"><dt>Name field</dt><dd>the passenger name(s) on the PNR; required before pricing</dd></div>
       <div class="entry"><dt>Lap infant</dt><dd>an infant traveling on an adult's lap rather than in their own seat; doesn't count against the party size/seats-sold limit</dd></div>
       <div class="entry"><dt>DOB format</dt><dd>DDMONYY, e.g. 12JAN26</dd></div>
+      <div class="entry"><dt>Group</dt><dd>a PNR with 10 or more passengers; typically built with TBA/TBA placeholder names finalized closer to departure, and requires a deposit (3DEPS) on file before it can be saved</dd></div>
       <div class="entry"><dt>APIS</dt><dd>(Advance Passenger Information) passport/nationality/date-of-birth data governments require for international travel, tied to a specific passenger by number — or, for an infant, by {PAX#}.{INFANT#} (Sabre-style decimal notation, since an infant has no name-field entry of its own)</dd></div>
     </dl>
   </div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 05</span><span class="stage-name">Special service requests / other service info</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 06</span><span class="stage-name">Special service requests / other service info</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -572,7 +637,7 @@ TKTT</div>
     </table>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
-      <div class="entry"><dt>SSR</dt><dd>(Special Service Request) a coded request to the airline: meals, wheelchair assistance, unaccompanied minor, extra baggage, etc.</dd></div>
+      <div class="entry"><dt>SSR</dt><dd>(Special Service Request) a coded request to the airline: meals, wheelchair assistance, unaccompanied minor, extra baggage, a group deposit (DEPS), etc.</dd></div>
       <div class="entry"><dt>OSI</dt><dd>(Other Service Info) free-text information sent to a carrier that isn't a coded SSR</dd></div>
       <div class="entry"><dt>FQTV</dt><dd>frequent flyer number, stored as a special kind of SSR; can carry a loyalty tier (SLV/GLD/PLT/DIA)</dd></div>
       <div class="entry"><dt>General remark</dt><dd>an agency-internal note on the PNR, distinct from OSI (which the carrier sees)</dd></div>
@@ -581,7 +646,7 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 06</span><span class="stage-name">Seat selection</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 07</span><span class="stage-name">Seat selection</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -598,7 +663,7 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 07</span><span class="stage-name">Price the itinerary</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 08</span><span class="stage-name">Price the itinerary</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -621,7 +686,7 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 08</span><span class="stage-name">Add contact &amp; booking info</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 09</span><span class="stage-name">Add contact &amp; booking info</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -641,7 +706,7 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 09</span><span class="stage-name">Ticketing arrangement &amp; form of payment</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 10</span><span class="stage-name">Ticketing arrangement &amp; form of payment</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -656,7 +721,7 @@ TKTT</div>
     </table>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
-      <div class="entry"><dt>Ticketing arrangement</dt><dd>the deadline (or lack of one) by which the PNR must be ticketed; not the same as ticketing itself</dd></div>
+      <div class="entry"><dt>Ticketing arrangement</dt><dd>the deadline (or lack of one) by which the PNR must be ticketed; not the same as ticketing itself. In this trainer it also stands in for a group's names-finalization deadline.</dd></div>
       <div class="entry"><dt>Ticket at will</dt><dd>no fixed ticketing deadline</dd></div>
       <div class="entry"><dt>Time limit</dt><dd>a fixed date/time by which the PNR must be ticketed or it's expected to cancel</dd></div>
       <div class="entry"><dt>Form of payment (FOP)</dt><dd>how the ticket will be paid for; required before end transaction. Card numbers are masked to the last 4 digits once stored</dd></div>
@@ -665,7 +730,7 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 10</span><span class="stage-name">End transaction</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 11</span><span class="stage-name">End transaction</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -678,30 +743,36 @@ TKTT</div>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
       <div class="entry"><dt>RLOC</dt><dd>(Record Locator) the 6-character confirmation code assigned the first time a PNR is end-transacted</dd></div>
-      <div class="entry"><dt>End transaction</dt><dd>saving the PNR; requires a segment, a name, a fare quote, a phone, a received-from, a form of payment, and a ticketing arrangement all on file</dd></div>
+      <div class="entry"><dt>End transaction</dt><dd>saving the PNR; requires a segment, a name, a fare quote, a phone, a received-from, a form of payment, and a ticketing arrangement all on file (plus a deposit on file for a 10+ name group)</dd></div>
     </dl>
   </div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 11</span><span class="stage-name">Ticket issuance</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 12</span><span class="stage-name">Ticket issuance</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
       <tbody>
         <tr><td class="mono">TKTT</td><td>Issue ticket number(s)</td></tr>
+        <tr><td class="mono">TKTV</td><td>Void issued ticket(s) — same-day, no penalty; the fare quote stays on file</td></tr>
+        <tr><td class="mono">TKTR</td><td>Refund issued ticket(s) — blocked for a nonrefundable fare basis</td></tr>
+        <tr><td class="mono">WFR{TICKET#}</td><td>Exchange an issued ticket after a fare/itinerary change</td></tr>
       </tbody>
     </table>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
       <div class="entry"><dt>Validating carrier</dt><dd>the airline whose numeric code prefixes the issued ticket number(s); taken from the first segment</dd></div>
       <div class="entry"><dt>Ticketing vs. ticketing arrangement</dt><dd>the arrangement (7TAW/7TAX) only sets a deadline; TKTT is the entry that actually issues ticket numbers, and requires the PNR to already be saved (has an RLOC)</dd></div>
+      <div class="entry"><dt>Void</dt><dd>a same-day ticket reversal with no penalty; unlike a refund, the fare quote and ticketing arrangement stay valid, so TKTT can reissue immediately</dd></div>
+      <div class="entry"><dt>Refund</dt><dd>cancelling issued ticket(s) and voiding the fare quote with them; blocked outright if the fare basis isn't refundable</dd></div>
+      <div class="entry"><dt>Exchange</dt><dd>applying an already-issued ticket's value toward a newly re-priced itinerary, showing either an additional collection (ADCOLL) or a non-refundable residual, then reissuing a new ticket number</dd></div>
     </dl>
   </div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 12</span><span class="stage-name">Documents</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 13</span><span class="stage-name">Documents</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -719,7 +790,7 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 13</span><span class="stage-name">Retrieve &amp; review</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 14</span><span class="stage-name">Retrieve &amp; review</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -737,7 +808,24 @@ TKTT</div>
 </div>
 
 <div class="stage">
-  <div class="stage-head"><span class="stage-num">STAGE 14</span><span class="stage-name">Queues</span></div>
+  <div class="stage-head"><span class="stage-num">STAGE 15</span><span class="stage-name">Divide a PNR</span></div>
+  <div class="stage-body">
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">SP{N}</td><td>Divide passenger N out of the PNR into a new, separately-locatored PNR</td></tr>
+        <tr><td class="mono">SP{N},{M}</td><td>Divide multiple passengers out at once</td></tr>
+      </tbody>
+    </table>
+    <div class="stage-term-head">Terminology</div>
+    <dl class="terms">
+      <div class="entry"><dt>Divide</dt><dd>splitting one or more passengers out of a PNR into a brand-new PNR; the itinerary and contact/ticketing details are copied to both, but each needs its own fresh fare quote (and reissue, if already ticketed) afterward since the party size changed on both sides</dd></div>
+    </dl>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="stage-num">STAGE 16</span><span class="stage-name">Queues</span></div>
   <div class="stage-body">
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
@@ -750,9 +838,11 @@ TKTT</div>
     </table>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
-      <div class="entry"><dt>Queue</dt><dd>a numbered bucket of PNRs awaiting follow-up work (schedule change, ticketing, general review); the backbone of real-world agent workflow, distinct from *{LOCATOR} retrieval which requires already knowing the exact record locator</dd></div>
+      <div class="entry"><dt>Queue</dt><dd>a numbered bucket of PNRs awaiting follow-up work; the backbone of real-world agent workflow, distinct from *{LOCATOR} retrieval which requires already knowing the exact record locator</dd></div>
       <div class="entry"><dt>Queue count</dt><dd>how many PNRs are currently sitting on a given queue, shown by QC</dd></div>
       <div class="entry"><dt>Working a queue</dt><dd>repeatedly entering QN{N} to pull PNRs off a queue one at a time, in the order they were placed there</dd></div>
+      <div class="entry"><dt>Schedule change</dt><dd>an airline-side change to a booked segment's time, discovered automatically: it auto-queues the PNR to queue 1 and shows a note on its next redisplay until re-priced</dd></div>
+      <div class="entry"><dt>Waitlist clearing</dt><dd>a waitlisted (HL) segment clearing to confirmed (HK), discovered the same way via queue 18 — no re-pricing needed, since the fare and flight are unchanged</dd></div>
     </dl>
   </div>
 </div>

@@ -74,6 +74,25 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "schedule_display_shows_week_window_no_booking_columns",
+        [
+            Step("S15AUGDFWORD", expect_contains=["NOT SIGNED IN"]),
+            SIGN_IN,
+            # Reuses genAvailability's exact per-date seed, so 15AUG's block reproduces the
+            # same known flight (AK 2265, 539A-720A) AVAIL_DFW_ORD already relies on -
+            # confirming this is the same underlying schedule, just without booking columns.
+            Step(
+                "S15AUGDFWORD",
+                expect_contains=[
+                    "SCHEDULE", "DFW-ORD", "15AUG2026 - 21AUG2026",
+                    "AK 2265", "539A", "720A",
+                ],
+                expect_not_contains=["SELL WITH", "SELL CONNECTION"],
+            ),
+            Step("S15AUGDFWDFW", expect_contains=["FORMAT", "CANNOT BE THE SAME"]),
+        ],
+    ),
+    Scenario(
         "full_booking_flow_single_pax_through_ticketing",
         [
             *_priced_single_pax_setup(),

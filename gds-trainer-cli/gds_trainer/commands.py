@@ -15,7 +15,7 @@ import copy
 import json
 import random
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .airports import AIRPORTS, city_name
@@ -41,6 +41,7 @@ from .data import (
     SSR_CODES,
     TAX_POOL,
     WAITLIST_CLEAR,
+    WEEKDAYS,
 )
 from .dates import minutes_to_clock, parse_date
 from .printer import print_blank, print_err, print_line
@@ -168,6 +169,55 @@ def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
         f"02Y{flights[0]['line']}Y{flights[-1]['line']}",
         "dim",
     )
+
+
+# Real Sabre's schedule display: identical entry shape to availability ("S" instead of
+# "A"/"1"), but shows what flies across a several-day window - no booking classes/seat
+# counts, since it's not tied to sellable inventory. Reuses gen_availability's exact
+# per-date seeding/generation (same hash_str/mulberry32/_gen_flight calls) once per date in
+# the window rather than a second, disconnected formula - so a date also covered by an
+# availability search on the same route shows the literal same flights here, just without
+# the booking columns. Nonstop only - connections are an availability/booking-time concept,
+# not a schedule-lookup one.
+def gen_schedule(day_str: str, mon_str: str, orig: str, dest: str) -> None:
+    if orig == dest:
+        print_err("FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME")
+        return
+    start_info = parse_date(day_str, mon_str)
+    if start_info is None:
+        print_err("INVALID DATE - CHECK ENTRY AND REENTER")
+        return
+
+    days = []
+    for i in range(7):
+        d = start_info.date + timedelta(days=i)
+        weekday = WEEKDAYS[(d.weekday() + 1) % 7]
+        days.append({"day": d.day, "mon": MONTHS[d.month - 1], "year": d.year, "weekday": weekday})
+
+    print_line(
+        f"** SCHEDULE **  {orig}-{dest}  {days[0]['day']}{days[0]['mon']}{days[0]['year']} - "
+        f"{days[6]['day']}{days[6]['mon']}{days[6]['year']}",
+        "hd",
+    )
+    print_line(f"  {city_name(orig)}  TO  {city_name(dest)}", "dim")
+    for day in days:
+        seed = hash_str(f"{orig}{dest}{day['day']}{day['mon']}{day['year']}")
+        rng = mulberry32(seed)
+        num_flights = 5 + int(rng() * 4)
+        dep = 300 + int(rng() * 90)
+        print_blank()
+        print_line(f"{pad(day['day'], 2)}{day['mon']} {day['weekday']}", "hd")
+        print_line("  FLT       DEP    ARR    ELAPSED EQP", "dim")
+        for _ in range(num_flights):
+            f = _gen_flight(rng, dep, orig, dest)
+            elapsed = f"{f['duration'] // 60}:{f['duration'] % 60:02d}"
+            print_line(
+                f"  {f['airline']} {pad(f['flight_num'], 4)}  {pad(minutes_to_clock(f['dep']), 6)} "
+                f"{pad(minutes_to_clock(f['arr']), 6)} {pad(elapsed, 7)} {f['equip']}"
+            )
+            dep += 55 + int(rng() * 95)
+            if dep > 1380:
+                dep = 300 + int(rng() * 60)
 
 
 def sell_from_avail(line_num: int, cls: str, seats: int) -> None:
@@ -1814,6 +1864,10 @@ def show_help() -> None:
     print_line("AVAILABILITY", "hd")
     print_line("  A{DD}{MMM}{ORG}{DST}   Air availability   e.g. A15AUGDFWORD")
     print_line("  1{DD}{MMM}{ORG}{DST}   Air availability (alternate entry)  e.g. 115AUGDFWORD")
+    print_blank()
+    print_line("SCHEDULE", "hd")
+    print_line("  S{DD}{MMM}{ORG}{DST}   Flight schedule, 7-day window from the given date -")
+    print_line("                         times/equipment only, no booking classes or seats   e.g. S15AUGDFWORD")
     print_blank()
     print_line("FARES", "hd")
     print_line("  FQ{ORG}{DST}   Fare quote shop by city pair - indicative only, no PNR needed   e.g. FQDFWORD")

@@ -206,6 +206,46 @@
     print('SELL CONNECTION: 0{SEATS}{CLASS}{LINE}{CLASS}{LINE}   e.g. 02Y' + flights[0].line + 'Y' + flights[flights.length-1].line, 'dim');
   }
 
+  // Real Sabre's schedule display: identical entry shape to availability ("S" instead of
+  // "A"/"1"), but shows what flies across a several-day window - no booking classes/seat
+  // counts, since it's not tied to sellable inventory. Reuses genAvailability's exact
+  // per-date seeding/generation (same hashStr/mulberry32/genFlight calls) once per date in
+  // the window rather than a second, disconnected formula - so a date also covered by an
+  // availability search on the same route shows the literal same flights here, just without
+  // the booking columns. Nonstop only - connections are an availability/booking-time
+  // concept, not a schedule-lookup one.
+  function genSchedule(dayStr, monStr, orig, dest){
+    if(orig === dest){ printErr('FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME'); return; }
+    const startInfo = parseDate(dayStr, monStr);
+    if(!startInfo){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
+
+    const days = [];
+    for(let i=0;i<7;i++){
+      const d = new Date(startInfo.date.getTime());
+      d.setDate(d.getDate()+i);
+      days.push({ day: d.getDate(), mon: MONTHS[d.getMonth()], year: d.getFullYear(), weekday: WEEKDAYS[d.getDay()] });
+    }
+
+    print(`** SCHEDULE **  ${orig}-${dest}  ${days[0].day}${days[0].mon}${days[0].year} - ${days[6].day}${days[6].mon}${days[6].year}`, 'hd');
+    print(`  ${cityName(orig)}  TO  ${cityName(dest)}`, 'dim');
+    for(const day of days){
+      const seed = hashStr(`${orig}${dest}${day.day}${day.mon}${day.year}`);
+      const rng = mulberry32(seed);
+      const numFlights = 5 + Math.floor(rng()*4);
+      let dep = 300 + Math.floor(rng()*90);
+      printBlank();
+      print(`${pad(day.day,2)}${day.mon} ${day.weekday}`, 'hd');
+      print(`  FLT       DEP    ARR    ELAPSED EQP`, 'dim');
+      for(let i=0;i<numFlights;i++){
+        const f = genFlight(rng, dep, orig, dest);
+        const elapsed = `${Math.floor(f.duration/60)}:${String(f.duration%60).padStart(2,'0')}`;
+        print(`  ${f.airline} ${pad(f.flightNum,4)}  ${pad(minutesToClock(f.dep),6)} ${pad(minutesToClock(f.arr),6)} ${pad(elapsed,7)} ${f.equip}`);
+        dep += 55 + Math.floor(rng()*95);
+        if(dep > 1380) dep = 300 + Math.floor(rng()*60);
+      }
+    }
+  }
+
   function sellFromAvail(lineNum, cls, seats){
     if(!state.lastAvail){ printErr('NO AVAILABILITY DISPLAY IN CONTEXT - ENTER AVAIL FIRST'); return; }
     const f = state.lastAvail.flights.find(fl => fl.line === lineNum);
@@ -1511,6 +1551,10 @@
     print('  A{DD}{MMM}{ORG}{DST}   Air availability   e.g. A15AUGDFWORD');
     print('  1{DD}{MMM}{ORG}{DST}   Air availability (alternate entry)  e.g. 115AUGDFWORD');
     printBlank();
+    print('SCHEDULE', 'hd');
+    print('  S{DD}{MMM}{ORG}{DST}   Flight schedule, 7-day window from the given date -');
+    print('                         times/equipment only, no booking classes or seats   e.g. S15AUGDFWORD');
+    printBlank();
     print('FARES', 'hd');
     print('  FQ{ORG}{DST}   Fare quote shop by city pair - indicative only, no PNR needed   e.g. FQDFWORD');
     printBlank();
@@ -1893,6 +1937,7 @@
     SIGN_OUT: () => signOut(),
     HELP: () => showHelp(),
     AVAILABILITY: (raw, day, mon, orig, dest) => genAvailability(day, mon, orig, dest),
+    SCHEDULE_DISPLAY: (raw, day, mon, orig, dest) => genSchedule(day, mon, orig, dest),
     SELL_FROM_AVAIL: (raw, line, cls, seats) => sellFromAvail(parseInt(line,10), cls, parseInt(seats,10)),
     SELL_CONNECTION: (raw, seats, cls1, line1, cls2, line2) => sellConnection(parseInt(seats,10), cls1, parseInt(line1,10), cls2, parseInt(line2,10)),
     LONG_SELL: (raw, al, flt, cls, day, mon, orig, dest, status, seats) => directSell(al, flt, cls, day, mon, orig, dest, status, parseInt(seats,10)),

@@ -262,6 +262,7 @@ This works one PNR at a time, first-in-first-out — exactly how an agent works 
 |---|---|---|
 | Sign in | `SI` | `SI` |
 | Search flights | `A{DD}{MON}{ORIG}{DEST}` | `A15AUGDFWORD` |
+| Flight schedule, 7-day window (no booking classes/seats) | `S{DD}{MON}{ORIG}{DEST}` | `S15AUGDFWORD` |
 | Shop fares by city pair (no PNR needed) | `FQ{ORIG}{DEST}` | `FQDFWORD` |
 | Sell from list | `0{LINE}{CLASS}{SEATS}` | `04Y1` |
 | Sell a connection (two avail lines) | `0{SEATS}{CLASS}{LINE}{CLASS}{LINE}` | `02Y1M2` |

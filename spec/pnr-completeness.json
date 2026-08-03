@@ -26,5 +26,9 @@
   ],
   "divide_pnr": [
     {"field": "locator", "check": "present", "message": "UNABLE TO DIVIDE - END TRANSACT (ER OR ET) BEFORE DIVIDING"}
+  ],
+  "exchange_ticket": [
+    {"field": "prior_tickets", "check": "non_empty", "message": "UNABLE TO EXCHANGE - NO PRIOR TICKET ON FILE"},
+    {"field": "pricing", "check": "present", "message": "UNABLE TO EXCHANGE - NO NEW FARE QUOTE ON FILE (ENTRY: WP)"}
   ]
 }

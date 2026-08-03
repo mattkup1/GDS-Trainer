@@ -334,15 +334,29 @@ def direct_sell(
     refresh_and_print_pnr()
 
 
+# Shared by every path that stales out a fare quote/ticket (sell, cancel, schedule change):
+# snapshots the outgoing pricing/tickets into prior_pricing/prior_tickets - but only when the
+# PNR was actually ticketed (both set), since there's nothing meaningful to exchange from a
+# merely-priced-but-not-ticketed PNR - before clearing them, so a later WFR{TICKET#} exchange
+# can still reference what the passenger already paid.
+def _clear_pricing_and_tickets(p: dict) -> None:
+    if p["pricing"] and p["tickets"]:
+        p["prior_tickets"] = p["tickets"]
+        p["prior_pricing"] = p["pricing"]
+    p["pricing"] = None
+    p["tickets"] = []
+
+
 def invalidate_pricing() -> None:
     p = STATE.pnr
-    if p["pricing"]:
-        p["pricing"] = None
+    had_pricing = bool(p["pricing"])
+    had_tickets = bool(p["tickets"])
+    _clear_pricing_and_tickets(p)
+    if had_pricing:
         print_line("FARE QUOTE INVALIDATED - ITINERARY CHANGED, RE-PRICE WITH WP", "dim")
         log_activity(STATE, "FARE QUOTE INVALIDATED - ITINERARY CHANGED")
-    if p["tickets"]:
-        p["tickets"] = []
-        print_line("TICKETS VOIDED - ITINERARY CHANGED, REISSUE WITH TKTT AFTER RE-PRICING", "dim")
+    if had_tickets:
+        print_line("TICKETS VOIDED - ITINERARY CHANGED, REISSUE WITH TKTT OR EXCHANGE WITH WFR AFTER RE-PRICING", "dim")
         log_activity(STATE, "TICKETS VOIDED - ITINERARY CHANGED")
 
 
@@ -1189,9 +1203,18 @@ def refresh_and_print_pnr() -> None:
     changed_segs = [s for s in STATE.pnr["segments"] if s.get("scheduleChanged")]
     if not STATE.pnr["pricing"] and changed_segs:
         print_blank()
-        print_line("** SCHEDULE CHANGE ON FILE - RE-PRICE (WP) AND REISSUE (TKTT) MAY BE REQUIRED **", "err")
+        print_line("** SCHEDULE CHANGE ON FILE - RE-PRICE (WP), THEN EXCHANGE (WFR) OR REISSUE (TKTT) **", "err")
         for s in changed_segs:
             print_line(f"  {format_segment_short(s)}", "dim")
+
+    # A fresh re-price already exists and there's still a prior ticket to apply toward it -
+    # ready for WFR{TICKET#}.
+    if STATE.pnr["pricing"] and STATE.pnr["prior_tickets"]:
+        print_blank()
+        print_line("** PRIOR TICKET ON FILE - EXCHANGE WITH WFR{TICKET#} OR REISSUE FRESH WITH TKTT **", "dim")
+        for t in STATE.pnr["prior_tickets"]:
+            label = t["passenger"] + (" (INF)" if t["is_infant"] else "")
+            print_line(f"  {label}  {t['ticket_num']}", "dim")
 
 
 def remove_element(e: dict) -> None:
@@ -1207,8 +1230,7 @@ def remove_element(e: dict) -> None:
         del p["remarks"][idx]
     elif kind == "segment":
         del p["segments"][idx]
-        p["pricing"] = None
-        p["tickets"] = []
+        _clear_pricing_and_tickets(p)
         new_seats = []
         for st in p["seats"]:
             if st["seg_idx"] == idx:
@@ -1225,8 +1247,7 @@ def remove_element(e: dict) -> None:
     elif kind == "osi":
         del p["osis"][idx]
     elif kind == "fq":
-        p["pricing"] = None
-        p["tickets"] = []
+        _clear_pricing_and_tickets(p)
     elif kind == "phone":
         del p["phones"][idx]
     elif kind == "rf":
@@ -1265,8 +1286,7 @@ def cancel_itinerary() -> None:
         print_err("NO ITINERARY SEGMENTS TO CANCEL")
         return
     p["segments"] = []
-    p["pricing"] = None
-    p["tickets"] = []
+    _clear_pricing_and_tickets(p)
     p["seats"] = []
     print_line("ITINERARY CANCELLED")
     log_activity(STATE, "ITINERARY CANCELLED")
@@ -1356,8 +1376,7 @@ def _apply_schedule_changes(p: dict) -> None:
         )
         any_changed = True
     if any_changed:
-        p["pricing"] = None
-        p["tickets"] = []
+        _clear_pricing_and_tickets(p)
         STATE.queues.setdefault("1", [])
         if p["locator"] not in STATE.queues["1"]:
             STATE.queues["1"].append(p["locator"])
@@ -1581,6 +1600,10 @@ def issue_tickets() -> None:
         STATE,
         f"TICKETED - {len(p['tickets'])} TICKET(S) ISSUED, VALIDATING CARRIER {validating_carrier}",
     )
+    # Reissuing fresh (rather than exchanging via WFR) means any pending exchange
+    # opportunity is moot - don't leave it lingering.
+    p["prior_tickets"] = []
+    p["prior_pricing"] = None
     refresh_and_print_pnr()
 
 
@@ -1623,6 +1646,62 @@ def refund_tickets() -> None:
     p["tickets"] = []
     p["pricing"] = None
     log_activity(STATE, f"TICKET(S) REFUNDED - {count} TICKET(S), USD {amount:.2f}")
+    refresh_and_print_pnr()
+
+
+# Real Sabre's "WFR{TICKET#}" starts an exchange against an already-issued ticket, applies
+# its value toward the newly re-priced itinerary, and either collects a difference (ADCOLL)
+# or leaves a residual, before reissuing. Real Sabre's full process is a heavier multi-step
+# workflow (WFR -> an auto-priced price-quote record -> a separate reissue commit entry);
+# this is a deliberately simplified single-entry version that keeps the real training value
+# (apply old value, show ADCOLL/residual, reissue) without simulating that machinery.
+def exchange_ticket(ticket_num: str) -> None:
+    p = STATE.pnr
+    incomplete = _first_incomplete_message("exchange_ticket")
+    if incomplete:
+        print_err(incomplete)
+        return
+
+    old_ticket = next((t for t in p["prior_tickets"] if t["ticket_num"] == ticket_num), None)
+    if not old_ticket:
+        print_err("INVALID TICKET NUMBER - CHECK ENTRY AND REENTER")
+        return
+
+    diff = round((p["pricing"]["total"] - p["prior_pricing"]["total"]) * 100) / 100
+
+    validating_carrier = p["segments"][0]["airline"]
+    numeric_code = AIRLINE_NUMERIC_CODES.get(validating_carrier, "000")
+    new_tickets = []
+    for name in p["names"]:
+        # Distinct seed input (the old ticket number) so the reissue gets a fresh number -
+        # gen_ticket_number(locator, name) alone would regenerate the same one as before.
+        serial = gen_ticket_number(p["locator"], f"{name}EXCH{old_ticket['ticket_num']}")
+        new_tickets.append({"passenger": name, "ticket_num": f"{numeric_code}-{serial}", "is_infant": False})
+    for inf in p["infants"]:
+        identifier = f"{inf['surname']}/{inf['given']}"
+        serial = gen_ticket_number(p["locator"], f"{identifier}EXCH{old_ticket['ticket_num']}")
+        new_tickets.append({"passenger": identifier, "ticket_num": f"{numeric_code}-{serial}", "is_infant": True})
+    p["tickets"] = new_tickets
+    p["prior_tickets"] = []
+    p["prior_pricing"] = None
+
+    print_line("** EXCHANGE PROCESSED **", "hd")
+    print_line(f"  ORIGINAL TICKET: {old_ticket['ticket_num']}   NEW FARE BASIS: {p['pricing']['fare_basis']}", "dim")
+    if diff > 0:
+        print_line(f"  ADDITIONAL COLLECTION (ADCOLL): USD {diff:.2f}")
+    elif diff < 0:
+        print_line(f"  RESIDUAL VALUE: USD {-diff:.2f} (NON-REFUNDABLE PER FARE RULES)", "dim")
+    else:
+        print_line("  EVEN EXCHANGE - NO ADDITIONAL COLLECTION")
+    for t in p["tickets"]:
+        label = t["passenger"] + (" (INF)" if t["is_infant"] else "")
+        print_line(f"  {pad(label, 28)} {t['ticket_num']}")
+    new_nums = ", ".join(t["ticket_num"] for t in p["tickets"])
+    log_activity(
+        STATE,
+        f"TICKET EXCHANGED - {old_ticket['ticket_num']} -> {new_nums}, "
+        f"{'ADCOLL' if diff >= 0 else 'RESIDUAL'} USD {abs(diff):.2f}",
+    )
     refresh_and_print_pnr()
 
 
@@ -1692,6 +1771,9 @@ def show_help() -> None:
     print_line("           and ticketing arrangement stay on file, so TKTT can reissue right away.")
     print_line("  TKTR     Refund issued ticket(s) - clears the fare quote too (re-price with WP")
     print_line("           before reissuing). Blocked for a nonrefundable fare basis.")
+    print_line("  WFR{TICKET#}   Exchange a previously issued ticket after a fare/itinerary")
+    print_line("                 change - applies the old ticket's value toward the freshly")
+    print_line("                 re-priced total (WP first), shows ADCOLL/residual, reissues.")
     print_blank()
     print_line("SPECIAL SERVICE / OTHER SERVICE INFO", "hd")
     print_line("  3{SSRCODE}[-{PAX#}][/{TEXT}]   Special service request   e.g. 3VGML  or  3WCHR-1/AISLE SEAT")

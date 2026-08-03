@@ -31,6 +31,8 @@ def fresh_pnr() -> dict[str, Any]:
         "tickets": [],
         "docs": [],
         "remarks": [],
+        "prior_tickets": [],
+        "prior_pricing": None,
     }
 
 

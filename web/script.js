@@ -122,7 +122,7 @@
   function freshPNR(){
     return { locator:null, names:[], segments:[], phones:[], receivedFrom:null, ticketing:null, pricing:null,
               infants:[], ssrs:[], osis:[], seats:[], formOfPayment:null, activityLog:[], tickets:[],
-              docs:[], remarks:[] };
+              docs:[], remarks:[], priorTickets:[], priorPricing:null };
   }
 
   function nowStamp(){
@@ -303,15 +303,30 @@
     refreshAndPrintPNR();
   }
 
+  // Shared by every path that stales out a fare quote/ticket (sell, cancel, schedule
+  // change): snapshots the outgoing pricing/tickets into priorPricing/priorTickets - but
+  // only when the PNR was actually ticketed (both set), since there's nothing meaningful to
+  // exchange from a merely-priced-but-not-ticketed PNR - before clearing them, so a later
+  // WFR{TICKET#} exchange can still reference what the passenger already paid.
+  function clearPricingAndTickets(p){
+    if(p.pricing && p.tickets.length){
+      p.priorTickets = p.tickets;
+      p.priorPricing = p.pricing;
+    }
+    p.pricing = null;
+    p.tickets = [];
+  }
+
   function invalidatePricing(){
-    if(state.pnr.pricing){
-      state.pnr.pricing = null;
+    const hadPricing = !!state.pnr.pricing;
+    const hadTickets = state.pnr.tickets.length > 0;
+    clearPricingAndTickets(state.pnr);
+    if(hadPricing){
       print('FARE QUOTE INVALIDATED - ITINERARY CHANGED, RE-PRICE WITH WP', 'dim');
       logActivity('FARE QUOTE INVALIDATED - ITINERARY CHANGED');
     }
-    if(state.pnr.tickets.length){
-      state.pnr.tickets = [];
-      print('TICKETS VOIDED - ITINERARY CHANGED, REISSUE WITH TKTT AFTER RE-PRICING', 'dim');
+    if(hadTickets){
+      print('TICKETS VOIDED - ITINERARY CHANGED, REISSUE WITH TKTT OR EXCHANGE WITH WFR AFTER RE-PRICING', 'dim');
       logActivity('TICKETS VOIDED - ITINERARY CHANGED');
     }
   }
@@ -970,8 +985,15 @@
     const changedSegs = state.pnr.segments.filter(s => s.scheduleChanged);
     if(!state.pnr.pricing && changedSegs.length){
       printBlank();
-      print('** SCHEDULE CHANGE ON FILE - RE-PRICE (WP) AND REISSUE (TKTT) MAY BE REQUIRED **', 'err');
+      print('** SCHEDULE CHANGE ON FILE - RE-PRICE (WP), THEN EXCHANGE (WFR) OR REISSUE (TKTT) **', 'err');
       for(const s of changedSegs){ print(`  ${formatSegmentShort(s)}`, 'dim'); }
+    }
+    // A fresh re-price already exists and there's still a prior ticket to apply toward it -
+    // ready for WFR{TICKET#}.
+    if(state.pnr.pricing && state.pnr.priorTickets.length){
+      printBlank();
+      print('** PRIOR TICKET ON FILE - EXCHANGE WITH WFR{TICKET#} OR REISSUE FRESH WITH TKTT **', 'dim');
+      for(const t of state.pnr.priorTickets){ print(`  ${t.passenger}${t.isInfant ? ' (INF)' : ''}  ${t.ticketNum}`, 'dim'); }
     }
   }
 
@@ -982,8 +1004,7 @@
     else if(e.kind === 'remark') state.pnr.remarks.splice(e.idx, 1);
     else if(e.kind === 'segment'){
       state.pnr.segments.splice(e.idx, 1);
-      state.pnr.pricing = null;
-      state.pnr.tickets = [];
+      clearPricingAndTickets(state.pnr);
       state.pnr.seats = state.pnr.seats
         .filter(st => st.segIdx !== e.idx)
         .map(st => st.segIdx > e.idx ? { segIdx: st.segIdx - 1, seat: st.seat } : st);
@@ -991,7 +1012,7 @@
     else if(e.kind === 'seat') state.pnr.seats.splice(e.idx, 1);
     else if(e.kind === 'ssr') state.pnr.ssrs.splice(e.idx, 1);
     else if(e.kind === 'osi') state.pnr.osis.splice(e.idx, 1);
-    else if(e.kind === 'fq'){ state.pnr.pricing = null; state.pnr.tickets = []; }
+    else if(e.kind === 'fq') clearPricingAndTickets(state.pnr);
     else if(e.kind === 'phone') state.pnr.phones.splice(e.idx, 1);
     else if(e.kind === 'rf') state.pnr.receivedFrom = null;
     else if(e.kind === 'fp') state.pnr.formOfPayment = null;
@@ -1018,8 +1039,7 @@
   function cancelItinerary(){
     if(state.pnr.segments.length === 0){ printErr('NO ITINERARY SEGMENTS TO CANCEL'); return; }
     state.pnr.segments = [];
-    state.pnr.pricing = null;
-    state.pnr.tickets = [];
+    clearPricingAndTickets(state.pnr);
     state.pnr.seats = [];
     print('ITINERARY CANCELLED');
     logActivity('ITINERARY CANCELLED');
@@ -1037,6 +1057,7 @@
     ticketing: () => state.pnr.ticketing,
     tickets: () => state.pnr.tickets,
     locator: () => state.pnr.locator,
+    prior_tickets: () => state.pnr.priorTickets,
   };
 
   function completenessCheckPasses(kind, value){
@@ -1096,8 +1117,7 @@
       anyChanged = true;
     }
     if(anyChanged){
-      p.pricing = null;
-      p.tickets = [];
+      clearPricingAndTickets(p);
       if(!state.queues['1']) state.queues['1'] = [];
       if(!state.queues['1'].includes(p.locator)) state.queues['1'].push(p.locator);
     }
@@ -1305,6 +1325,10 @@
     }
     print(`VALIDATING CARRIER: ${validatingCarrier}   FORM OF PAYMENT: ${p.formOfPayment.display}`, 'dim');
     logActivity(`TICKETED - ${p.tickets.length} TICKET(S) ISSUED, VALIDATING CARRIER ${validatingCarrier}`);
+    // Reissuing fresh (rather than exchanging via WFR) means any pending exchange
+    // opportunity is moot - don't leave it lingering.
+    p.priorTickets = [];
+    p.priorPricing = null;
     refreshAndPrintPNR();
   }
 
@@ -1341,6 +1365,53 @@
     p.tickets = [];
     p.pricing = null;
     logActivity(`TICKET(S) REFUNDED - ${count} TICKET(S), USD ${amount.toFixed(2)}`);
+    refreshAndPrintPNR();
+  }
+
+  // Real Sabre's "WFR{TICKET#}" starts an exchange against an already-issued ticket, applies
+  // its value toward the newly re-priced itinerary, and either collects a difference
+  // (ADCOLL) or leaves a residual, before reissuing. Real Sabre's full process is a heavier
+  // multi-step workflow (WFR -> an auto-priced price-quote record -> a separate reissue
+  // commit entry); this is a deliberately simplified single-entry version that keeps the
+  // real training value (apply old value, show ADCOLL/residual, reissue) without simulating
+  // that machinery.
+  function exchangeTicket(ticketNum){
+    const p = state.pnr;
+    const incomplete = firstIncompleteMessage('exchange_ticket');
+    if(incomplete){ printErr(incomplete); return; }
+
+    const oldTicket = p.priorTickets.find(t => t.ticketNum === ticketNum);
+    if(!oldTicket){ printErr('INVALID TICKET NUMBER - CHECK ENTRY AND REENTER'); return; }
+
+    const diff = Math.round((p.pricing.total - p.priorPricing.total) * 100) / 100;
+
+    const validatingCarrier = p.segments[0].airline;
+    const numericCode = AIRLINE_NUMERIC_CODES[validatingCarrier] || '000';
+    const newTickets = [];
+    for(const name of p.names){
+      // Distinct seed input (the old ticket number) so the reissue gets a fresh number -
+      // genTicketNumber(locator, name) alone would regenerate the same one as before.
+      const serial = genTicketNumber(p.locator, `${name}EXCH${oldTicket.ticketNum}`);
+      newTickets.push({ passenger: name, ticketNum: `${numericCode}-${serial}`, isInfant:false });
+    }
+    for(const inf of p.infants){
+      const identifier = `${inf.surname}/${inf.given}`;
+      const serial = genTicketNumber(p.locator, `${identifier}EXCH${oldTicket.ticketNum}`);
+      newTickets.push({ passenger: identifier, ticketNum: `${numericCode}-${serial}`, isInfant:true });
+    }
+    p.tickets = newTickets;
+    p.priorTickets = [];
+    p.priorPricing = null;
+
+    print('** EXCHANGE PROCESSED **', 'hd');
+    print(`  ORIGINAL TICKET: ${oldTicket.ticketNum}   NEW FARE BASIS: ${p.pricing.fareBasis}`, 'dim');
+    if(diff > 0) print(`  ADDITIONAL COLLECTION (ADCOLL): USD ${diff.toFixed(2)}`);
+    else if(diff < 0) print(`  RESIDUAL VALUE: USD ${(-diff).toFixed(2)} (NON-REFUNDABLE PER FARE RULES)`, 'dim');
+    else print('  EVEN EXCHANGE - NO ADDITIONAL COLLECTION');
+    for(const t of p.tickets){
+      print(`  ${pad(t.passenger + (t.isInfant ? ' (INF)' : ''), 28)} ${t.ticketNum}`);
+    }
+    logActivity(`TICKET EXCHANGED - ${oldTicket.ticketNum} -> ${p.tickets.map(t=>t.ticketNum).join(', ')}, ${diff>=0?'ADCOLL':'RESIDUAL'} USD ${Math.abs(diff).toFixed(2)}`);
     refreshAndPrintPNR();
   }
 
@@ -1407,6 +1478,9 @@
     print('           and ticketing arrangement stay on file, so TKTT can reissue right away.');
     print('  TKTR     Refund issued ticket(s) - clears the fare quote too (re-price with WP');
     print('           before reissuing). Blocked for a nonrefundable fare basis.');
+    print('  WFR{TICKET#}   Exchange a previously issued ticket after a fare/itinerary');
+    print('                 change - applies the old ticket\'s value toward the freshly');
+    print('                 re-priced total (WP first), shows ADCOLL/residual, reissues.');
     printBlank();
     print('SPECIAL SERVICE / OTHER SERVICE INFO', 'hd');
     print('  3{SSRCODE}[-{PAX#}][/{TEXT}]   Special service request   e.g. 3VGML  or  3WCHR-1/AISLE SEAT');
@@ -1763,6 +1837,7 @@
     ISSUE_TICKETS: () => issueTickets(),
     VOID_TICKETS: () => voidTickets(),
     REFUND_TICKETS: () => refundTickets(),
+    EXCHANGE_TICKET: (raw, ticketNum) => exchangeTicket(ticketNum),
     DOCS: (raw, type, country, number, nationality, dob, sex, expiry, pax, infant) => addDocs(type, country, number, nationality, dob, sex, expiry, pax, infant),
     SSR_FQTV: (raw, airline, num, tier) => addFqtv(airline, num, tier),
     OSI: (raw, airline, text) => addOsi(airline, text),

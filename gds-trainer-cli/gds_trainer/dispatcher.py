@@ -46,6 +46,7 @@ HANDLERS = {
     "ISSUE_TICKETS": lambda raw, *g: c.issue_tickets(),
     "VOID_TICKETS": lambda raw, *g: c.void_tickets(),
     "REFUND_TICKETS": lambda raw, *g: c.refund_tickets(),
+    "EXCHANGE_TICKET": lambda raw, ticket_num: c.exchange_ticket(ticket_num),
     "DOCS": lambda raw, doc_type, country, number, nationality, dob, sex, expiry, pax, infant: c.add_docs(
         doc_type, country, number, nationality, dob, sex, expiry, pax, infant
     ),

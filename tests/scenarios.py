@@ -137,6 +137,33 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "exchange_ticket_requires_prior_ticket_on_file",
+        [
+            SIGN_IN,
+            Step(
+                "WFR045-1234567890",
+                expect_contains=["UNABLE TO EXCHANGE", "NO PRIOR TICKET ON FILE"],
+            ),
+        ],
+    ),
+    Scenario(
+        "exchange_ticket_requires_fresh_fare_quote",
+        [
+            *_priced_single_pax_setup(),
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            Step("TKTT", expect_contains=["ELECTRONIC TICKET ISSUED"]),
+            # selling again invalidates pricing/tickets and stashes them for exchange -
+            # but WFR still needs a fresh WP before it'll compute a fare difference
+            Step("01Y1", expect_contains=["SEGMENT SOLD"]),
+            Step(
+                "WFR045-1234567890",
+                expect_contains=["UNABLE TO EXCHANGE", "NO NEW FARE QUOTE ON FILE"],
+            ),
+        ],
+    ),
+    Scenario(
         "divide_pnr_requires_saved_pnr",
         [
             SIGN_IN,

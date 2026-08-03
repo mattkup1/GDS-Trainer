@@ -286,6 +286,7 @@ This works one PNR at a time, first-in-first-out — exactly how an agent works 
 | Issue ticket | `TKTT` | `TKTT` |
 | Void ticket (same-day, no penalty) | `TKTV` | `TKTV` |
 | Refund ticket (blocked for nonrefundable fares) | `TKTR` | `TKTR` |
+| Exchange ticket after a fare/itinerary change | `WFR{TICKET#}` | `WFR045-1234567890` |
 | Print/save itinerary, invoice, or e-ticket document | `EM`, `EMI`, `EMT` | `EMI` |
 | Redisplay PNR | `*R` or `*` | `*R` |
 | Show PNR activity history | `*H` | `*H` |

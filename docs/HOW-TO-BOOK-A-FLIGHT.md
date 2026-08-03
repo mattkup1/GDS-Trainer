@@ -262,7 +262,9 @@ This works one PNR at a time, first-in-first-out — exactly how an agent works 
 |---|---|---|
 | Sign in | `SI` | `SI` |
 | Search flights | `A{DD}{MON}{ORIG}{DEST}` | `A15AUGDFWORD` |
+| Shop fares by city pair (no PNR needed) | `FQ{ORIG}{DEST}` | `FQDFWORD` |
 | Sell from list | `0{LINE}{CLASS}{SEATS}` | `04Y1` |
+| Sell a connection (two avail lines) | `0{SEATS}{CLASS}{LINE}{CLASS}{LINE}` | `02Y1M2` |
 | Long/direct sell | `0{AL}{FLT}{CLASS}{DD}{MON}{ORIG}{DEST}{STATUS}{SEATS}` | `0AA100Y15AUGDFWORDNN1` |
 | Add name | `-{SURNAME}/{GIVEN} {TITLE}` | `-SMITH/JOHN MR` |
 | Add multiple passengers | `-{N}{SURNAME}/{G1} {T1}/{G2} {T2}` | `-2SMITH/JOHN MR/JANE MRS` |
@@ -282,13 +284,16 @@ This works one PNR at a time, first-in-first-out — exactly how an agent works 
 | Add form of payment | `FPCASH`, `FPCHECK`, `FPCC{TYPE}{NUM}/{MMYY}` | `FPCASH` |
 | Save booking | `ER` or `ET` | `ER` |
 | Issue ticket | `TKTT` | `TKTT` |
+| Void ticket (same-day, no penalty) | `TKTV` | `TKTV` |
+| Refund ticket (blocked for nonrefundable fares) | `TKTR` | `TKTR` |
 | Print/save itinerary, invoice, or e-ticket document | `EM`, `EMI`, `EMT` | `EMI` |
 | Redisplay PNR | `*R` or `*` | `*R` |
 | Show PNR activity history | `*H` | `*H` |
 | Retrieve saved PNR | `*{LOCATOR}` | `*ABC123` |
+| Divide passenger(s) into a new PNR | `SP{N}` or `SP{N},{M}` | `SP2` |
 | Place PNR on a queue | `QE{N}` | `QE25` |
 | Show queue counts | `QC` or `QC{N}` | `QC` or `QC25` |
-| Retrieve next PNR from a queue | `QN{N}` | `QN25` |
+| Retrieve next PNR from a queue | `QN{N}` | `QN25` (queue `1` is auto-populated by schedule changes) |
 | Cancel an item | `X{N}`, `X{N}-{M}`, `X{N},{M}` | `X2` |
 | Cancel entire itinerary | `XI` | `XI` |
 | Discard unsaved work | `IG` | `IG` |

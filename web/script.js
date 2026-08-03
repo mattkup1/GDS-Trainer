@@ -59,6 +59,7 @@
   const CLASS_FARE_MULT = REFERENCE_DATA.classFareMultipliers;
   const TAX_POOL = REFERENCE_DATA.taxPool;
   const FARE_FORMULA = REFERENCE_DATA.fareFormula;
+  const SCHEDULE_CHANGE = REFERENCE_DATA.scheduleChange;
   const SSR_CODES = REFERENCE_DATA.ssrCodes;
   const CARD_TYPES = REFERENCE_DATA.cardTypes;
   const QUEUE_CATEGORIES = REFERENCE_DATA.queueCategories;
@@ -320,6 +321,39 @@
   }
 
   // ---------- pricing (WP / WPNCS) ----------
+  // Real Sabre's "FQ" entry: a bare fare quote by city pair, independent of any PNR/
+  // itinerary - unlike priceItinerary below, there's no segment to derive a fare from, so
+  // this seeds off the route only and reuses the same shared spec constants (FARE_FORMULA/
+  // CLASS_FARE_MULT/TAX_POOL) via its own parallel calculation, one indicative total per
+  // booking class. Purely informational - no PNR mutation, no activity log entry, matching
+  // DC/DAN's existing precedent as pure lookups with no PNR side effects.
+  function fareQuoteShop(orig, dest){
+    if(orig === dest){ printErr('FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME'); return; }
+    const rng = mulberry32(hashStr(`FQ${orig}${dest}`));
+    const dist = FARE_FORMULA.distanceMin + Math.floor(rng()*FARE_FORMULA.distanceRange);
+
+    print(`** FARE QUOTE SHOP **  ${orig}-${dest}`, 'hd');
+    print(`  ${cityName(orig)}  TO  ${cityName(dest)}`, 'dim');
+    printBlank();
+    print('CLS  BASE FARE    TAXES/FEES    TOTAL', 'dim');
+    for(const cls of CLASSES){
+      const mult = CLASS_FARE_MULT[cls] || 1.4;
+      const baseFare = Math.round((FARE_FORMULA.baseFareCoefficient + dist*FARE_FORMULA.baseFarePerMile) * mult);
+
+      const numTaxes = FARE_FORMULA.minTaxes + Math.floor(rng()*FARE_FORMULA.additionalTaxesRange);
+      const pool = TAX_POOL.slice().sort(() => rng()-0.5).slice(0, numTaxes);
+      let taxTotal = 0;
+      for(const t of pool){
+        taxTotal += Math.round((FARE_FORMULA.taxAmountMin + rng()*FARE_FORMULA.taxAmountRange) * 100)/100;
+      }
+      taxTotal = Math.round(taxTotal*100)/100;
+      const total = Math.round((baseFare + taxTotal)*100)/100;
+      print(` ${cls}    USD ${pad(baseFare.toFixed(2),9)}  USD ${pad(taxTotal.toFixed(2),9)}  USD ${total.toFixed(2)}`);
+    }
+    printBlank();
+    print('INDICATIVE ONLY - PRICE THE ACTUAL ITINERARY WITH WP AFTER BOOKING', 'dim');
+  }
+
   function tripType(segments){
     if(segments.length === 1) return 'OW';
     const first = segments[0], last = segments[segments.length-1];
@@ -931,6 +965,14 @@
     for(const e of state.lastDisplay){
       print(` ${pad(e.num,2)}  ${pad(e.label,5)} ${e.text}`);
     }
+    // Naturally stops once the agent re-prices (WP) - reuses the existing pricing-null-
+    // means-stale convention rather than a separate acknowledgement flag.
+    const changedSegs = state.pnr.segments.filter(s => s.scheduleChanged);
+    if(!state.pnr.pricing && changedSegs.length){
+      printBlank();
+      print('** SCHEDULE CHANGE ON FILE - RE-PRICE (WP) AND REISSUE (TKTT) MAY BE REQUIRED **', 'err');
+      for(const s of changedSegs){ print(`  ${formatSegmentShort(s)}`, 'dim'); }
+    }
   }
 
   function removeElement(e){
@@ -1024,12 +1066,50 @@
     return s;
   }
 
+  // Real airline schedule changes are airline-initiated, not something an agent types - the
+  // honest equivalent in a single-user trainer is a one-time, deterministic seeded check per
+  // segment. Seeded off flight+route+date identity only (NOT the PNR's locator, which is
+  // genuinely random per genLocator()) so the same flight+route+date always gives the same
+  // outcome regardless of which PNR it ends up on - matching real life (a schedule change
+  // happens to a flight, affecting every booking on it, not to one lucky/unlucky PNR) and
+  // keeping this reproducible for training/testing instead of varying every run. The
+  // scheduleChanged flag (not the seed) is what stops it from re-firing on a later save of
+  // the same segment. The mutation itself has no dedicated print (no "an airline changed
+  // your flight" banner) - it's auto-queued to queue "1" (SCHEDULE CHANGE, spec/reference-
+  // data.json's queueCategories) and only surfaces via the ordinary channels a real agent
+  // already checks: QC/QN1, or the alert refreshAndPrintPNR prints below whenever a redisplay
+  // (ER's own, *R, or after QN1) shows an unpriced, changed segment. ET's redisplay is skipped
+  // (work area cleared instead), so ET alone doesn't reveal it - a later *{LOCATOR}/QN1 does.
+  function applyScheduleChanges(p){
+    let anyChanged = false;
+    for(const seg of p.segments){
+      if(seg.scheduleChanged) continue;
+      const seed = hashStr(`SKEDCHG${seg.airline}${seg.flightNum}${seg.orig}${seg.dest}${seg.dinfo.day}${seg.dinfo.mon}${seg.dinfo.year}`);
+      const rng = mulberry32(seed);
+      if(rng() >= SCHEDULE_CHANGE.chance) continue;
+      const magnitude = SCHEDULE_CHANGE.minShiftMinutes + Math.floor(rng()*(SCHEDULE_CHANGE.maxShiftMinutes - SCHEDULE_CHANGE.minShiftMinutes));
+      const shift = (rng() < 0.5 ? -1 : 1) * magnitude;
+      seg.dep += shift;
+      seg.arr += shift;
+      seg.scheduleChanged = true;
+      logActivity(`SCHEDULE CHANGE - ${seg.airline}${seg.flightNum} ${seg.orig}${seg.dest} NOW ${minutesToClock(seg.dep)}-${minutesToClock(seg.arr)}`);
+      anyChanged = true;
+    }
+    if(anyChanged){
+      p.pricing = null;
+      p.tickets = [];
+      if(!state.queues['1']) state.queues['1'] = [];
+      if(!state.queues['1'].includes(p.locator)) state.queues['1'].push(p.locator);
+    }
+  }
+
   function endTransaction(mode){
     const p = state.pnr;
     const incomplete = firstIncompleteMessage('end_transaction');
     if(incomplete){ printErr(incomplete); return; }
 
     if(!p.locator) p.locator = genLocator();
+    applyScheduleChanges(p);
     logActivity(`PNR SAVED (${mode}) - RLOC ${p.locator}`);
     state.history[p.locator] = JSON.parse(JSON.stringify(p));
 
@@ -1062,6 +1142,84 @@
     state.pnr = JSON.parse(JSON.stringify(rec));
     print(`PNR ${loc} RETRIEVED`);
     logActivity(`PNR RETRIEVED - RLOC ${loc}`);
+    refreshAndPrintPNR();
+  }
+
+  // ---------- divide (SP) ----------
+  // Only `names` (by array index) and `docs` (an explicit pax index) are unambiguously
+  // per-passenger in this PNR model - infants link only by matching adult name string,
+  // seats link only to a segment (not a passenger) and aren't reliably attributable, and
+  // SSRs bake any pax number into free text only. So: names/infants(by adult name)/docs
+  // (reindexed, same pattern as seat.segIdx after a segment cancel) move to the new PNR;
+  // segments/phones/receivedFrom/remarks/osis/ssrs/formOfPayment/ticketing are copied
+  // (real Sabre divide keeps the itinerary in both resulting PNRs); seats are dropped from
+  // the new PNR (no passenger attribution to decide which seat goes where).
+  function dividePnr(numsStr){
+    const p = state.pnr;
+    const incomplete = firstIncompleteMessage('divide_pnr');
+    if(incomplete){ printErr(incomplete); return; }
+
+    const uniq = Array.from(new Set(numsStr.split(',').map(s => parseInt(s,10))));
+    for(const n of uniq){
+      if(!n || n < 1 || n > p.names.length){ printErr('INVALID PASSENGER NUMBER - CHECK ENTRY AND REENTER'); return; }
+    }
+    if(uniq.length >= p.names.length){ printErr('UNABLE TO DIVIDE - AT LEAST ONE PASSENGER MUST REMAIN'); return; }
+
+    const uniqDesc = uniq.slice().sort((a,b) => b-a);
+    const removed = [];
+    for(const n of uniqDesc){
+      const idx = n-1;
+      removed.push({ idx, name: p.names[idx] });
+      p.names.splice(idx, 1);
+    }
+    removed.reverse();
+    const movedNames = removed.map(r => r.name);
+    const removedIdxSet = new Set(removed.map(r => r.idx));
+    const removedIdxAsc = Array.from(removedIdxSet).sort((a,b) => a-b);
+    const idxToNewPax = {};
+    removed.forEach((r,i) => { idxToNewPax[r.idx] = i+1; });
+
+    const movedInfants = [];
+    p.infants = p.infants.filter(inf => {
+      if(movedNames.includes(inf.adult)){ movedInfants.push(inf); return false; }
+      return true;
+    });
+
+    const movedDocs = [];
+    const remainingDocs = [];
+    for(const d of p.docs){
+      const originalIdx = d.pax - 1;
+      if(removedIdxSet.has(originalIdx)){
+        movedDocs.push({ ...d, pax: idxToNewPax[originalIdx] });
+      } else {
+        const shift = removedIdxAsc.filter(ri => ri < originalIdx).length;
+        remainingDocs.push({ ...d, pax: originalIdx - shift + 1 });
+      }
+    }
+    p.docs = remainingDocs;
+
+    const newPnr = freshPNR();
+    newPnr.names = movedNames;
+    newPnr.infants = movedInfants;
+    newPnr.docs = movedDocs;
+    newPnr.segments = JSON.parse(JSON.stringify(p.segments));
+    newPnr.phones = JSON.parse(JSON.stringify(p.phones));
+    newPnr.receivedFrom = p.receivedFrom;
+    newPnr.remarks = JSON.parse(JSON.stringify(p.remarks));
+    newPnr.osis = JSON.parse(JSON.stringify(p.osis));
+    newPnr.ssrs = JSON.parse(JSON.stringify(p.ssrs));
+    newPnr.formOfPayment = p.formOfPayment ? JSON.parse(JSON.stringify(p.formOfPayment)) : null;
+    newPnr.ticketing = p.ticketing;
+    newPnr.locator = genLocator();
+    newPnr.activityLog = [{ stamp: nowStamp(), sine: state.sine || '----', text: `PNR CREATED - DIVIDED FROM RLOC ${p.locator}` }];
+    state.history[newPnr.locator] = JSON.parse(JSON.stringify(newPnr));
+
+    invalidatePricing();
+
+    print('** PNR DIVIDED **', 'hd');
+    print(`  NEW RLOC: ${newPnr.locator} - ${movedNames.join(', ')}`);
+    print('  ORIGINAL RLOC RETAINED - RE-SAVE WITH ER TO UPDATE', 'dim');
+    logActivity(`PNR DIVIDED - ${movedNames.join(', ')} TO NEW RLOC ${newPnr.locator}`);
     refreshAndPrintPNR();
   }
 
@@ -1150,6 +1308,42 @@
     refreshAndPrintPNR();
   }
 
+  function voidTickets(){
+    const p = state.pnr;
+    const incomplete = firstIncompleteMessage('void_tickets');
+    if(incomplete){ printErr(incomplete); return; }
+
+    print('** TICKET(S) VOIDED **', 'hd');
+    for(const t of p.tickets){
+      print(`  ${pad(t.passenger + (t.isInfant ? ' (INF)' : ''), 28)} ${t.ticketNum}`);
+    }
+    const count = p.tickets.length;
+    p.tickets = [];
+    logActivity(`TICKET(S) VOIDED - ${count} TICKET(S)`);
+    refreshAndPrintPNR();
+  }
+
+  function refundTickets(){
+    const p = state.pnr;
+    const incomplete = firstIncompleteMessage('refund_tickets');
+    if(incomplete){ printErr(incomplete); return; }
+
+    const rules = FARE_RULES[p.segments[0].cls] || null;
+    if(rules && !rules.refundable){ printErr('UNABLE TO REFUND - NONREFUNDABLE FARE BASIS'); return; }
+
+    const amount = p.pricing ? p.pricing.total : 0;
+    print('** TICKET(S) REFUNDED **', 'hd');
+    for(const t of p.tickets){
+      print(`  ${pad(t.passenger + (t.isInfant ? ' (INF)' : ''), 28)} ${t.ticketNum}`);
+    }
+    print(`REFUND AMOUNT: USD ${amount.toFixed(2)}`, 'dim');
+    const count = p.tickets.length;
+    p.tickets = [];
+    p.pricing = null;
+    logActivity(`TICKET(S) REFUNDED - ${count} TICKET(S), USD ${amount.toFixed(2)}`);
+    refreshAndPrintPNR();
+  }
+
   function showHistory(){
     const log = state.pnr.activityLog || [];
     if(log.length === 0){ print('NO HISTORY AVAILABLE FOR THIS PNR', 'dim'); return; }
@@ -1171,6 +1365,9 @@
     print('AVAILABILITY', 'hd');
     print('  A{DD}{MMM}{ORG}{DST}   Air availability   e.g. A15AUGDFWORD');
     print('  1{DD}{MMM}{ORG}{DST}   Air availability (alternate entry)  e.g. 115AUGDFWORD');
+    printBlank();
+    print('FARES', 'hd');
+    print('  FQ{ORG}{DST}   Fare quote shop by city pair - indicative only, no PNR needed   e.g. FQDFWORD');
     printBlank();
     print('SELL', 'hd');
     print('  0{LN}{CLASS}{SEATS}                        Sell from avail line   e.g. 04Y1');
@@ -1206,6 +1403,10 @@
     print('           Distinct from the ticketing ARRANGEMENT above: TAW/TAX just sets');
     print('           a deadline, TKTT actually issues ticket numbers. Changing the');
     print('           itinerary after ticketing voids the ticket(s) - reissue with WP then TKTT.');
+    print('  TKTV     Void issued ticket(s) - same-day reversal, no penalty. Fare quote');
+    print('           and ticketing arrangement stay on file, so TKTT can reissue right away.');
+    print('  TKTR     Refund issued ticket(s) - clears the fare quote too (re-price with WP');
+    print('           before reissuing). Blocked for a nonrefundable fare basis.');
     printBlank();
     print('SPECIAL SERVICE / OTHER SERVICE INFO', 'hd');
     print('  3{SSRCODE}[-{PAX#}][/{TEXT}]   Special service request   e.g. 3VGML  or  3WCHR-1/AISLE SEAT');
@@ -1232,6 +1433,9 @@
     print('  *R  or  *              Display current PNR');
     print('  *H                     Display PNR activity history (chronological log)');
     print('  *{LOCATOR}             Retrieve PNR by record locator');
+    print('  SP{N}  or  SP{N},{M}   Divide passenger(s) into a new PNR   e.g. SP2 or SP2,3');
+    print('                         Itinerary/contact/ticketing fields are copied to the new');
+    print('                         PNR; both PNRs then need a fresh fare quote (WP).');
     print('  X{N}                   Cancel numbered element N');
     print('  X{N}-{M}, X{N},{M}     Cancel a range or list of elements');
     print('  XI                     Cancel entire itinerary (all segments)');
@@ -1549,6 +1753,7 @@
     RECEIVED_FROM: (raw) => handleReceivedFrom(raw),
     GENERAL_REMARK: (raw) => handleGeneralRemark(raw),
     PRICE_ITINERARY: (raw, mode, corpCode) => priceItinerary(mode, corpCode),
+    FARE_QUOTE_SHOP: (raw, orig, dest) => fareQuoteShop(orig, dest),
     TICKETING_AT_WILL: () => addTicketingAtWill(),
     TICKETING_AT_WILL_DATED: (raw, day, mon, time) => addTicketingAtWillDated(day, mon, time),
     TICKETING_TIME_LIMIT: (raw, day, mon, time) => addTicketingTimeLimit(day, mon, time),
@@ -1556,6 +1761,8 @@
     FOP_CHECK: () => addFopCheck(),
     FOP_CREDIT_CARD: (raw, type, num, mm, yy) => addFopCreditCard(type, num, mm, yy),
     ISSUE_TICKETS: () => issueTickets(),
+    VOID_TICKETS: () => voidTickets(),
+    REFUND_TICKETS: () => refundTickets(),
     DOCS: (raw, type, country, number, nationality, dob, sex, expiry, pax, infant) => addDocs(type, country, number, nationality, dob, sex, expiry, pax, infant),
     SSR_FQTV: (raw, airline, num, tier) => addFqtv(airline, num, tier),
     OSI: (raw, airline, text) => addOsi(airline, text),
@@ -1567,6 +1774,7 @@
     PNR_REDISPLAY: () => refreshAndPrintPNR(),
     PNR_HISTORY: () => showHistory(),
     PNR_RETRIEVE: (raw, loc) => retrieveByLocator(loc),
+    DIVIDE_PNR: (raw, nums) => dividePnr(nums),
     QUEUE_ENQUEUE: (raw, n) => queueEnqueue(n),
     QUEUE_NEXT: (raw, n) => queueNext(n),
     QUEUE_COUNT: (raw, n) => queueCount(n),

@@ -35,6 +35,7 @@ from .data import (
     MONTHS,
     PHONE_LOC_CODES,
     QUEUE_CATEGORIES,
+    SCHEDULE_CHANGE,
     SEAT_LAYOUTS,
     SEGMENT_STATUS_LABELS,
     SSR_CODES,
@@ -43,7 +44,7 @@ from .data import (
 from .dates import minutes_to_clock, parse_date
 from .printer import print_blank, print_err, print_line
 from .rng import hash_str, mulberry32
-from .state import STATE, fresh_pnr, log_activity
+from .state import STATE, fresh_pnr, log_activity, now_stamp
 from .util import pad
 
 _SPEC_DIR = Path(__file__).resolve().parents[2] / "spec"
@@ -472,6 +473,40 @@ def _shuffled(items: list, rng) -> list:
         j = int(rng() * (i + 1))
         arr[i], arr[j] = arr[j], arr[i]
     return arr
+
+
+def fare_quote_shop(orig: str, dest: str) -> None:
+    """Real Sabre's "FQ" entry: a bare fare quote by city pair, independent of any PNR/
+    itinerary - unlike price_itinerary below, there's no segment to derive a fare from, so
+    this seeds off the route only and reuses the same shared spec constants (FARE_FORMULA/
+    CLASS_FARE_MULT/TAX_POOL) via its own parallel calculation, one indicative total per
+    booking class. Purely informational - no PNR mutation, no activity log entry, matching
+    decode_airport/search_airports' existing precedent as pure lookups with no PNR side effects.
+    """
+    if orig == dest:
+        print_err("FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME")
+        return
+    rng = mulberry32(hash_str(f"FQ{orig}{dest}"))
+    dist = FARE_FORMULA["distanceMin"] + int(rng() * FARE_FORMULA["distanceRange"])
+
+    print_line(f"** FARE QUOTE SHOP **  {orig}-{dest}", "hd")
+    print_line(f"  {city_name(orig)}  TO  {city_name(dest)}", "dim")
+    print_blank()
+    print_line("CLS  BASE FARE    TAXES/FEES    TOTAL", "dim")
+    for cls in CLASSES:
+        mult = CLASS_FARE_MULT.get(cls, 1.4)
+        base_fare = round((FARE_FORMULA["baseFareCoefficient"] + dist * FARE_FORMULA["baseFarePerMile"]) * mult)
+
+        num_taxes = FARE_FORMULA["minTaxes"] + int(rng() * FARE_FORMULA["additionalTaxesRange"])
+        pool = _shuffled(TAX_POOL, rng)[:num_taxes]
+        tax_total = 0.0
+        for _t in pool:
+            tax_total += round((FARE_FORMULA["taxAmountMin"] + rng() * FARE_FORMULA["taxAmountRange"]) * 100) / 100
+        tax_total = round(tax_total * 100) / 100
+        total = round((base_fare + tax_total) * 100) / 100
+        print_line(f" {cls}    USD {pad(f'{base_fare:.2f}', 9)}  USD {pad(f'{tax_total:.2f}', 9)}  USD {total:.2f}")
+    print_blank()
+    print_line("INDICATIVE ONLY - PRICE THE ACTUAL ITINERARY WITH WP AFTER BOOKING", "dim")
 
 
 def price_itinerary(mode: str, corp_code: str | None = None) -> None:
@@ -1149,6 +1184,15 @@ def refresh_and_print_pnr() -> None:
     for e in STATE.last_display:
         print_line(f" {pad(e['num'], 2)}  {pad(e['label'], 5)} {e['text']}")
 
+    # Naturally stops once the agent re-prices (WP) - reuses the existing pricing-null-
+    # means-stale convention rather than a separate acknowledgement flag.
+    changed_segs = [s for s in STATE.pnr["segments"] if s.get("scheduleChanged")]
+    if not STATE.pnr["pricing"] and changed_segs:
+        print_blank()
+        print_line("** SCHEDULE CHANGE ON FILE - RE-PRICE (WP) AND REISSUE (TKTT) MAY BE REQUIRED **", "err")
+        for s in changed_segs:
+            print_line(f"  {format_segment_short(s)}", "dim")
+
 
 def remove_element(e: dict) -> None:
     p = STATE.pnr
@@ -1272,6 +1316,53 @@ def gen_locator() -> str:
             return s
 
 
+# Real airline schedule changes are airline-initiated, not something an agent types - the
+# honest equivalent in a single-user trainer is a one-time, deterministic seeded check per
+# segment. Seeded off flight+route+date identity only (NOT the PNR's locator, which is
+# genuinely random per gen_locator()) so the same flight+route+date always gives the same
+# outcome regardless of which PNR it ends up on - matching real life (a schedule change
+# happens to a flight, affecting every booking on it, not to one lucky/unlucky PNR) and
+# keeping this reproducible for training/testing instead of varying every run. The
+# scheduleChanged flag (not the seed) is what stops it from re-firing on a later save of the
+# same segment. The mutation itself has no dedicated print (no "an airline changed your
+# flight" banner) - it's auto-queued to queue "1" (SCHEDULE CHANGE, spec/reference-data.json's
+# queueCategories) and only surfaces via the ordinary channels a real agent already checks:
+# QC/QN1, or the alert refresh_and_print_pnr prints below whenever a redisplay (ER's own, *R,
+# or after QN1) shows an unpriced, changed segment. ET's redisplay is skipped (work area
+# cleared instead), so ET alone doesn't reveal it - a later *{LOCATOR}/QN1 does.
+def _apply_schedule_changes(p: dict) -> None:
+    any_changed = False
+    for seg in p["segments"]:
+        if seg.get("scheduleChanged"):
+            continue
+        seed = hash_str(
+            f"SKEDCHG{seg['airline']}{seg['flight_num']}{seg['orig']}{seg['dest']}"
+            f"{seg['dinfo'].day}{seg['dinfo'].mon}{seg['dinfo'].year}"
+        )
+        rng = mulberry32(seed)
+        if rng() >= SCHEDULE_CHANGE["chance"]:
+            continue
+        magnitude = SCHEDULE_CHANGE["minShiftMinutes"] + int(
+            rng() * (SCHEDULE_CHANGE["maxShiftMinutes"] - SCHEDULE_CHANGE["minShiftMinutes"])
+        )
+        shift = magnitude * (-1 if rng() < 0.5 else 1)
+        seg["dep"] += shift
+        seg["arr"] += shift
+        seg["scheduleChanged"] = True
+        log_activity(
+            STATE,
+            f"SCHEDULE CHANGE - {seg['airline']}{seg['flight_num']} {seg['orig']}{seg['dest']} "
+            f"NOW {minutes_to_clock(seg['dep'])}-{minutes_to_clock(seg['arr'])}",
+        )
+        any_changed = True
+    if any_changed:
+        p["pricing"] = None
+        p["tickets"] = []
+        STATE.queues.setdefault("1", [])
+        if p["locator"] not in STATE.queues["1"]:
+            STATE.queues["1"].append(p["locator"])
+
+
 def end_transaction(mode: str) -> None:
     p = STATE.pnr
     incomplete = _first_incomplete_message("end_transaction")
@@ -1281,6 +1372,7 @@ def end_transaction(mode: str) -> None:
 
     if not p["locator"]:
         p["locator"] = gen_locator()
+    _apply_schedule_changes(p)
     log_activity(STATE, f"PNR SAVED ({mode}) - RLOC {p['locator']}")
     STATE.history[p["locator"]] = copy.deepcopy(p)
 
@@ -1311,6 +1403,85 @@ def retrieve_by_locator(loc: str) -> None:
     STATE.pnr = copy.deepcopy(rec)
     print_line(f"PNR {loc} RETRIEVED")
     log_activity(STATE, f"PNR RETRIEVED - RLOC {loc}")
+    refresh_and_print_pnr()
+
+
+# ---------- divide (SP) ----------
+# Only `names` (by array index) and `docs` (an explicit pax index) are unambiguously
+# per-passenger in this PNR model - infants link only by matching adult name string,
+# seats link only to a segment (not a passenger) and aren't reliably attributable, and
+# SSRs bake any pax number into free text only. So: names/infants(by adult name)/docs
+# (reindexed, same pattern as seat_idx after a segment cancel) move to the new PNR;
+# segments/phones/received_from/remarks/osis/ssrs/form_of_payment/ticketing are copied
+# (real Sabre divide keeps the itinerary in both resulting PNRs); seats are dropped from
+# the new PNR (no passenger attribution to decide which seat goes where).
+
+def divide_pnr(nums_str: str) -> None:
+    p = STATE.pnr
+    incomplete = _first_incomplete_message("divide_pnr")
+    if incomplete:
+        print_err(incomplete)
+        return
+
+    uniq = sorted(set(int(s) for s in nums_str.split(",")))
+    for n in uniq:
+        if n < 1 or n > len(p["names"]):
+            print_err("INVALID PASSENGER NUMBER - CHECK ENTRY AND REENTER")
+            return
+    if len(uniq) >= len(p["names"]):
+        print_err("UNABLE TO DIVIDE - AT LEAST ONE PASSENGER MUST REMAIN")
+        return
+
+    uniq_desc = sorted(uniq, reverse=True)
+    removed: list[dict] = []
+    for n in uniq_desc:
+        idx = n - 1
+        removed.append({"idx": idx, "name": p["names"][idx]})
+        del p["names"][idx]
+    removed.reverse()
+    moved_names = [r["name"] for r in removed]
+    removed_idx_set = {r["idx"] for r in removed}
+    removed_idx_asc = sorted(removed_idx_set)
+    idx_to_new_pax = {r["idx"]: i + 1 for i, r in enumerate(removed)}
+
+    moved_infants = [inf for inf in p["infants"] if inf["adult"] in moved_names]
+    p["infants"] = [inf for inf in p["infants"] if inf["adult"] not in moved_names]
+
+    moved_docs = []
+    remaining_docs = []
+    for d in p["docs"]:
+        original_idx = d["pax"] - 1
+        if original_idx in removed_idx_set:
+            moved_docs.append({**d, "pax": idx_to_new_pax[original_idx]})
+        else:
+            shift = sum(1 for ri in removed_idx_asc if ri < original_idx)
+            remaining_docs.append({**d, "pax": original_idx - shift + 1})
+    p["docs"] = remaining_docs
+
+    new_pnr = fresh_pnr()
+    new_pnr["names"] = moved_names
+    new_pnr["infants"] = moved_infants
+    new_pnr["docs"] = moved_docs
+    new_pnr["segments"] = copy.deepcopy(p["segments"])
+    new_pnr["phones"] = copy.deepcopy(p["phones"])
+    new_pnr["received_from"] = p["received_from"]
+    new_pnr["remarks"] = copy.deepcopy(p["remarks"])
+    new_pnr["osis"] = copy.deepcopy(p["osis"])
+    new_pnr["ssrs"] = copy.deepcopy(p["ssrs"])
+    new_pnr["form_of_payment"] = copy.deepcopy(p["form_of_payment"]) if p["form_of_payment"] else None
+    new_pnr["ticketing"] = p["ticketing"]
+    new_pnr["locator"] = gen_locator()
+    new_pnr["activity_log"] = [
+        {"stamp": now_stamp(), "sine": STATE.sine or "----", "text": f"PNR CREATED - DIVIDED FROM RLOC {p['locator']}"}
+    ]
+    STATE.history[new_pnr["locator"]] = copy.deepcopy(new_pnr)
+
+    invalidate_pricing()
+
+    print_line("** PNR DIVIDED **", "hd")
+    print_line(f"  NEW RLOC: {new_pnr['locator']} - {', '.join(moved_names)}")
+    print_line("  ORIGINAL RLOC RETAINED - RE-SAVE WITH ER TO UPDATE", "dim")
+    log_activity(STATE, f"PNR DIVIDED - {', '.join(moved_names)} TO NEW RLOC {new_pnr['locator']}")
     refresh_and_print_pnr()
 
 
@@ -1413,6 +1584,48 @@ def issue_tickets() -> None:
     refresh_and_print_pnr()
 
 
+def void_tickets() -> None:
+    p = STATE.pnr
+    incomplete = _first_incomplete_message("void_tickets")
+    if incomplete:
+        print_err(incomplete)
+        return
+
+    print_line("** TICKET(S) VOIDED **", "hd")
+    for t in p["tickets"]:
+        label = t["passenger"] + (" (INF)" if t["is_infant"] else "")
+        print_line(f"  {pad(label, 28)} {t['ticket_num']}")
+    count = len(p["tickets"])
+    p["tickets"] = []
+    log_activity(STATE, f"TICKET(S) VOIDED - {count} TICKET(S)")
+    refresh_and_print_pnr()
+
+
+def refund_tickets() -> None:
+    p = STATE.pnr
+    incomplete = _first_incomplete_message("refund_tickets")
+    if incomplete:
+        print_err(incomplete)
+        return
+
+    rules = FARE_RULES.get(p["segments"][0]["cls"])
+    if rules and not rules["refundable"]:
+        print_err("UNABLE TO REFUND - NONREFUNDABLE FARE BASIS")
+        return
+
+    amount = p["pricing"]["total"] if p["pricing"] else 0
+    print_line("** TICKET(S) REFUNDED **", "hd")
+    for t in p["tickets"]:
+        label = t["passenger"] + (" (INF)" if t["is_infant"] else "")
+        print_line(f"  {pad(label, 28)} {t['ticket_num']}")
+    print_line(f"REFUND AMOUNT: USD {amount:.2f}", "dim")
+    count = len(p["tickets"])
+    p["tickets"] = []
+    p["pricing"] = None
+    log_activity(STATE, f"TICKET(S) REFUNDED - {count} TICKET(S), USD {amount:.2f}")
+    refresh_and_print_pnr()
+
+
 def show_history() -> None:
     log = STATE.pnr.get("activity_log") or []
     if not log:
@@ -1437,6 +1650,9 @@ def show_help() -> None:
     print_line("AVAILABILITY", "hd")
     print_line("  A{DD}{MMM}{ORG}{DST}   Air availability   e.g. A15AUGDFWORD")
     print_line("  1{DD}{MMM}{ORG}{DST}   Air availability (alternate entry)  e.g. 115AUGDFWORD")
+    print_blank()
+    print_line("FARES", "hd")
+    print_line("  FQ{ORG}{DST}   Fare quote shop by city pair - indicative only, no PNR needed   e.g. FQDFWORD")
     print_blank()
     print_line("SELL", "hd")
     print_line("  0{LN}{CLASS}{SEATS}                        Sell from avail line   e.g. 04Y1")
@@ -1472,6 +1688,10 @@ def show_help() -> None:
     print_line("           Distinct from the ticketing ARRANGEMENT above: TAW/TAX just sets")
     print_line("           a deadline, TKTT actually issues ticket numbers. Changing the")
     print_line("           itinerary after ticketing voids the ticket(s) - reissue with WP then TKTT.")
+    print_line("  TKTV     Void issued ticket(s) - same-day reversal, no penalty. Fare quote")
+    print_line("           and ticketing arrangement stay on file, so TKTT can reissue right away.")
+    print_line("  TKTR     Refund issued ticket(s) - clears the fare quote too (re-price with WP")
+    print_line("           before reissuing). Blocked for a nonrefundable fare basis.")
     print_blank()
     print_line("SPECIAL SERVICE / OTHER SERVICE INFO", "hd")
     print_line("  3{SSRCODE}[-{PAX#}][/{TEXT}]   Special service request   e.g. 3VGML  or  3WCHR-1/AISLE SEAT")
@@ -1501,6 +1721,9 @@ def show_help() -> None:
     print_line("  *R  or  *              Display current PNR")
     print_line("  *H                     Display PNR activity history (chronological log)")
     print_line("  *{LOCATOR}             Retrieve PNR by record locator")
+    print_line("  SP{N}  or  SP{N},{M}   Divide passenger(s) into a new PNR   e.g. SP2 or SP2,3")
+    print_line("                         Itinerary/contact/ticketing fields are copied to the new")
+    print_line("                         PNR; both PNRs then need a fresh fare quote (WP).")
     print_line("  X{N}                   Cancel numbered element N")
     print_line("  X{N}-{M}, X{N},{M}     Cancel a range or list of elements")
     print_line("  XI                     Cancel entire itinerary (all segments)")

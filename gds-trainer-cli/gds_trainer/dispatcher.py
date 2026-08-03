@@ -36,6 +36,7 @@ HANDLERS = {
     "RECEIVED_FROM": lambda raw, *g: c.handle_received_from(raw),
     "GENERAL_REMARK": lambda raw, *g: c.handle_general_remark(raw),
     "PRICE_ITINERARY": lambda raw, mode, corp_code: c.price_itinerary(mode, corp_code),
+    "FARE_QUOTE_SHOP": lambda raw, orig, dest: c.fare_quote_shop(orig, dest),
     "TICKETING_AT_WILL": lambda raw, *g: c.add_ticketing_at_will(),
     "TICKETING_AT_WILL_DATED": lambda raw, day, mon, time: c.add_ticketing_at_will_dated(day, mon, time),
     "TICKETING_TIME_LIMIT": lambda raw, day, mon, time: c.add_ticketing_time_limit(day, mon, time),
@@ -43,6 +44,8 @@ HANDLERS = {
     "FOP_CHECK": lambda raw, *g: c.add_fop_check(),
     "FOP_CREDIT_CARD": lambda raw, card_type, num, mm, yy: c.add_fop_credit_card(card_type, num, mm, yy),
     "ISSUE_TICKETS": lambda raw, *g: c.issue_tickets(),
+    "VOID_TICKETS": lambda raw, *g: c.void_tickets(),
+    "REFUND_TICKETS": lambda raw, *g: c.refund_tickets(),
     "DOCS": lambda raw, doc_type, country, number, nationality, dob, sex, expiry, pax, infant: c.add_docs(
         doc_type, country, number, nationality, dob, sex, expiry, pax, infant
     ),
@@ -56,6 +59,7 @@ HANDLERS = {
     "PNR_REDISPLAY": lambda raw, *g: c.refresh_and_print_pnr(),
     "PNR_HISTORY": lambda raw, *g: c.show_history(),
     "PNR_RETRIEVE": lambda raw, loc: c.retrieve_by_locator(loc),
+    "DIVIDE_PNR": lambda raw, nums: c.divide_pnr(nums),
     "QUEUE_ENQUEUE": lambda raw, n: c.queue_enqueue(n),
     "QUEUE_NEXT": lambda raw, n: c.queue_next(n),
     "QUEUE_COUNT": lambda raw, n: c.queue_count(n),

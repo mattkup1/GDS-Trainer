@@ -69,6 +69,11 @@
     "taxAmountMin": 3,
     "taxAmountRange": 22
   },
+  "scheduleChange": {
+    "chance": 0.35,
+    "minShiftMinutes": 30,
+    "maxShiftMinutes": 180
+  },
   "ssrCodes": {
     "WCHR": "WHEELCHAIR - CAN WALK TO/FROM SEAT",
     "WCHS": "WHEELCHAIR - MUST BE CARRIED SHORT DISTANCE",

@@ -17,5 +17,14 @@
   ],
   "queue_place": [
     {"field": "locator", "check": "present", "message": "UNABLE TO QUEUE - END TRANSACT (ER OR ET) BEFORE QUEUING"}
+  ],
+  "void_tickets": [
+    {"field": "tickets", "check": "non_empty", "message": "UNABLE TO VOID - NO TICKET NUMBERS ON FILE"}
+  ],
+  "refund_tickets": [
+    {"field": "tickets", "check": "non_empty", "message": "UNABLE TO REFUND - NO TICKET NUMBERS ON FILE"}
+  ],
+  "divide_pnr": [
+    {"field": "locator", "check": "present", "message": "UNABLE TO DIVIDE - END TRANSACT (ER OR ET) BEFORE DIVIDING"}
   ]
 }

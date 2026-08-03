@@ -62,6 +62,18 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "fare_quote_shop_needs_no_pnr",
+        [
+            Step("FQDFWORD", expect_contains=["NOT SIGNED IN"]),
+            SIGN_IN,
+            Step(
+                "FQDFWORD",
+                expect_contains=["FARE QUOTE SHOP", "DFW-ORD", "INDICATIVE ONLY"],
+            ),
+            Step("FQDFWDFW", expect_contains=["FORMAT", "CANNOT BE THE SAME"]),
+        ],
+    ),
+    Scenario(
         "full_booking_flow_single_pax_through_ticketing",
         [
             *_priced_single_pax_setup(),
@@ -69,6 +81,105 @@ SCENARIOS: list[Scenario] = [
             FOP_CASH,
             Step("ER", expect_contains=["END OF TRANSACTION COMPLETE", "RLOC"]),
             Step("TKTT", expect_contains=["ELECTRONIC TICKET ISSUED", "SMITH/JOHN MR"]),
+        ],
+    ),
+    Scenario(
+        "void_and_refund_require_tickets_on_file",
+        [
+            *_priced_single_pax_setup(),
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("TKTV", expect_contains=["UNABLE TO VOID", "NO TICKET NUMBERS"]),
+            Step("TKTR", expect_contains=["UNABLE TO REFUND", "NO TICKET NUMBERS"]),
+        ],
+    ),
+    Scenario(
+        "void_tickets_allows_immediate_reissue",
+        [
+            *_priced_single_pax_setup(),
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            Step("TKTT", expect_contains=["ELECTRONIC TICKET ISSUED"]),
+            Step("TKTV", expect_contains=["TICKET(S) VOIDED"]),
+            # fare quote/ticketing arrangement stay on file after a void, so TKTT works again
+            Step("TKTT", expect_contains=["ELECTRONIC TICKET ISSUED"]),
+        ],
+    ),
+    Scenario(
+        "refund_blocked_for_nonrefundable_fare",
+        [
+            # class Y is nonrefundable per spec/reference-data.json's fareRules
+            *_priced_single_pax_setup(),
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            Step("TKTT", expect_contains=["ELECTRONIC TICKET ISSUED"]),
+            Step("TKTR", expect_contains=["UNABLE TO REFUND", "NONREFUNDABLE"]),
+        ],
+    ),
+    Scenario(
+        "refund_succeeds_for_refundable_fare",
+        [
+            # class F is refundable per spec/reference-data.json's fareRules
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            Step("01F1", expect_contains=["SEGMENT SOLD"]),
+            NAME_SMITH,
+            PHONE_VALID,
+            RECEIVED_FROM,
+            PRICE,
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            Step("TKTT", expect_contains=["ELECTRONIC TICKET ISSUED"]),
+            Step("TKTR", expect_contains=["TICKET(S) REFUNDED", "REFUND AMOUNT"]),
+        ],
+    ),
+    Scenario(
+        "divide_pnr_requires_saved_pnr",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            NAME_SMITH,
+            Step("SP1", expect_contains=["UNABLE TO DIVIDE", "END TRANSACT"]),
+        ],
+    ),
+    Scenario(
+        "divide_pnr_rejects_removing_all_passengers",
+        [
+            *_priced_single_pax_setup(),
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            Step("SP1", expect_contains=["UNABLE TO DIVIDE", "AT LEAST ONE PASSENGER MUST REMAIN"]),
+        ],
+    ),
+    Scenario(
+        "divide_pnr_moves_passenger_to_new_pnr",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_2_SEATS,
+            Step(
+                "-2SMITH/JOHN MR/JANE MRS",
+                expect_contains=["NAMES ADDED", "SMITH/JOHN MR", "SMITH/JANE MRS"],
+            ),
+            PHONE_VALID,
+            RECEIVED_FROM,
+            PRICE,
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            Step("SP2", expect_contains=["PNR DIVIDED", "NEW RLOC", "SMITH/JANE MRS"]),
+            # original PNR keeps its own segment/phone/RF/FOP/ticketing, loses passenger 2,
+            # and has its fare quote invalidated (party size changed)
+            Step(
+                "*R",
+                expect_contains=["NM1", "SMITH/JOHN MR", "SEG1", "CTC", "RF", "FP", "TK"],
+                expect_not_contains=["SMITH/JANE MRS", "FQ"],
+            ),
         ],
     ),
     Scenario(
@@ -223,6 +334,38 @@ SCENARIOS: list[Scenario] = [
         [
             SIGN_IN,
             Step("QN50", expect_contains=["END OF QUEUE 50"]),
+        ],
+    ),
+    Scenario(
+        "schedule_change_auto_queues_and_clears_on_repricing",
+        [
+            # DFW-ORD 5NOV, line 1 (LA614) is empirically confirmed to deterministically
+            # trigger a schedule change (seeded off flight+route+date identity, not the
+            # PNR's locator - see spec/reference-data.json's scheduleChange and the
+            # apply_schedule_changes/applyScheduleChanges rationale comment).
+            SIGN_IN,
+            Step("A5NOVDFWORD", expect_contains=["AIR AVAILABILITY", "DFW-ORD"]),
+            Step("01Y1", expect_contains=["SEGMENT SOLD"]),
+            NAME_SMITH,
+            PHONE_VALID,
+            RECEIVED_FROM,
+            PRICE,
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            # The mutation itself is silent (no dedicated print) - but ER always redisplays
+            # the PNR afterward, and that redisplay is exactly where the alert surfaces.
+            Step(
+                "ER",
+                expect_contains=["END OF TRANSACTION COMPLETE", "SCHEDULE CHANGE ON FILE"],
+            ),
+            Step("QC1", expect_contains=["SCHEDULE CHANGE"]),
+            Step(
+                "*R",
+                expect_contains=["SCHEDULE CHANGE ON FILE", "RE-PRICE", "REISSUE"],
+            ),
+            Step("WP", expect_contains=["ITINERARY PRICING"]),
+            Step("*R", expect_not_contains=["SCHEDULE CHANGE ON FILE"]),
+            Step("TKTT", expect_contains=["ELECTRONIC TICKET ISSUED"]),
         ],
     ),
     Scenario(

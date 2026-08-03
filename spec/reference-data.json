@@ -74,6 +74,9 @@
     "minShiftMinutes": 30,
     "maxShiftMinutes": 180
   },
+  "waitlistClear": {
+    "chance": 0.4
+  },
   "ssrCodes": {
     "WCHR": "WHEELCHAIR - CAN WALK TO/FROM SEAT",
     "WCHS": "WHEELCHAIR - MUST BE CARRIED SHORT DISTANCE",

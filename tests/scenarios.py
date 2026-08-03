@@ -396,6 +396,36 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "waitlist_clearing_auto_queues_and_shows_once",
+        [
+            # DFW-ORD 20SEP, line 1 class J is empirically confirmed to have 0 seats (instant
+            # HL on sell) and to deterministically clear (seeded off flight+route+class+date
+            # identity, not the PNR's locator - see spec/reference-data.json's waitlistClear
+            # and the apply_waitlist_clearing/applyWaitlistClearing rationale comment).
+            SIGN_IN,
+            Step("A20SEPDFWORD", expect_contains=["AIR AVAILABILITY", "DFW-ORD"]),
+            Step("01J1", expect_contains=["SEGMENT WAITLISTED", "HL"]),
+            NAME_SMITH,
+            PHONE_VALID,
+            RECEIVED_FROM,
+            PRICE,
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            # The mutation itself is silent (no dedicated print) - but ER always redisplays
+            # the PNR afterward, and that redisplay is exactly where the notice surfaces, this
+            # time as a one-time notice (not "until resolved" - no re-price is needed).
+            Step(
+                "ER",
+                expect_contains=["END OF TRANSACTION COMPLETE", "WAITLIST CLEARED", "HK1"],
+            ),
+            Step("QC18", expect_contains=["WAITLIST CLEARED"]),
+            # Shown once already (on ER's own redisplay) - must NOT repeat on a later redisplay
+            Step("*R", expect_not_contains=["WAITLIST CLEARED"]),
+            # No re-price/reissue needed - the fare quote from before clearing is still valid
+            Step("TKTT", expect_contains=["ELECTRONIC TICKET ISSUED"]),
+        ],
+    ),
+    Scenario(
         "invalid_entry_falls_through_to_format_error",
         [
             SIGN_IN,

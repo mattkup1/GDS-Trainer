@@ -40,6 +40,7 @@ from .data import (
     SEGMENT_STATUS_LABELS,
     SSR_CODES,
     TAX_POOL,
+    WAITLIST_CLEAR,
 )
 from .dates import minutes_to_clock, parse_date
 from .printer import print_blank, print_err, print_line
@@ -1216,6 +1217,18 @@ def refresh_and_print_pnr() -> None:
             label = t["passenger"] + (" (INF)" if t["is_infant"] else "")
             print_line(f"  {label}  {t['ticket_num']}", "dim")
 
+    # Show-once (not show-until-resolved like the schedule-change alert above): clearing a
+    # waitlist needs no follow-up action, so this fires on the next redisplay after clearing
+    # (most likely QN18 or *{LOCATOR}) and never again - waitlistClearAcked is set as part of
+    # this same print pass.
+    cleared_segs = [s for s in STATE.pnr["segments"] if s.get("waitlistCleared") and not s.get("waitlistClearAcked")]
+    if cleared_segs:
+        print_blank()
+        print_line("** WAITLIST CLEARED - SEGMENT(S) NOW CONFIRMED **", "hd")
+        for s in cleared_segs:
+            print_line(f"  {format_segment_short(s)}", "dim")
+            s["waitlistClearAcked"] = True
+
 
 def remove_element(e: dict) -> None:
     p = STATE.pnr
@@ -1382,6 +1395,40 @@ def _apply_schedule_changes(p: dict) -> None:
             STATE.queues["1"].append(p["locator"])
 
 
+# Same deterministic-seeded-check-at-save-time pattern as _apply_schedule_changes, for
+# queue_categories["18"] (WAITLIST CLEARED) - previously unused, same as "1" was. Deltas
+# from schedule change: (1) flips seg["status"] HL->HK instead of shifting dep/arr - same
+# flight/class/fare, not an itinerary change, so pricing/tickets are never touched here;
+# (2) the seed includes seg["cls"] (waitlist status is class-specific) and uses a distinct
+# hash prefix so it can never collide with schedule change's seed for the same flight;
+# (3) no idempotency flag is needed to gate the roll itself - only currently-HL segments are
+# considered, and a cleared segment becomes HK immediately, so it naturally drops out.
+# waitlistCleared/waitlistClearAcked exist only to drive the show-once notice in
+# refresh_and_print_pnr above, not to gate this function.
+def _apply_waitlist_clearing(p: dict) -> None:
+    for seg in p["segments"]:
+        if seg["status"] != "HL":
+            continue
+        seed = hash_str(
+            f"WLCLEAR{seg['airline']}{seg['flight_num']}{seg['orig']}{seg['dest']}{seg['cls']}"
+            f"{seg['dinfo'].day}{seg['dinfo'].mon}{seg['dinfo'].year}"
+        )
+        rng = mulberry32(seed)
+        if rng() >= WAITLIST_CLEAR["chance"]:
+            continue
+        seg["status"] = "HK"
+        seg["waitlistCleared"] = True
+        seg["waitlistClearAcked"] = False
+        log_activity(
+            STATE,
+            f"WAITLIST CLEARED - {seg['airline']}{seg['flight_num']} {seg['orig']}{seg['dest']} "
+            f"{seg['cls']} NOW CONFIRMED (WAS WAITLISTED)",
+        )
+        STATE.queues.setdefault("18", [])
+        if p["locator"] not in STATE.queues["18"]:
+            STATE.queues["18"].append(p["locator"])
+
+
 def end_transaction(mode: str) -> None:
     p = STATE.pnr
     incomplete = _first_incomplete_message("end_transaction")
@@ -1392,6 +1439,7 @@ def end_transaction(mode: str) -> None:
     if not p["locator"]:
         p["locator"] = gen_locator()
     _apply_schedule_changes(p)
+    _apply_waitlist_clearing(p)
     log_activity(STATE, f"PNR SAVED ({mode}) - RLOC {p['locator']}")
     STATE.history[p["locator"]] = copy.deepcopy(p)
 

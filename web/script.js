@@ -60,6 +60,7 @@
   const TAX_POOL = REFERENCE_DATA.taxPool;
   const FARE_FORMULA = REFERENCE_DATA.fareFormula;
   const SCHEDULE_CHANGE = REFERENCE_DATA.scheduleChange;
+  const WAITLIST_CLEAR = REFERENCE_DATA.waitlistClear;
   const SSR_CODES = REFERENCE_DATA.ssrCodes;
   const CARD_TYPES = REFERENCE_DATA.cardTypes;
   const QUEUE_CATEGORIES = REFERENCE_DATA.queueCategories;
@@ -995,6 +996,16 @@
       print('** PRIOR TICKET ON FILE - EXCHANGE WITH WFR{TICKET#} OR REISSUE FRESH WITH TKTT **', 'dim');
       for(const t of state.pnr.priorTickets){ print(`  ${t.passenger}${t.isInfant ? ' (INF)' : ''}  ${t.ticketNum}`, 'dim'); }
     }
+    // Show-once (not show-until-resolved like the schedule-change alert above): clearing a
+    // waitlist needs no follow-up action, so this fires on the next redisplay after clearing
+    // (most likely QN18 or *{LOCATOR}) and never again - waitlistClearAcked is set as part of
+    // this same print pass.
+    const clearedSegs = state.pnr.segments.filter(s => s.waitlistCleared && !s.waitlistClearAcked);
+    if(clearedSegs.length){
+      printBlank();
+      print('** WAITLIST CLEARED - SEGMENT(S) NOW CONFIRMED **', 'hd');
+      for(const s of clearedSegs){ print(`  ${formatSegmentShort(s)}`, 'dim'); s.waitlistClearAcked = true; }
+    }
   }
 
   function removeElement(e){
@@ -1123,6 +1134,31 @@
     }
   }
 
+  // Same deterministic-seeded-check-at-save-time pattern as applyScheduleChanges, for
+  // queueCategories["18"] (WAITLIST CLEARED) - previously unused, same as "1" was. Deltas
+  // from schedule change: (1) flips seg.status HL->HK instead of shifting dep/arr - same
+  // flight/class/fare, not an itinerary change, so pricing/tickets are never touched here;
+  // (2) the seed includes seg.cls (waitlist status is class-specific) and uses a distinct
+  // hash prefix so it can never collide with schedule change's seed for the same flight;
+  // (3) no idempotency flag is needed to gate the roll itself - only currently-HL segments
+  // are considered, and a cleared segment becomes HK immediately, so it naturally drops out.
+  // waitlistCleared/waitlistClearAcked exist only to drive the show-once notice in
+  // refreshAndPrintPNR below, not to gate this function.
+  function applyWaitlistClearing(p){
+    for(const seg of p.segments){
+      if(seg.status !== 'HL') continue;
+      const seed = hashStr(`WLCLEAR${seg.airline}${seg.flightNum}${seg.orig}${seg.dest}${seg.cls}${seg.dinfo.day}${seg.dinfo.mon}${seg.dinfo.year}`);
+      const rng = mulberry32(seed);
+      if(rng() >= WAITLIST_CLEAR.chance) continue;
+      seg.status = 'HK';
+      seg.waitlistCleared = true;
+      seg.waitlistClearAcked = false;
+      logActivity(`WAITLIST CLEARED - ${seg.airline}${seg.flightNum} ${seg.orig}${seg.dest} ${seg.cls} NOW CONFIRMED (WAS WAITLISTED)`);
+      if(!state.queues['18']) state.queues['18'] = [];
+      if(!state.queues['18'].includes(p.locator)) state.queues['18'].push(p.locator);
+    }
+  }
+
   function endTransaction(mode){
     const p = state.pnr;
     const incomplete = firstIncompleteMessage('end_transaction');
@@ -1130,6 +1166,7 @@
 
     if(!p.locator) p.locator = genLocator();
     applyScheduleChanges(p);
+    applyWaitlistClearing(p);
     logActivity(`PNR SAVED (${mode}) - RLOC ${p.locator}`);
     state.history[p.locator] = JSON.parse(JSON.stringify(p));
 

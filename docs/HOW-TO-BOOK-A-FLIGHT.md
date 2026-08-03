@@ -294,7 +294,7 @@ This works one PNR at a time, first-in-first-out — exactly how an agent works 
 | Divide passenger(s) into a new PNR | `SP{N}` or `SP{N},{M}` | `SP2` |
 | Place PNR on a queue | `QE{N}` | `QE25` |
 | Show queue counts | `QC` or `QC{N}` | `QC` or `QC25` |
-| Retrieve next PNR from a queue | `QN{N}` | `QN25` (queue `1` is auto-populated by schedule changes) |
+| Retrieve next PNR from a queue | `QN{N}` | `QN25` (queue `1` is auto-populated by schedule changes, queue `18` by waitlist clearing) |
 | Cancel an item | `X{N}`, `X{N}-{M}`, `X{N},{M}` | `X2` |
 | Cancel entire itinerary | `XI` | `XI` |
 | Discard unsaved work | `IG` | `IG` |

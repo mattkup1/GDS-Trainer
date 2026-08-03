@@ -454,9 +454,31 @@ def handle_name(u: str) -> None:
         print_err("FORMAT - NAME MUST BE SURNAME/GIVEN NAME")
         return
     surname = head_match.group(2)
+    group_count = int(head_match.group(1)) if head_match.group(1) else None
     incoming = parts[1:]
     segments = STATE.pnr["segments"]
     max_party = min(s["seats"] for s in segments) if segments else None
+
+    # Group placeholder shorthand: -{N}TBA/TBA creates N identical "TBA/TBA" placeholder
+    # passengers in one entry (real Sabre group convention - unnamed pax held with
+    # identical placeholder names, distinguished only by position in the name list, not
+    # synthesized unique strings) rather than spelling out N individual TBA/TBA entries.
+    # Real names replace a placeholder later via X{n} (cancel that NM element) then an
+    # ordinary name entry - no separate "replace" command needed.
+    if group_count and group_count > 1 and len(incoming) == 1 and surname == "TBA" and incoming[0] == "TBA":
+        if max_party is not None and len(STATE.pnr["names"]) + group_count > max_party:
+            print_err(
+                f"UNABLE TO ADD NAME - PARTY SIZE EXCEEDS SEATS SOLD ({max_party}) - "
+                "SELL ADDITIONAL SEATS OR CANCEL A NAME"
+            )
+            return
+        for _ in range(group_count):
+            STATE.pnr["names"].append("TBA/TBA")
+        print_line(f"NAMES ADDED - {group_count} TBA/TBA PLACEHOLDER(S) (GROUP - REPLACE WITH REAL NAMES BEFORE TICKETING)")
+        log_activity(STATE, f"NAMES ADDED - {group_count} TBA/TBA PLACEHOLDER(S)")
+        refresh_and_print_pnr()
+        return
+
     if max_party is not None and len(STATE.pnr["names"]) + len(incoming) > max_party:
         print_err(
             f"UNABLE TO ADD NAME - PARTY SIZE EXCEEDS SEATS SOLD ({max_party}) - "
@@ -1521,6 +1543,13 @@ def end_transaction(mode: str) -> None:
     incomplete = _first_incomplete_message("end_transaction")
     if incomplete:
         print_err(incomplete)
+        return
+
+    # Real groups (10+ passengers) need a deposit on file before the PNR can be saved -
+    # conditional on party size, so it's bespoke rather than a spec/pnr-completeness.json
+    # rule (same precedent as divide_pnr's "at least one passenger must remain" check).
+    if len(p["names"]) >= 10 and not any(r["code"] == "DEPS" for r in p["ssrs"]):
+        print_err("PNR INCOMPLETE - GROUP DEPOSIT REQUIRED FOR 10+ PASSENGERS (ENTRY: 3DEPS)")
         return
 
     if not p["locator"]:

@@ -243,6 +243,38 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "group_pnr_requires_deposit_for_ten_plus_names",
+        [
+            SIGN_IN,
+            # Long/direct sell isn't capped by an availability class's seat count, so it can
+            # hold a real 12-seat group in one entry.
+            Step("0AA100Y15AUGDFWORDNN12", expect_contains=["SEGMENT SOLD"]),
+            Step(
+                "-12TBA/TBA",
+                expect_contains=["NAMES ADDED", "12 TBA/TBA PLACEHOLDER"],
+            ),
+            PHONE_VALID,
+            RECEIVED_FROM,
+            PRICE,
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step(
+                "ER",
+                expect_contains=["PNR INCOMPLETE", "GROUP DEPOSIT REQUIRED", "3DEPS"],
+                expect_not_contains=["END OF TRANSACTION COMPLETE"],
+            ),
+            Step("3DEPS", expect_contains=["SSR ADDED", "GROUP DEPOSIT RECEIVED"]),
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            # Finalizing a placeholder: cancel it, then add the real name - no new command
+            Step("X5", expect_contains=["ELEMENT 5 CANCELLED"]),
+            Step(
+                "-SMITH/JOHN MR",
+                expect_contains=["NAME ADDED", "SMITH/JOHN MR"],
+            ),
+            Step("*R", expect_contains=["SMITH/JOHN MR"], expect_not_contains=["UNABLE"]),
+        ],
+    ),
+    Scenario(
         "lap_infant_does_not_count_toward_party_size",
         [
             SIGN_IN,

@@ -1241,6 +1241,14 @@
     const incomplete = firstIncompleteMessage('end_transaction');
     if(incomplete){ printErr(incomplete); return; }
 
+    // Real groups (10+ passengers) need a deposit on file before the PNR can be saved -
+    // conditional on party size, so it's bespoke rather than a spec/pnr-completeness.json
+    // rule (same precedent as dividePnr's "at least one passenger must remain" check).
+    if(p.names.length >= 10 && !p.ssrs.some(r => r.code === 'DEPS')){
+      printErr('PNR INCOMPLETE - GROUP DEPOSIT REQUIRED FOR 10+ PASSENGERS (ENTRY: 3DEPS)');
+      return;
+    }
+
     if(!p.locator) p.locator = genLocator();
     applyScheduleChanges(p);
     applyWaitlistClearing(p);
@@ -1695,8 +1703,28 @@
     const headMatch = parts.length >= 2 ? parts[0].match(/^(\d{1,2})?([A-Z][A-Z\-' ]*)$/) : null;
     if(!headMatch){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
     const surname = headMatch[2];
+    const groupCount = headMatch[1] ? parseInt(headMatch[1],10) : null;
     const incoming = parts.slice(1);
     const maxParty = state.pnr.segments.length ? Math.min(...state.pnr.segments.map(s => s.seats)) : null;
+
+    // Group placeholder shorthand: -{N}TBA/TBA creates N identical "TBA/TBA" placeholder
+    // passengers in one entry (real Sabre group convention - unnamed pax held with
+    // identical placeholder names, distinguished only by position in the name list, not
+    // synthesized unique strings) rather than spelling out N individual TBA/TBA entries.
+    // Real names replace a placeholder later via X{n} (cancel that NM element) then an
+    // ordinary name entry - no separate "replace" command needed.
+    if(groupCount && groupCount > 1 && incoming.length === 1 && surname === 'TBA' && incoming[0] === 'TBA'){
+      if(maxParty !== null && state.pnr.names.length + groupCount > maxParty){
+        printErr(`UNABLE TO ADD NAME - PARTY SIZE EXCEEDS SEATS SOLD (${maxParty}) - SELL ADDITIONAL SEATS OR CANCEL A NAME`);
+        return;
+      }
+      for(let i=0;i<groupCount;i++) state.pnr.names.push('TBA/TBA');
+      print(`NAMES ADDED - ${groupCount} TBA/TBA PLACEHOLDER(S) (GROUP - REPLACE WITH REAL NAMES BEFORE TICKETING)`);
+      logActivity(`NAMES ADDED - ${groupCount} TBA/TBA PLACEHOLDER(S)`);
+      refreshAndPrintPNR();
+      return;
+    }
+
     if(maxParty !== null && state.pnr.names.length + incoming.length > maxParty){
       printErr(`UNABLE TO ADD NAME - PARTY SIZE EXCEEDS SEATS SOLD (${maxParty}) - SELL ADDITIONAL SEATS OR CANCEL A NAME`);
       return;

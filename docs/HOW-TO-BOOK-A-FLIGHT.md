@@ -270,6 +270,8 @@ This works one PNR at a time, first-in-first-out — exactly how an agent works 
 | Add name | `-{SURNAME}/{GIVEN} {TITLE}` | `-SMITH/JOHN MR` |
 | Add multiple passengers | `-{N}{SURNAME}/{G1} {T1}/{G2} {T2}` | `-2SMITH/JOHN MR/JANE MRS` |
 | Add lap infant | `-...(INF{SURNAME}/{GIVEN}/{DOB})` | `-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)` |
+| Add a group of placeholder names (10+ = a group) | `-{N}TBA/TBA` | `-12TBA/TBA` |
+| Record a group deposit (required to save a 10+ name PNR) | `3DEPS` | `3DEPS` |
 | Add travel document (APIS) | `3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}[.{INFANT#}]` | `3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1` or `...-1.1` for an infant |
 | Add SSR | `3{SSRCODE}[-{PAX#}][/{TEXT}]` | `3VGML` |
 | Add OSI | `3OSI{AL}{TEXT}` | `3OSIAA VIP PASSENGER` |
@@ -300,6 +302,8 @@ This works one PNR at a time, first-in-first-out — exactly how an agent works 
 | Cancel entire itinerary | `XI` | `XI` |
 | Discard unsaved work | `IG` | `IG` |
 | Full command list | `HELP` | `HELP` |
+
+**Finalizing a group placeholder name:** there's no separate "replace" command — cancel the specific `TBA/TBA` element (`X{n}`) and add the real name (`-{SURNAME}/{GIVEN} {TITLE}`), the same two entries you'd use to fix any other passenger name.
 
 **Full walkthrough, start to finish:**
 ```

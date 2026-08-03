@@ -267,6 +267,11 @@ def sell_connection(seats: int, cls1: str, line1_num: int, cls2: str, line2_num:
             return
         cinfos.append(cinfo)
 
+    # Married segments: the two legs are tagged with a shared group id so cancel_elements
+    # can later require both be cancelled together, matching real Sabre. Marriage is only
+    # ever created here - the one place two segments are known to belong to one itinerary.
+    married_group = STATE.next_married_group_id
+    STATE.next_married_group_id += 1
     for (flight, cls), cinfo in zip(legs, cinfos):
         waitlisted = cinfo["seats"] == 0
         seg = {
@@ -281,6 +286,7 @@ def sell_connection(seats: int, cls1: str, line1_num: int, cls2: str, line2_num:
             "arr": flight["arr"],
             "status": "HL" if waitlisted else "HK",
             "equip": flight["equip"],
+            "marriedGroup": married_group,
         }
         STATE.pnr["segments"].append(seg)
         if not waitlisted:
@@ -1121,6 +1127,16 @@ def search_airports(term: str) -> None:
 
 # ---------- PNR element display / cancel ----------
 
+# Indices (into `segments`) of every OTHER segment sharing segments[idx]'s marriedGroup -
+# empty if that segment isn't married. Shared by build_elements' display text and
+# cancel_elements' enforcement below.
+def married_partner_indices(segments: list[dict], idx: int) -> list[int]:
+    group = segments[idx].get("marriedGroup")
+    if not group:
+        return []
+    return [i for i, s in enumerate(segments) if i != idx and s.get("marriedGroup") == group]
+
+
 def build_elements() -> list[dict]:
     p = STATE.pnr
     els: list[dict] = []
@@ -1148,12 +1164,14 @@ def build_elements() -> list[dict]:
             }
         )
     for i, s in enumerate(p["segments"]):
+        partners = married_partner_indices(p["segments"], i)
+        married_note = f"  MARRIED TO {','.join(f'SEG{j + 1}' for j in partners)}" if partners else ""
         els.append(
             {
                 "kind": "segment",
                 "idx": i,
                 "label": f"SEG{i + 1}",
-                "text": format_segment_short(s) + f"  {s['dinfo'].weekday}",
+                "text": format_segment_short(s) + f"  {s['dinfo'].weekday}" + married_note,
             }
         )
     for i, st in enumerate(p["seats"]):
@@ -1275,6 +1293,25 @@ def remove_element(e: dict) -> None:
 
 def cancel_elements(nums: list[int]) -> None:
     uniq_desc = sorted(set(nums), reverse=True)
+
+    # Married segments must be cancelled together - block the whole command (no partial
+    # cancellation) if a request names only some of a married group's currently-displayed
+    # element numbers.
+    for n in uniq_desc:
+        e = next((x for x in STATE.last_display if x["num"] == n), None)
+        if not e or e["kind"] != "segment":
+            continue
+        for partner_idx in married_partner_indices(STATE.pnr["segments"], e["idx"]):
+            partner_el = next(
+                (x for x in STATE.last_display if x["kind"] == "segment" and x["idx"] == partner_idx), None
+            )
+            if partner_el and partner_el["num"] not in uniq_desc:
+                print_err(
+                    f"UNABLE TO CANCEL - ELEMENT {n} IS MARRIED TO ELEMENT {partner_el['num']} "
+                    f"- CANCEL BOTH TOGETHER (X{n},{partner_el['num']})"
+                )
+                return
+
     cancelled = []
     for n in uniq_desc:
         e = next((x for x in STATE.last_display if x["num"] == n), None)

@@ -46,6 +46,7 @@ class AppState:
         self.last_display: list[dict[str, Any]] = []
         self.history: dict[str, dict[str, Any]] = {}
         self.queues: dict[str, list[str]] = {}
+        self.next_married_group_id = 1  # monotonic - never reused, unlike a segment's list index
 
 
 # Single shared instance, mirroring script.js's module-level `state`.

@@ -117,7 +117,8 @@
     history: {},        // locator -> saved pnr snapshot
     queues: {},          // queue number -> [locator, ...] FIFO
     cmdHistory: [],
-    cmdHistoryIdx: -1
+    cmdHistoryIdx: -1,
+    nextMarriedGroupId: 1   // monotonic - never reused, unlike a segment's array index
   };
 
   function freshPNR(){
@@ -266,13 +267,18 @@
       cinfos.push(cinfo);
     }
 
+    // Married segments: the two legs are tagged with a shared group id so cancelElements
+    // can later require both be cancelled together, matching real Sabre. Marriage is only
+    // ever created here - the one place two segments are known to belong to one itinerary.
+    const marriedGroup = state.nextMarriedGroupId++;
     legs.forEach(({flight, cls}, i) => {
       const cinfo = cinfos[i];
       const waitlisted = cinfo.seats === 0;
       const seg = {
         airline: flight.airline, flightNum: flight.flightNum, cls, seats,
         dinfo: state.lastAvail.dinfo, orig: flight.orig, dest: flight.dest,
-        dep: flight.dep, arr: flight.arr, status: waitlisted ? 'HL' : 'HK', equip: flight.equip
+        dep: flight.dep, arr: flight.arr, status: waitlisted ? 'HL' : 'HK', equip: flight.equip,
+        marriedGroup
       };
       state.pnr.segments.push(seg);
       if(!waitlisted) cinfo.seats -= seats;
@@ -927,12 +933,27 @@
     return { label: `${paxNum}.${infantNum}`, name: inf ? `${inf.surname}/${inf.given} (INFANT)` : '?' };
   }
 
+  // Indices (into `segments`) of every OTHER segment sharing segments[idx]'s marriedGroup -
+  // empty if that segment isn't married. Shared by buildElements' display text and
+  // cancelElements' enforcement below.
+  function marriedPartnerIndices(segments, idx){
+    const group = segments[idx].marriedGroup;
+    if(!group) return [];
+    const partners = [];
+    segments.forEach((s,i) => { if(i !== idx && s.marriedGroup === group) partners.push(i); });
+    return partners;
+  }
+
   function buildElements(){
     const els = [];
     state.pnr.names.forEach((n, i) => els.push({ kind:'name', idx:i, label:`NM${i+1}`, text:n }));
     state.pnr.infants.forEach((inf, i) => els.push({ kind:'infant', idx:i, label:'IN', text:`${inf.surname}/${inf.given}  DOB ${inf.dob}  (INFANT - TRAVELS WITH ${inf.adult})` }));
     state.pnr.docs.forEach((d, i) => { const t = resolveDocTraveler(d.pax, d.infantNum); els.push({ kind:'docs', idx:i, label:'DOC', text:`${d.desc} ${d.country} ${d.number}  NATIONALITY ${d.nationality}  DOB ${d.dob}  ${d.sex}  EXP ${d.expiry}  PAX ${t.label} (${t.name})` }); });
-    state.pnr.segments.forEach((s, i) => els.push({ kind:'segment', idx:i, label:`SEG${i+1}`, text: formatSegmentShort(s) + `  ${s.dinfo.weekday}` }));
+    state.pnr.segments.forEach((s, i) => {
+      const partners = marriedPartnerIndices(state.pnr.segments, i).map(j => `SEG${j+1}`);
+      const marriedNote = partners.length ? `  MARRIED TO ${partners.join(',')}` : '';
+      els.push({ kind:'segment', idx:i, label:`SEG${i+1}`, text: formatSegmentShort(s) + `  ${s.dinfo.weekday}` + marriedNote });
+    });
     state.pnr.seats.forEach((st, i) => els.push({ kind:'seat', idx:i, label:'SEAT', text:`SEG${st.segIdx+1} - SEAT ${st.seat}` }));
     state.pnr.ssrs.forEach((r, i) => els.push({ kind:'ssr', idx:i, label:'SSR', text: r.text }));
     state.pnr.osis.forEach((o, i) => els.push({ kind:'osi', idx:i, label:'OSI', text: o.text }));
@@ -1033,6 +1054,22 @@
 
   function cancelElements(nums){
     const uniqDesc = Array.from(new Set(nums)).sort((a,b) => b-a);
+
+    // Married segments must be cancelled together - block the whole command (no partial
+    // cancellation) if a request names only some of a married group's currently-displayed
+    // element numbers.
+    for(const n of uniqDesc){
+      const e = state.lastDisplay.find(x => x.num === n);
+      if(!e || e.kind !== 'segment') continue;
+      for(const partnerIdx of marriedPartnerIndices(state.pnr.segments, e.idx)){
+        const partnerEl = state.lastDisplay.find(x => x.kind === 'segment' && x.idx === partnerIdx);
+        if(partnerEl && !uniqDesc.includes(partnerEl.num)){
+          printErr(`UNABLE TO CANCEL - ELEMENT ${n} IS MARRIED TO ELEMENT ${partnerEl.num} - CANCEL BOTH TOGETHER (X${n},${partnerEl.num})`);
+          return;
+        }
+      }
+    }
+
     const cancelled = [];
     for(const n of uniqDesc){
       const e = state.lastDisplay.find(x => x.num === n);

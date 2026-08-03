@@ -637,4 +637,17 @@ SCENARIOS: list[Scenario] = [
             Step("*R", expect_contains=["SEG1", "SEG2"]),
         ],
     ),
+    Scenario(
+        "connection_segments_married_and_must_cancel_together",
+        [
+            SIGN_IN,
+            Step("A15AUGDFWORD", expect_contains=["AIR AVAILABILITY"]),
+            Step("02Y7Y8", expect_contains=["SEGMENT SOLD"]),
+            Step("*R", expect_contains=["MARRIED TO SEG2", "MARRIED TO SEG1"]),
+            # cancelling just one leg is blocked - no partial cancellation of a connection
+            Step("X1", expect_contains=["UNABLE TO CANCEL", "MARRIED TO ELEMENT 2"]),
+            Step("X1,2", expect_contains=["ELEMENTS 1,2 CANCELLED"]),
+            Step("*R", expect_contains=["PNR IS EMPTY"]),
+        ],
+    ),
 ]

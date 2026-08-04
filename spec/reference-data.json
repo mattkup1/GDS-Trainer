@@ -80,6 +80,10 @@
   "flightCancellation": {
     "chance": 0.015
   },
+  "minimumConnectTime": {
+    "domestic": 45,
+    "international": 90
+  },
   "ssrCodes": {
     "WCHR": "WHEELCHAIR - CAN WALK TO/FROM SEAT",
     "WCHS": "WHEELCHAIR - MUST BE CARRIED SHORT DISTANCE",

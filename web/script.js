@@ -62,6 +62,7 @@
   const SCHEDULE_CHANGE = REFERENCE_DATA.scheduleChange;
   const WAITLIST_CLEAR = REFERENCE_DATA.waitlistClear;
   const FLIGHT_CANCELLATION = REFERENCE_DATA.flightCancellation;
+  const MIN_CONNECT_TIME = REFERENCE_DATA.minimumConnectTime;
   const SSR_CODES = REFERENCE_DATA.ssrCodes;
   const CARD_TYPES = REFERENCE_DATA.cardTypes;
   const QUEUE_CATEGORIES = REFERENCE_DATA.queueCategories;
@@ -77,6 +78,21 @@
   function cityName(code){
     const a = typeof AIRPORTS !== 'undefined' ? AIRPORTS[code] : null;
     return a ? a[1].toUpperCase()+' '+code : 'CITY '+code;
+  }
+  function airportCountry(code){
+    const a = typeof AIRPORTS !== 'undefined' ? AIRPORTS[code] : null;
+    return a ? a[2] : null;
+  }
+  // Real GDS minimum connect time: an agency's actual MCT table is keyed per specific
+  // airport (and sometimes per terminal), which this app has no data for - the honest
+  // simplification, and what a real GDS itself falls back to when no airport-specific
+  // override exists, is the domestic/international default. A connection only counts as
+  // domestic if BOTH legs stay within the connecting airport's country - crossing a border
+  // on either leg (inbound or outbound) requires the longer international MCT, same as a
+  // real itinerary spending extra time in immigration/security/re-check-in.
+  function requiredMct(orig, via, dest){
+    const domestic = airportCountry(orig) === airportCountry(via) && airportCountry(via) === airportCountry(dest);
+    return domestic ? MIN_CONNECT_TIME.domestic : MIN_CONNECT_TIME.international;
   }
 
   // ---------- date helpers ----------
@@ -184,7 +200,12 @@
       }
       const dep1 = 300 + Math.floor(rng()*600);
       const leg1 = genFlight(rng, dep1, orig, via);
-      const layover = 45 + Math.floor(rng()*135);
+      // Layover always clears whatever MCT this specific via-airport requires (domestic or
+      // international) so these 2 generated connections stay guaranteed-sellable regardless
+      // of which via-airport got picked above - the +15 floor plus the existing 135-wide
+      // spread keeps the same "generous, obviously workable" feel the flat 45-180 range had.
+      const mct = requiredMct(orig, via, dest);
+      const layover = mct + 15 + Math.floor(rng()*135);
       const leg2 = genFlight(rng, leg1.arr + layover, via, dest);
       flights.push({ line: nextLine++, ...leg1 });
       flights.push({ line: nextLine++, ...leg2 });
@@ -295,7 +316,9 @@
     const f2 = state.lastAvail.flights.find(fl => fl.line === line2Num);
     if(!f1 || !f2){ printErr('INVALID LINE NUMBER - CHECK ENTRY AND REENTER'); return; }
     if(f1.dest !== f2.orig){ printErr(`INVALID CONNECTION - ${f1.dest} DOES NOT MATCH ${f2.orig}`); return; }
-    if(f2.dep < f1.arr + 30){ printErr('UNABLE - INSUFFICIENT CONNECTION TIME'); return; }
+    const mct = requiredMct(f1.orig, f1.dest, f2.dest);
+    const actualGap = f2.dep - f1.arr;
+    if(actualGap < mct){ printErr(`UNABLE - MINIMUM CONNECTING TIME NOT MET AT ${f1.dest} (MCT ${mct} MIN, ONLY ${actualGap} MIN AVAILABLE)`); return; }
 
     const legs = [ {flight:f1, cls:cls1.toUpperCase()}, {flight:f2, cls:cls2.toUpperCase()} ];
     // Validate both legs before mutating anything, so a shortfall on the second leg

@@ -262,6 +262,7 @@
     <p class="note">If two lines' cities and times line up (one line's destination matches another's origin, with a workable connection time), sell them together as a connecting itinerary in one entry: seats, then class + line number for each leg:</p>
     <div class="cmdblock">02Y1M2</div>
     <p class="note">Sells 2 seats — Y class on line 1, M class on line 2 — as two segments that are <b>married</b>: they were sold as one connection, so cancelling one later requires cancelling both together (<code>X1,2</code>), rather than silently leaving the other leg behind.</p>
+    <p class="note">"Workable connection time" means the layover clears minimum connect time (MCT) at the connecting airport: <b>45 minutes</b> if both legs stay within the same country, <b>90 minutes</b> if either leg crosses a border (extra time for immigration, security, or re-check-in). A layover that's too short is rejected with the required and actual minutes shown.</p>
   </div>
 </section>
 
@@ -608,6 +609,7 @@ TKTT</div>
       <div class="entry"><dt>Party size</dt><dd>the number of seats requested in a sell entry; caps how many passenger names the PNR can carry</dd></div>
       <div class="entry"><dt>PNR element</dt><dd>any single numbered line on the PNR display (a name, a segment, a phone, etc.) — what X{N} cancels</dd></div>
       <div class="entry"><dt>Married segments</dt><dd>two segments sold together as one connection; the PNR display notes each one's pairing, and cancelling either alone is blocked — both must be cancelled in the same X entry</dd></div>
+      <div class="entry"><dt>Minimum connect time (MCT)</dt><dd>the shortest layover a connection sell will accept at the connecting airport: 45 minutes if both legs stay within the same country, 90 minutes if either leg crosses a border. A shorter layover is rejected with the required and actual minutes shown</dd></div>
     </dl>
   </div>
 </div>

@@ -21,3 +21,8 @@ def city_name(code: str) -> str:
     if a:
         return f"{a[1].upper()} {code}"
     return f"CITY {code}"
+
+
+def airport_country(code: str) -> str | None:
+    a = AIRPORTS.get(code)
+    return a[2] if a else None

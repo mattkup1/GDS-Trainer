@@ -207,7 +207,7 @@
         "Sells seat 2Y on flight number M2."
       ],
       correct: 1,
-      explain: "0{SEATS}{CLASS1}{LINE1}{CLASS2}{LINE2} is the connection-sell entry. It only succeeds if line 1's destination matches line 2's origin and the layover is workable (≥30 min) — the two legs are then pushed as one married pair, sharing a marriedGroup id."
+      explain: "0{SEATS}{CLASS1}{LINE1}{CLASS2}{LINE2} is the connection-sell entry. It only succeeds if line 1's destination matches line 2's origin and the layover clears minimum connect time (45 min domestic, 90 min if either leg crosses a border) — the two legs are then pushed as one married pair, sharing a marriedGroup id."
     },
     {
       type: 'command',

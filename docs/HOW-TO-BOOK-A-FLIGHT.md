@@ -72,6 +72,8 @@ If two lines' cities and times line up (one line's destination matches another's
 ```
 Sells 2 seats — Y class on line 1, M class on line 2 — as two segments that are **married**: they were sold as one connection, so cancelling one later requires cancelling both together (`X1,2`), rather than silently leaving the other leg behind.
 
+"Workable connection time" means the layover clears minimum connect time (MCT) at the connecting airport: **45 minutes** if both legs stay within the same country, **90 minutes** if either leg crosses a border (extra time for immigration, security, or re-check-in). A layover that's too short is rejected with the required and actual minutes shown.
+
 ---
 
 ### 5. Add the passenger's name
@@ -465,6 +467,7 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 - **Party size** — the number of seats requested in a sell entry; caps how many passenger names the PNR can carry
 - **PNR element** — any single numbered line on the PNR display (a name, a segment, a phone, etc.) — what `X{N}` cancels
 - **Married segments** — two segments sold together as one connection; the PNR display notes each one's pairing, and cancelling either alone is blocked — both must be cancelled in the same `X` entry
+- **Minimum connect time (MCT)** — the shortest layover a connection sell will accept at the connecting airport: 45 minutes if both legs stay within the same country, 90 minutes if either leg crosses a border. A shorter layover is rejected with the required and actual minutes shown
 
 ### 5. Add passenger data (name field &amp; documents)
 

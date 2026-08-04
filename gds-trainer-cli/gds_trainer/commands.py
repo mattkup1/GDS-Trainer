@@ -18,7 +18,7 @@ import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from .airports import AIRPORTS, city_name
+from .airports import AIRPORTS, airport_country, city_name
 from .data import (
     AIRLINE_NUMERIC_CODES,
     AIRLINES,
@@ -32,6 +32,7 @@ from .data import (
     FARE_FORMULA,
     FARE_RULES,
     FLIGHT_CANCELLATION,
+    MINIMUM_CONNECT_TIME,
     LOYALTY_TIERS,
     MONTHS,
     PHONE_LOC_CODES,
@@ -99,6 +100,18 @@ def _gen_flight(rng, dep: int, orig: str, dest: str) -> dict:
     }
 
 
+# Real GDS minimum connect time: an agency's actual MCT table is keyed per specific
+# airport (and sometimes per terminal), which this app has no data for - the honest
+# simplification, and what a real GDS itself falls back to when no airport-specific
+# override exists, is the domestic/international default. A connection only counts as
+# domestic if BOTH legs stay within the connecting airport's country - crossing a border
+# on either leg (inbound or outbound) requires the longer international MCT, same as a
+# real itinerary spending extra time in immigration/security/re-check-in.
+def _required_mct(orig: str, via: str, dest: str) -> int:
+    domestic = airport_country(orig) == airport_country(via) and airport_country(via) == airport_country(dest)
+    return MINIMUM_CONNECT_TIME["domestic"] if domestic else MINIMUM_CONNECT_TIME["international"]
+
+
 def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
     if orig == dest:
         print_err("FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME")
@@ -135,7 +148,12 @@ def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
                 via = airport_codes[int(rng() * len(airport_codes))]
         dep1 = 300 + int(rng() * 600)
         leg1 = _gen_flight(rng, dep1, orig, via)
-        layover = 45 + int(rng() * 135)
+        # Layover always clears whatever MCT this specific via-airport requires (domestic or
+        # international) so these 2 generated connections stay guaranteed-sellable regardless
+        # of which via-airport got picked above - the +15 floor plus the existing 135-wide
+        # spread keeps the same "generous, obviously workable" feel the flat 45-180 range had.
+        mct = _required_mct(orig, via, dest)
+        layover = mct + 15 + int(rng() * 135)
         leg2 = _gen_flight(rng, leg1["arr"] + layover, via, dest)
         flights.append({"line": next_line, **leg1})
         next_line += 1
@@ -300,8 +318,13 @@ def sell_connection(seats: int, cls1: str, line1_num: int, cls2: str, line2_num:
     if f1["dest"] != f2["orig"]:
         print_err(f"INVALID CONNECTION - {f1['dest']} DOES NOT MATCH {f2['orig']}")
         return
-    if f2["dep"] < f1["arr"] + 30:
-        print_err("UNABLE - INSUFFICIENT CONNECTION TIME")
+    mct = _required_mct(f1["orig"], f1["dest"], f2["dest"])
+    actual_gap = f2["dep"] - f1["arr"]
+    if actual_gap < mct:
+        print_err(
+            f"UNABLE - MINIMUM CONNECTING TIME NOT MET AT {f1['dest']} "
+            f"(MCT {mct} MIN, ONLY {actual_gap} MIN AVAILABLE)"
+        )
         return
 
     legs = [(f1, cls1.upper()), (f2, cls2.upper())]

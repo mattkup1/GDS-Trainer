@@ -837,12 +837,16 @@
       printBlank();
     }
     print('. OPEN   X OCCUPIED   * YOUR ASSIGNMENT', 'dim');
-    print(`ASSIGN WITH: 4${n}-{SEAT}   e.g. 4${n}-14A`, 'dim');
+    if(state.pnr.names.length > 1){
+      print(`ASSIGN WITH: 4${n}-{SEAT}/{PAX#}   e.g. 4${n}-14A/1 (multiple passengers on file - required)`, 'dim');
+    } else {
+      print(`ASSIGN WITH: 4${n}-{SEAT}   e.g. 4${n}-14A`, 'dim');
+    }
     renderSeatMapPanel(n, seg, map, mine);
     switchDockTab('seat');
   }
 
-  function assignSeat(n, seatStr){
+  function assignSeat(n, seatStr, paxStr){
     const seg = state.pnr.segments[n-1];
     if(!seg){ printErr('INVALID SEGMENT NUMBER - CHECK ITINERARY'); return; }
     const rowMatch = seatStr.match(/^(\d{1,2})([A-HJK])$/);
@@ -858,9 +862,29 @@
     if(!deck.cols.join('').includes(letter)){ printErr(`INVALID SEAT LETTER ${letter} - VALID: ${deck.cols.join(' ')}`); return; }
     if(map.occupied.has(seatStr)){ printErr(`SEAT ${seatStr} NOT AVAILABLE - SELECT ANOTHER (SEE SEAT MAP: 4${n})`); return; }
     if(state.pnr.seats.some(s => s.segIdx === n-1 && s.seat === seatStr)){ printErr(`SEAT ${seatStr} ALREADY ASSIGNED ON THIS SEGMENT`); return; }
-    state.pnr.seats.push({ segIdx: n-1, seat: seatStr });
-    print(`SEAT ASSIGNED - SEG${n} ${seatStr}`);
-    logActivity(`SEAT ASSIGNED - SEG${n} ${seatStr}`);
+
+    const names = state.pnr.names;
+    let paxNum;
+    if(paxStr){
+      paxNum = parseInt(paxStr, 10);
+      if(paxNum < 1 || paxNum > names.length){ printErr('INVALID PASSENGER NUMBER - CHECK NAME FIELD'); return; }
+    } else if(names.length > 1){
+      // More than one passenger on file - which of them gets this seat is no longer
+      // unambiguous (unlike the solo case below), so this must be explicit rather than
+      // silently leaving the assignment unattributed (which would make it impossible to
+      // know which side of a later divide it belongs to - see dividePnr).
+      printErr(`MULTIPLE PASSENGERS ON FILE - SPECIFY PASSENGER NUMBER (ENTRY: 4${n}-${seatStr}/{PAX#})`);
+      return;
+    } else {
+      // Exactly one passenger (or none yet) - unambiguous, so default rather than force
+      // every solo booking to type a passenger number it couldn't possibly need.
+      paxNum = names.length === 1 ? 1 : null;
+    }
+
+    state.pnr.seats.push({ segIdx: n-1, seat: seatStr, pax: paxNum });
+    const paxSuffix = paxNum ? `  PAX ${paxNum} (${names[paxNum-1]})` : '';
+    print(`SEAT ASSIGNED - SEG${n} ${seatStr}${paxSuffix}`);
+    logActivity(`SEAT ASSIGNED - SEG${n} ${seatStr}${paxSuffix}`);
     refreshAndPrintPNR();
   }
 
@@ -994,7 +1018,10 @@
       const marriedNote = partners.length ? `  MARRIED TO ${partners.join(',')}` : '';
       els.push({ kind:'segment', idx:i, label:`SEG${i+1}`, text: formatSegmentShort(s) + `  ${s.dinfo.weekday}` + marriedNote });
     });
-    state.pnr.seats.forEach((st, i) => els.push({ kind:'seat', idx:i, label:'SEAT', text:`SEG${st.segIdx+1} - SEAT ${st.seat}` }));
+    state.pnr.seats.forEach((st, i) => {
+      const paxSuffix = st.pax ? `  PAX ${st.pax} (${state.pnr.names[st.pax-1] || '?'})` : '';
+      els.push({ kind:'seat', idx:i, label:'SEAT', text:`SEG${st.segIdx+1} - SEAT ${st.seat}${paxSuffix}` });
+    });
     state.pnr.ssrs.forEach((r, i) => els.push({ kind:'ssr', idx:i, label:'SSR', text: r.text }));
     state.pnr.osis.forEach((o, i) => els.push({ kind:'osi', idx:i, label:'OSI', text: o.text }));
     state.pnr.remarks.forEach((r, i) => els.push({ kind:'remark', idx:i, label:'RM', text: r }));
@@ -1079,7 +1106,7 @@
       clearPricingAndTickets(state.pnr);
       state.pnr.seats = state.pnr.seats
         .filter(st => st.segIdx !== e.idx)
-        .map(st => st.segIdx > e.idx ? { segIdx: st.segIdx - 1, seat: st.seat } : st);
+        .map(st => st.segIdx > e.idx ? { ...st, segIdx: st.segIdx - 1 } : st);
     }
     else if(e.kind === 'seat') state.pnr.seats.splice(e.idx, 1);
     else if(e.kind === 'ssr') state.pnr.ssrs.splice(e.idx, 1);
@@ -1238,33 +1265,54 @@
 
   function endTransaction(mode){
     const p = state.pnr;
-    const incomplete = firstIncompleteMessage('end_transaction');
-    if(incomplete){ printErr(incomplete); return; }
 
-    // Real groups (10+ passengers) need a deposit on file before the PNR can be saved -
-    // conditional on party size, so it's bespoke rather than a spec/pnr-completeness.json
-    // rule (same precedent as dividePnr's "at least one passenger must remain" check).
-    if(p.names.length >= 10 && !p.ssrs.some(r => r.code === 'DEPS')){
-      printErr('PNR INCOMPLETE - GROUP DEPOSIT REQUIRED FOR 10+ PASSENGERS (ENTRY: 3DEPS)');
-      return;
+    // Cancelling a previously-saved PNR down to zero segments (XI, or X{n} against every
+    // segment) and then ER/ET is a real, supported GDS workflow distinct from creating a
+    // new PNR - none of the standard completeness fields (name, fare quote, phone, RF,
+    // FOP, ticketing) are meaningful for an itinerary that no longer exists. Without this,
+    // the "segments" completeness rule would permanently trap the cancellation in the work
+    // area - it could never be committed, since a brand-new PNR still correctly requires a
+    // segment. Restricted to ER/ET; EM/EMI/EMT generate a customer document, which makes
+    // no sense for a cancelled itinerary, so those still go through the normal gate below.
+    const cancelling = Boolean(p.locator) && p.segments.length === 0 && (mode === 'ER' || mode === 'ET');
+
+    if(!cancelling){
+      const incomplete = firstIncompleteMessage('end_transaction');
+      if(incomplete){ printErr(incomplete); return; }
+
+      // Real groups (10+ passengers) need a deposit on file before the PNR can be saved -
+      // conditional on party size, so it's bespoke rather than a spec/pnr-completeness.json
+      // rule (same precedent as dividePnr's "at least one passenger must remain" check).
+      if(p.names.length >= 10 && !p.ssrs.some(r => r.code === 'DEPS')){
+        printErr('PNR INCOMPLETE - GROUP DEPOSIT REQUIRED FOR 10+ PASSENGERS (ENTRY: 3DEPS)');
+        return;
+      }
     }
 
     if(!p.locator) p.locator = genLocator();
-    applyScheduleChanges(p);
-    applyWaitlistClearing(p);
-    logActivity(`PNR SAVED (${mode}) - RLOC ${p.locator}`);
-    state.history[p.locator] = JSON.parse(JSON.stringify(p));
 
-    const now = new Date();
-    const ts = `${pad(now.getDate(),2).trim()}${MONTHS[now.getMonth()]}  ${minutesToClock(now.getHours()*60+now.getMinutes())}`;
-    print('END OF TRANSACTION COMPLETE', 'hd');
-    print(`  ${ts}   RLOC: ${p.locator}`);
+    if(cancelling){
+      logActivity(`PNR CANCELLED (${mode}) - ALL SEGMENTS REMOVED - RLOC ${p.locator}`);
+      state.history[p.locator] = JSON.parse(JSON.stringify(p));
+      print('PNR CANCELLED - ALL ITINERARY SEGMENTS REMOVED', 'hd');
+      print(`  RLOC: ${p.locator}`);
+    } else {
+      applyScheduleChanges(p);
+      applyWaitlistClearing(p);
+      logActivity(`PNR SAVED (${mode}) - RLOC ${p.locator}`);
+      state.history[p.locator] = JSON.parse(JSON.stringify(p));
 
-    if(EMAIL_DOCUMENTS[mode]){
-      const doc = buildItineraryDocument(mode);
-      print(`${EMAIL_DOCUMENTS[mode].label} DOCUMENT GENERATED - OPENING PRINT VIEW`, 'dim');
-      logActivity(`${EMAIL_DOCUMENTS[mode].label} DOCUMENT SENT (${mode})`);
-      openItineraryDocument(doc);
+      const now = new Date();
+      const ts = `${pad(now.getDate(),2).trim()}${MONTHS[now.getMonth()]}  ${minutesToClock(now.getHours()*60+now.getMinutes())}`;
+      print('END OF TRANSACTION COMPLETE', 'hd');
+      print(`  ${ts}   RLOC: ${p.locator}`);
+
+      if(EMAIL_DOCUMENTS[mode]){
+        const doc = buildItineraryDocument(mode);
+        print(`${EMAIL_DOCUMENTS[mode].label} DOCUMENT GENERATED - OPENING PRINT VIEW`, 'dim');
+        logActivity(`${EMAIL_DOCUMENTS[mode].label} DOCUMENT SENT (${mode})`);
+        openItineraryDocument(doc);
+      }
     }
 
     if(mode === 'ET' || EMAIL_DOCUMENTS[mode]){
@@ -1340,11 +1388,37 @@
     }
     p.docs = remainingDocs;
 
+    // Same pax-attribution/reindex pattern as docs above. A seat with no pax on file
+    // (assigned before this feature existed, or left unattributed on a multi-pax PNR) has
+    // no way to know which side of the divide it belongs to, so it's dropped from both -
+    // same fate as before pax attribution existed at all.
+    const movedSeats = [];
+    const remainingSeats = [];
+    for(const st of p.seats){
+      if(!st.pax) continue;
+      const originalIdx = st.pax - 1;
+      if(removedIdxSet.has(originalIdx)){
+        movedSeats.push({ ...st, pax: idxToNewPax[originalIdx] });
+      } else {
+        const shift = removedIdxAsc.filter(ri => ri < originalIdx).length;
+        remainingSeats.push({ ...st, pax: originalIdx - shift + 1 });
+      }
+    }
+    p.seats = remainingSeats;
+
     const newPnr = freshPNR();
     newPnr.names = movedNames;
     newPnr.infants = movedInfants;
     newPnr.docs = movedDocs;
+    newPnr.seats = movedSeats;
     newPnr.segments = JSON.parse(JSON.stringify(p.segments));
+    // Each segment's `seats` count is what priceItinerary multiplies the per-seat fare by
+    // (see there) - left at the pre-divide party size on both sides, a WP after dividing
+    // would silently price every resulting PNR for the *original* combined party instead of
+    // its own, now-smaller one. Scale both copies to their own side's headcount (infants
+    // don't count against seats here, matching how they never did at sell time either).
+    newPnr.segments.forEach(seg => { seg.seats = movedNames.length; });
+    p.segments.forEach(seg => { seg.seats = p.names.length; });
     newPnr.phones = JSON.parse(JSON.stringify(p.phones));
     newPnr.receivedFrom = p.receivedFrom;
     newPnr.remarks = JSON.parse(JSON.stringify(p.remarks));
@@ -1825,8 +1899,11 @@
     refreshAndPrintPNR();
   }
 
-  function addFqtv(airline, num, tierCode){
+  function addFqtv(airline, num, paxStr, tierCode){
+    const paxNum = paxStr ? parseInt(paxStr,10) : null;
+    if(paxNum && (paxNum < 1 || paxNum > state.pnr.names.length)){ printErr('INVALID PASSENGER NUMBER - CHECK NAME FIELD'); return; }
     let text = `FQTV ${airline} FREQUENT FLYER NUMBER  ${airline}${num}`;
+    if(paxNum) text += `  PAX ${paxNum} (${state.pnr.names[paxNum-1]})`;
     if(tierCode){
       const tierName = LOYALTY_TIERS[tierCode];
       if(!tierName){ printErr(`UNKNOWN LOYALTY TIER ${tierCode} - VALID: ${Object.keys(LOYALTY_TIERS).join(' ')}`); return; }
@@ -1986,11 +2063,11 @@
     REFUND_TICKETS: () => refundTickets(),
     EXCHANGE_TICKET: (raw, ticketNum) => exchangeTicket(ticketNum),
     DOCS: (raw, type, country, number, nationality, dob, sex, expiry, pax, infant) => addDocs(type, country, number, nationality, dob, sex, expiry, pax, infant),
-    SSR_FQTV: (raw, airline, num, tier) => addFqtv(airline, num, tier),
+    SSR_FQTV: (raw, airline, num, pax, tier) => addFqtv(airline, num, pax, tier),
     OSI: (raw, airline, text) => addOsi(airline, text),
     SSR: (raw, code, pax, freeText) => addSsr(code, pax, freeText),
     SEAT_MAP: (raw, n) => showSeatMap(parseInt(n,10)),
-    SEAT_ASSIGN: (raw, n, seat) => assignSeat(parseInt(n,10), seat),
+    SEAT_ASSIGN: (raw, n, seat, pax) => assignSeat(parseInt(n,10), seat, pax),
     DECODE_AIRPORT: (raw, code) => decodeAirport(code),
     SEARCH_AIRPORTS: (raw, term) => searchAirports(term),
     PNR_REDISPLAY: () => refreshAndPrintPNR(),

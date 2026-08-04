@@ -207,14 +207,14 @@
     <span class="difficulty diff-2">Beginner+</span>
   </div>
   <div class="scenario-body">
-    <p class="briefing"><b>John Smith</b> and <b>Jane Smith</b> are flying from <b>Los Angeles (LAX)</b> to <b>New York JFK</b> on <b>September 20, 2026</b>, with their lap infant, <b>baby Smith</b> (DOB <b>05JUL26</b>), who travels on John's lap. Book them on the <b>9:33 AM departure</b>. John would like a bassinet request noted, and Jane wants a vegetarian meal. Jane's frequent flyer number is <b>AA1234567</b>, Gold tier. Assign both adults window and aisle seats in row 14 of your choice (skip any seat the map shows as occupied). Their travel agency, <b>ACME Corp</b>, has a negotiated fare code (<code>ACME01</code>) — apply it when pricing. Payment is by Visa, card number <code>4111111111111111</code>, expiring <code>09/28</code>.</p>
+    <p class="briefing"><b>John Smith</b> and <b>Jane Smith</b> are flying from <b>Los Angeles (LAX)</b> to <b>New York (JFK)</b> on <b>September 20, 2026</b>, with their lap infant, <b>baby Smith</b> (DOB <b>05JUL26</b>), who travels on John's lap. Book them on the <b>8:33 AM departure</b>. John would like a bassinet request noted, and Jane wants a vegetarian meal. Jane's frequent flyer number is <b>AA1234567</b>, Gold tier. Assign both adults window and aisle seats in row 14 of your choice (skip any seat the map shows as occupied). Their travel agency, <b>ACME Corp</b>, has a negotiated fare code (<code>ACME01</code>) — apply it when pricing. Payment is by Visa, card number <code>4111111111111111</code>, expiring <code>09/28</code>.</p>
     <ul class="tasklist">
       <li>Sell 2 seats on the correct flight, then add both names (with the infant attached to John's entry).</li>
-      <li>Add the bassinet SSR for passenger 1, the meal SSR for passenger 2, and the frequent flyer number.</li>
+      <li>Add the bassinet SSR for passenger 1, the meal SSR for passenger 2, and Jane's frequent flyer number tied to her passenger number.</li>
       <li>Pull up the seat map and assign two seats in row 14.</li>
       <li>Price with the corporate code, then complete the rest of the PNR and issue tickets for all 3 (2 adults + 1 infant).</li>
     </ul>
-    <p class="skills"><b>New ground covered:</b> multiple passengers + lap infant, SSRs, FQTV/loyalty tier, seat maps and assignment, corporate fare codes, credit card form of payment.</p>
+    <p class="skills"><b>New ground covered:</b> multiple passengers + lap infant, SSRs, FQTV tied to a passenger with a loyalty tier, seat maps and assignment, corporate fare codes, credit card form of payment.</p>
   </div>
 </section>
 
@@ -249,7 +249,7 @@
     <span class="difficulty diff-4">Intermediate+</span>
   </div>
   <div class="scenario-body">
-    <p class="briefing">The White family — <b>Robert</b>, <b>Susan</b>, and <b>Emily White</b> — are booked <b>JFK &rarr; London Heathrow (LHR)</b> on <b>October 10, 2026</b>, on the <b>9:17 AM departure</b>, 3 seats in Y class. Build, price, complete, save, and ticket this PNR for all three. Then: Emily has decided to fly out a day later than her parents on a separate ticket (in this exercise, just split her into her own PNR — don't worry about actually changing her date). Split her out, and get <i>both</i> resulting PNRs — the parents' and Emily's — back to a fully re-priced, re-ticketed state.</p>
+    <p class="briefing">The White family — <b>Robert</b>, <b>Susan</b>, and <b>Emily White</b> — are booked <b>JFK &rarr; LHR</b> on <b>October 10, 2026</b>, on the <b>9:17 AM departure</b>, 3 seats in Y class. Build, price, complete, save, and ticket this PNR for all three. Then: Emily has decided to fly out a day later than her parents on a separate ticket (in this exercise, just split her into her own PNR — don't worry about actually changing her date). Split her out, and get <i>both</i> resulting PNRs — the parents' and Emily's — back to a fully re-priced, re-ticketed state.</p>
     <ul class="tasklist">
       <li>Sell 3 seats on the correct flight and add all three passengers in one name entry.</li>
       <li>Price, complete, save, and ticket the PNR for all three.</li>
@@ -319,10 +319,10 @@ A20SEPLAXJFK
 -SMITH/JANE MRS
 3BSCT-1
 3VGML-2
-3FQTVAA1234567/GLD
+3FQTVAA1234567-2/GLD
 41
-41-14A
-41-14G
+41-14A/1
+41-14G/2
 WP/ACME01
 9213555-2000-A
 6JDOE
@@ -331,12 +331,12 @@ FPCCVI4111111111111111/0928
 ER
 TKTT</div>
   <ol class="annot">
-    <li><code>A20SEPLAXJFK</code> — line 3 (JQ772) departs 8:33A, the "9:33 AM" flight referenced in the brief.</li>
+    <li><code>A20SEPLAXJFK</code> — line 3 (JQ772) departs 8:33A, matching the brief.</li>
     <li><code>03Y2</code> — sells 2 Y-class seats for the two adults (the infant doesn't count against this).</li>
     <li>Two separate <code>-</code> entries since the adults don't share a surname format constraint here — John's entry carries the infant suffix.</li>
     <li><code>3BSCT-1</code> / <code>3VGML-2</code> — SSRs tied to passenger 1 (John) and passenger 2 (Jane) respectively by their pax number in the name list.</li>
-    <li><code>3FQTVAA1234567/GLD</code> — frequent flyer number with a Gold tier suffix.</li>
-    <li><code>41</code> displays the seat map for segment 1 (a 777, 3-3-3 layout) — row 14 seats <code>B</code>/<code>C</code>/<code>D</code>/<code>E</code>/<code>F</code>/<code>H</code> are occupied on this generated map, so <code>14A</code> and <code>14G</code> are the two open seats actually assignable in that row.</li>
+    <li><code>3FQTVAA1234567-2/GLD</code> — frequent flyer number tied to passenger 2 (Jane), with a Gold tier suffix. The passenger number and tier are each optional and independent of each other — <code>-2</code> and <code>/GLD</code> can be used together, alone, or dropped entirely for a PNR-level FQTV not attributed to anyone specific.</li>
+    <li><code>41</code> displays the seat map for segment 1 (a 777, 3-3-3 layout) — row 14 seats <code>B</code>/<code>C</code>/<code>D</code>/<code>E</code>/<code>F</code>/<code>H</code> are occupied on this generated map, so <code>14A</code> and <code>14G</code> are the two open seats actually assignable in that row. With 2 passengers on the PNR, the passenger number is required on assignment (omitting it — as with a solo passenger — gets rejected: <code>MULTIPLE PASSENGERS ON FILE - SPECIFY PASSENGER NUMBER</code>) — <code>41-14A/1</code> ties 14A to John, <code>41-14G/2</code> ties 14G to Jane. This attribution is what would let either seat follow its passenger through a later <code>SP</code> divide (see Scenario 4) instead of being dropped as unattributed.</li>
     <li><code>WP/ACME01</code> — prices with the corporate discount code applied.</li>
     <li><code>FPCCVI4111111111111111/0928</code> — Visa, masked to <code>XXXXXXXXXXXX1111</code> once stored.</li>
     <li><code>ER</code> then <code>TKTT</code> — saves and issues 3 ticket numbers (John, Jane, and the infant).</li>

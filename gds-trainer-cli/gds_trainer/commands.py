@@ -957,10 +957,13 @@ def show_seat_map(n: int) -> None:
                 print_line(_seat_map_row_line(row, mine))
         print_blank()
     print_line(". OPEN   X OCCUPIED   * YOUR ASSIGNMENT", "dim")
-    print_line(f"ASSIGN WITH: 4{n}-{{SEAT}}   e.g. 4{n}-14A", "dim")
+    if len(STATE.pnr["names"]) > 1:
+        print_line(f"ASSIGN WITH: 4{n}-{{SEAT}}/{{PAX#}}   e.g. 4{n}-14A/1 (multiple passengers on file - required)", "dim")
+    else:
+        print_line(f"ASSIGN WITH: 4{n}-{{SEAT}}   e.g. 4{n}-14A", "dim")
 
 
-def assign_seat(n: int, seat_str: str) -> None:
+def assign_seat(n: int, seat_str: str, pax_str: str | None = None) -> None:
     segments = STATE.pnr["segments"]
     if n < 1 or n > len(segments):
         print_err("INVALID SEGMENT NUMBER - CHECK ITINERARY")
@@ -987,9 +990,29 @@ def assign_seat(n: int, seat_str: str) -> None:
     if any(s["seg_idx"] == n - 1 and s["seat"] == seat_str for s in STATE.pnr["seats"]):
         print_err(f"SEAT {seat_str} ALREADY ASSIGNED ON THIS SEGMENT")
         return
-    STATE.pnr["seats"].append({"seg_idx": n - 1, "seat": seat_str})
-    print_line(f"SEAT ASSIGNED - SEG{n} {seat_str}")
-    log_activity(STATE, f"SEAT ASSIGNED - SEG{n} {seat_str}")
+
+    names = STATE.pnr["names"]
+    if pax_str:
+        pax_num = int(pax_str)
+        if pax_num < 1 or pax_num > len(names):
+            print_err("INVALID PASSENGER NUMBER - CHECK NAME FIELD")
+            return
+    elif len(names) > 1:
+        # More than one passenger on file - which of them gets this seat is no longer
+        # unambiguous (unlike the solo case below), so this must be explicit rather than
+        # silently leaving the assignment unattributed (which would make it impossible to
+        # know which side of a later divide it belongs to - see divide_pnr).
+        print_err(f"MULTIPLE PASSENGERS ON FILE - SPECIFY PASSENGER NUMBER (ENTRY: 4{n}-{seat_str}/{{PAX#}})")
+        return
+    else:
+        # Exactly one passenger (or none yet) - unambiguous, so default rather than force
+        # every solo booking to type a passenger number it couldn't possibly need.
+        pax_num = 1 if len(names) == 1 else None
+
+    STATE.pnr["seats"].append({"seg_idx": n - 1, "seat": seat_str, "pax": pax_num})
+    pax_suffix = f"  PAX {pax_num} ({names[pax_num - 1]})" if pax_num else ""
+    print_line(f"SEAT ASSIGNED - SEG{n} {seat_str}{pax_suffix}")
+    log_activity(STATE, f"SEAT ASSIGNED - SEG{n} {seat_str}{pax_suffix}")
     refresh_and_print_pnr()
 
 
@@ -1030,8 +1053,14 @@ def add_fop_credit_card(card_type: str, num: str, mm_str: str, yy: str) -> None:
 
 # ---------- special service requests / other service info ----------
 
-def add_fqtv(airline: str, num: str, tier_code: str | None = None) -> None:
+def add_fqtv(airline: str, num: str, pax_str: str | None = None, tier_code: str | None = None) -> None:
+    pax_num = int(pax_str) if pax_str else None
+    if pax_num and (pax_num < 1 or pax_num > len(STATE.pnr["names"])):
+        print_err("INVALID PASSENGER NUMBER - CHECK NAME FIELD")
+        return
     text = f"FQTV {airline} FREQUENT FLYER NUMBER  {airline}{num}"
+    if pax_num:
+        text += f"  PAX {pax_num} ({STATE.pnr['names'][pax_num - 1]})"
     if tier_code:
         tier_name = LOYALTY_TIERS.get(tier_code)
         if not tier_name:
@@ -1247,12 +1276,19 @@ def build_elements() -> list[dict]:
             }
         )
     for i, st in enumerate(p["seats"]):
+        pax_num = st.get("pax")
+        if pax_num and pax_num - 1 < len(p["names"]):
+            pax_suffix = f"  PAX {pax_num} ({p['names'][pax_num - 1]})"
+        elif pax_num:
+            pax_suffix = f"  PAX {pax_num} (?)"
+        else:
+            pax_suffix = ""
         els.append(
             {
                 "kind": "seat",
                 "idx": i,
                 "label": "SEAT",
-                "text": f"SEG{st['seg_idx'] + 1} - SEAT {st['seat']}",
+                "text": f"SEG{st['seg_idx'] + 1} - SEAT {st['seat']}{pax_suffix}",
             }
         )
     for i, r in enumerate(p["ssrs"]):
@@ -1339,7 +1375,7 @@ def remove_element(e: dict) -> None:
             if st["seg_idx"] == idx:
                 continue
             if st["seg_idx"] > idx:
-                new_seats.append({"seg_idx": st["seg_idx"] - 1, "seat": st["seat"]})
+                new_seats.append({**st, "seg_idx": st["seg_idx"] - 1})
             else:
                 new_seats.append(st)
         p["seats"] = new_seats
@@ -1540,35 +1576,54 @@ def _apply_waitlist_clearing(p: dict) -> None:
 
 def end_transaction(mode: str) -> None:
     p = STATE.pnr
-    incomplete = _first_incomplete_message("end_transaction")
-    if incomplete:
-        print_err(incomplete)
-        return
 
-    # Real groups (10+ passengers) need a deposit on file before the PNR can be saved -
-    # conditional on party size, so it's bespoke rather than a spec/pnr-completeness.json
-    # rule (same precedent as divide_pnr's "at least one passenger must remain" check).
-    if len(p["names"]) >= 10 and not any(r["code"] == "DEPS" for r in p["ssrs"]):
-        print_err("PNR INCOMPLETE - GROUP DEPOSIT REQUIRED FOR 10+ PASSENGERS (ENTRY: 3DEPS)")
-        return
+    # Cancelling a previously-saved PNR down to zero segments (XI, or X{n} against every
+    # segment) and then ER/ET is a real, supported GDS workflow distinct from creating a
+    # new PNR - none of the standard completeness fields (name, fare quote, phone, RF,
+    # FOP, ticketing) are meaningful for an itinerary that no longer exists. Without this,
+    # the "segments" completeness rule would permanently trap the cancellation in the work
+    # area - it could never be committed, since a brand-new PNR still correctly requires a
+    # segment. Restricted to ER/ET; EM/EMI/EMT generate a customer document, which makes
+    # no sense for a cancelled itinerary, so those still go through the normal gate below.
+    cancelling = bool(p["locator"]) and not p["segments"] and mode in ("ER", "ET")
+
+    if not cancelling:
+        incomplete = _first_incomplete_message("end_transaction")
+        if incomplete:
+            print_err(incomplete)
+            return
+
+        # Real groups (10+ passengers) need a deposit on file before the PNR can be saved -
+        # conditional on party size, so it's bespoke rather than a spec/pnr-completeness.json
+        # rule (same precedent as divide_pnr's "at least one passenger must remain" check).
+        if len(p["names"]) >= 10 and not any(r["code"] == "DEPS" for r in p["ssrs"]):
+            print_err("PNR INCOMPLETE - GROUP DEPOSIT REQUIRED FOR 10+ PASSENGERS (ENTRY: 3DEPS)")
+            return
 
     if not p["locator"]:
         p["locator"] = gen_locator()
-    _apply_schedule_changes(p)
-    _apply_waitlist_clearing(p)
-    log_activity(STATE, f"PNR SAVED ({mode}) - RLOC {p['locator']}")
-    STATE.history[p["locator"]] = copy.deepcopy(p)
 
-    now = datetime.now()
-    ts = f"{now.day}{MONTHS[now.month - 1]}  {minutes_to_clock(now.hour * 60 + now.minute)}"
-    print_line("END OF TRANSACTION COMPLETE", "hd")
-    print_line(f"  {ts}   RLOC: {p['locator']}")
+    if cancelling:
+        log_activity(STATE, f"PNR CANCELLED ({mode}) - ALL SEGMENTS REMOVED - RLOC {p['locator']}")
+        STATE.history[p["locator"]] = copy.deepcopy(p)
+        print_line("PNR CANCELLED - ALL ITINERARY SEGMENTS REMOVED", "hd")
+        print_line(f"  RLOC: {p['locator']}")
+    else:
+        _apply_schedule_changes(p)
+        _apply_waitlist_clearing(p)
+        log_activity(STATE, f"PNR SAVED ({mode}) - RLOC {p['locator']}")
+        STATE.history[p["locator"]] = copy.deepcopy(p)
 
-    if mode in EMAIL_DOCUMENTS:
-        doc = build_itinerary_document(mode)
-        print_line(f"{EMAIL_DOCUMENTS[mode]['label']} DOCUMENT GENERATED", "dim")
-        log_activity(STATE, f"{EMAIL_DOCUMENTS[mode]['label']} DOCUMENT SENT ({mode})")
-        print_itinerary_document(doc)
+        now = datetime.now()
+        ts = f"{now.day}{MONTHS[now.month - 1]}  {minutes_to_clock(now.hour * 60 + now.minute)}"
+        print_line("END OF TRANSACTION COMPLETE", "hd")
+        print_line(f"  {ts}   RLOC: {p['locator']}")
+
+        if mode in EMAIL_DOCUMENTS:
+            doc = build_itinerary_document(mode)
+            print_line(f"{EMAIL_DOCUMENTS[mode]['label']} DOCUMENT GENERATED", "dim")
+            log_activity(STATE, f"{EMAIL_DOCUMENTS[mode]['label']} DOCUMENT SENT ({mode})")
+            print_itinerary_document(doc)
 
     if mode == "ET" or mode in EMAIL_DOCUMENTS:
         STATE.pnr = fresh_pnr()
@@ -1641,11 +1696,39 @@ def divide_pnr(nums_str: str) -> None:
             remaining_docs.append({**d, "pax": original_idx - shift + 1})
     p["docs"] = remaining_docs
 
+    # Same pax-attribution/reindex pattern as docs above. A seat with no pax on file
+    # (assigned before this feature existed, or left unattributed on a multi-pax PNR) has
+    # no way to know which side of the divide it belongs to, so it's dropped from both -
+    # same fate as before pax attribution existed at all.
+    moved_seats = []
+    remaining_seats = []
+    for st in p["seats"]:
+        pax_num = st.get("pax")
+        if not pax_num:
+            continue
+        original_idx = pax_num - 1
+        if original_idx in removed_idx_set:
+            moved_seats.append({**st, "pax": idx_to_new_pax[original_idx]})
+        else:
+            shift = sum(1 for ri in removed_idx_asc if ri < original_idx)
+            remaining_seats.append({**st, "pax": original_idx - shift + 1})
+    p["seats"] = remaining_seats
+
     new_pnr = fresh_pnr()
     new_pnr["names"] = moved_names
     new_pnr["infants"] = moved_infants
     new_pnr["docs"] = moved_docs
+    new_pnr["seats"] = moved_seats
     new_pnr["segments"] = copy.deepcopy(p["segments"])
+    # Each segment's `seats` count is what price_itinerary multiplies the per-seat fare by
+    # (see there) - left at the pre-divide party size on both sides, a WP after dividing
+    # would silently price every resulting PNR for the *original* combined party instead of
+    # its own, now-smaller one. Scale both copies to their own side's headcount (infants
+    # don't count against seats here, matching how they never did at sell time either).
+    for seg in new_pnr["segments"]:
+        seg["seats"] = len(moved_names)
+    for seg in p["segments"]:
+        seg["seats"] = len(p["names"])
     new_pnr["phones"] = copy.deepcopy(p["phones"])
     new_pnr["received_from"] = p["received_from"]
     new_pnr["remarks"] = copy.deepcopy(p["remarks"])

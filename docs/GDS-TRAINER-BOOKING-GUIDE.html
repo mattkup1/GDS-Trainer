@@ -304,9 +304,9 @@
 3WCHR-1/AISLE SEAT PREFERRED
 3OSIAA VIP PASSENGER</div>
     <p class="note">Common SSR codes: <code>WCHR</code>/<code>WCHS</code>/<code>WCHC</code> (wheelchair), <code>VGML</code>/<code>BBML</code>/<code>CHML</code>/<code>KSML</code>/<code>MOML</code>/<code>DBML</code>/<code>SPML</code> (meals), <code>BLND</code>/<code>DEAF</code> (accessibility), <code>UMNR</code> (unaccompanied minor), <code>PETC</code> (pet in cabin), <code>BSCT</code> (bassinet), <code>XBAG</code> (extra baggage), <code>DEPS</code> (group deposit received — see step 5).</p>
-    <p class="note">A frequent flyer number can optionally carry a loyalty tier:</p>
-    <div class="cmdblock">3FQTVAA1234567/GLD</div>
-    <p class="note">Tiers: <code>SLV</code> (Silver), <code>GLD</code> (Gold), <code>PLT</code> (Platinum), <code>DIA</code> (Diamond).</p>
+    <p class="note">A frequent flyer number can optionally be tied to a specific passenger and/or carry a loyalty tier:</p>
+    <div class="cmdblock">3FQTVAA1234567-1/GLD</div>
+    <p class="note">Tiers: <code>SLV</code> (Silver), <code>GLD</code> (Gold), <code>PLT</code> (Platinum), <code>DIA</code> (Diamond). The passenger number and tier are each optional and independent — <code>3FQTVAA1234567-1</code> (no tier) and <code>3FQTVAA1234567/GLD</code> (no passenger, applies to the PNR generally) both work too.</p>
     <p class="note">To add an agency-internal note that isn't sent to the airline (distinct from OSI, which is carrier-facing):</p>
     <div class="cmdblock">5VIP CLIENT - HANDLE WITH CARE</div>
   </div>
@@ -316,9 +316,12 @@
   <div class="step-num">8</div>
   <div>
     <h2>Assign a seat (optional)</h2>
-    <p class="format">Format: <code>4{N}</code> to display the seat map for itinerary segment N, then <code>4{N}-{SEAT}</code> to assign one.</p>
+    <p class="format">Format: <code>4{N}</code> to display the seat map for itinerary segment N, then <code>4{N}-{SEAT}</code> to assign one, optionally tied to a specific passenger with <code>/{PAX#}</code>.</p>
     <div class="cmdblock">41
 41-14A</div>
+    <p class="note">With a solo passenger on file, the passenger number can be omitted — it's assigned to them automatically. With more than one name on the PNR, it's required (there's no way to guess whose seat it is):</p>
+    <div class="cmdblock">41-14A/1
+41-14B/2</div>
   </div>
 </section>
 
@@ -419,7 +422,7 @@
     <h2>Divide the PNR into two bookings (optional)</h2>
     <p class="format">Format: <code>SP</code> + passenger number(s)</p>
     <div class="cmdblock">SP2</div>
-    <p class="note">Splits passenger 2 out of the current PNR into a brand-new, separately-locatored PNR — the itinerary and contact/ticketing info are copied to both. Needs a saved PNR (<code>ER</code>/<code>ET</code> already run) to work from; both resulting PNRs need a fresh <code>WP</code> (and <code>TKTT</code> if already ticketed) before they can be saved again, since the party size changed on each side.</p>
+    <p class="note">Splits passenger 2 out of the current PNR into a brand-new, separately-locatored PNR — the itinerary and contact/ticketing info are copied to both. Needs a saved PNR (<code>ER</code>/<code>ET</code> already run) to work from; both resulting PNRs need a fresh <code>WP</code> (and <code>TKTT</code> if already ticketed) before they can be saved again, since the party size changed on each side — each side's <code>WP</code> prices for its own headcount, not the original combined party. Any seat assignment tied to the divided passenger (see step 8) follows them into the new PNR; seats tied to passengers who stay behind stay with the original.</p>
   </div>
 </section>
 
@@ -460,9 +463,9 @@
     <tr><td>Add travel document (APIS)</td><td class="mono">3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}[.{INFANT#}]</td><td class="mono">3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1 or ...-1.1</td></tr>
     <tr><td>Add SSR</td><td class="mono">3{SSRCODE}[-{PAX#}][/{TEXT}]</td><td class="mono">3VGML</td></tr>
     <tr><td>Add OSI</td><td class="mono">3OSI{AL}{TEXT}</td><td class="mono">3OSIAA VIP PASSENGER</td></tr>
-    <tr><td>Add frequent flyer number (+ tier)</td><td class="mono">3FQTV{AL}{NUMBER}[/{TIER}]</td><td class="mono">3FQTVAA1234567/GLD</td></tr>
+    <tr><td>Add frequent flyer number (+ pax, tier)</td><td class="mono">3FQTV{AL}{NUMBER}[-{PAX#}][/{TIER}]</td><td class="mono">3FQTVAA1234567-1/GLD</td></tr>
     <tr><td>Add general remark</td><td class="mono">5{TEXT}</td><td class="mono">5VIP CLIENT</td></tr>
-    <tr><td>Seat map / assign seat</td><td class="mono">4{N} / 4{N}-{SEAT}</td><td class="mono">41 / 41-14A</td></tr>
+    <tr><td>Seat map / assign seat (+ pax)</td><td class="mono">4{N} / 4{N}-{SEAT}[/{PAX#}]</td><td class="mono">41 / 41-14A or 41-14A/1</td></tr>
     <tr><td>Decode airport code</td><td class="mono">DC{CODE}</td><td class="mono">DCORD</td></tr>
     <tr><td>Search airports by name</td><td class="mono">DAN{TEXT}</td><td class="mono">DANCHICAGO</td></tr>
     <tr><td>Price itinerary (+ corporate code)</td><td class="mono">WP[/{CORPCODE}]</td><td class="mono">WP or WP/ACME01</td></tr>
@@ -631,7 +634,7 @@ TKTT</div>
       <tbody>
         <tr><td class="mono">3{SSRCODE}[-{PAX#}][/{TEXT}]</td><td>Add a special service request</td></tr>
         <tr><td class="mono">3OSI{AL}{TEXT}</td><td>Add other-service-info free text to a carrier</td></tr>
-        <tr><td class="mono">3FQTV{AL}{NUMBER}[/{TIER}]</td><td>Add a frequent flyer number, optionally with a loyalty tier</td></tr>
+        <tr><td class="mono">3FQTV{AL}{NUMBER}[-{PAX#}][/{TIER}]</td><td>Add a frequent flyer number, optionally tied to a passenger, optionally with a loyalty tier</td></tr>
         <tr><td class="mono">5{TEXT}</td><td>Add a general remark (agency-internal, not sent to the carrier)</td></tr>
       </tbody>
     </table>
@@ -639,7 +642,7 @@ TKTT</div>
     <dl class="terms">
       <div class="entry"><dt>SSR</dt><dd>(Special Service Request) a coded request to the airline: meals, wheelchair assistance, unaccompanied minor, extra baggage, a group deposit (DEPS), etc.</dd></div>
       <div class="entry"><dt>OSI</dt><dd>(Other Service Info) free-text information sent to a carrier that isn't a coded SSR</dd></div>
-      <div class="entry"><dt>FQTV</dt><dd>frequent flyer number, stored as a special kind of SSR; can carry a loyalty tier (SLV/GLD/PLT/DIA)</dd></div>
+      <div class="entry"><dt>FQTV</dt><dd>frequent flyer number, stored as a special kind of SSR; can be tied to a specific passenger by number (like a regular SSR), and can carry a loyalty tier (SLV/GLD/PLT/DIA)</dd></div>
       <div class="entry"><dt>General remark</dt><dd>an agency-internal note on the PNR, distinct from OSI (which the carrier sees)</dd></div>
     </dl>
   </div>
@@ -652,12 +655,13 @@ TKTT</div>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
       <tbody>
         <tr><td class="mono">4{N}</td><td>Display the seat map for segment N</td></tr>
-        <tr><td class="mono">4{N}-{SEAT}</td><td>Assign a seat on segment N</td></tr>
+        <tr><td class="mono">4{N}-{SEAT}[/{PAX#}]</td><td>Assign a seat on segment N, optionally tied to a passenger</td></tr>
       </tbody>
     </table>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
       <div class="entry"><dt>Seat map</dt><dd>the row/column grid of open (.) and occupied (X) seats for a segment</dd></div>
+      <div class="entry"><dt>Seat/passenger attribution</dt><dd>which specific passenger a seat assignment belongs to; optional and auto-assumed for a solo passenger, required once there's more than one name on the PNR. Matters for SP (divide): only an attributed seat can follow its passenger into a new PNR</dd></div>
     </dl>
   </div>
 </div>
@@ -819,7 +823,7 @@ TKTT</div>
     </table>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
-      <div class="entry"><dt>Divide</dt><dd>splitting one or more passengers out of a PNR into a brand-new PNR; the itinerary and contact/ticketing details are copied to both, but each needs its own fresh fare quote (and reissue, if already ticketed) afterward since the party size changed on both sides</dd></div>
+      <div class="entry"><dt>Divide</dt><dd>splitting one or more passengers out of a PNR into a brand-new PNR; the itinerary and contact/ticketing details are copied to both, but each needs its own fresh fare quote (and reissue, if already ticketed) afterward since the party size changed on both sides — each side prices for its own remaining/moved headcount, not the original combined party. A passenger's own seat assignment (if tied to them) moves with them; an unattributed seat assignment is dropped from both sides</dd></div>
     </dl>
   </div>
 </div>

@@ -51,11 +51,11 @@ HANDLERS = {
     "DOCS": lambda raw, doc_type, country, number, nationality, dob, sex, expiry, pax, infant: c.add_docs(
         doc_type, country, number, nationality, dob, sex, expiry, pax, infant
     ),
-    "SSR_FQTV": lambda raw, airline, num, tier: c.add_fqtv(airline, num, tier),
+    "SSR_FQTV": lambda raw, airline, num, pax, tier: c.add_fqtv(airline, num, pax, tier),
     "OSI": lambda raw, airline, text: c.add_osi(airline, text),
     "SSR": lambda raw, code, pax, free_text: c.add_ssr(code, pax, free_text),
     "SEAT_MAP": lambda raw, n: c.show_seat_map(int(n)),
-    "SEAT_ASSIGN": lambda raw, n, seat: c.assign_seat(int(n), seat),
+    "SEAT_ASSIGN": lambda raw, n, seat, pax: c.assign_seat(int(n), seat, pax),
     "DECODE_AIRPORT": lambda raw, code: c.decode_airport(code),
     "SEARCH_AIRPORTS": lambda raw, term: c.search_airports(term),
     "PNR_REDISPLAY": lambda raw, *g: c.refresh_and_print_pnr(),

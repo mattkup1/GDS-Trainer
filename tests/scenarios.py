@@ -220,11 +220,14 @@ SCENARIOS: list[Scenario] = [
             Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
             Step("SP2", expect_contains=["PNR DIVIDED", "NEW RLOC", "SMITH/JANE MRS"]),
             # original PNR keeps its own segment/phone/RF/FOP/ticketing, loses passenger 2,
-            # and has its fare quote invalidated (party size changed)
+            # and has its fare quote invalidated (party size changed). The retained
+            # segment's seat count must also drop from HK2 to HK1 - it was sold for 2
+            # passengers, only 1 remains on this side after the divide, and a later WP
+            # must price for that 1, not silently re-price the original party of 2.
             Step(
                 "*R",
-                expect_contains=["NM1", "SMITH/JOHN MR", "SEG1", "CTC", "RF", "FP", "TK"],
-                expect_not_contains=["SMITH/JANE MRS", "FQ"],
+                expect_contains=["NM1", "SMITH/JOHN MR", "SEG1", "HK1", "CTC", "RF", "FP", "TK"],
+                expect_not_contains=["SMITH/JANE MRS", "FQ", "HK2"],
             ),
         ],
     ),
@@ -310,6 +313,74 @@ SCENARIOS: list[Scenario] = [
             SELL_1_SEAT,
             Step("41-1A"),  # outcome depends on random occupancy - not asserted here
             Step("41-1A", expect_not_contains=["SEAT ASSIGNED - SEG1 1A"]),
+        ],
+    ),
+    Scenario(
+        "seat_assign_defaults_to_solo_passenger",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            NAME_SMITH,
+            # solo passenger on file - the passenger number is unambiguous and optional
+            Step("41-1A", expect_contains=["SEAT ASSIGNED", "PAX 1 (SMITH/JOHN MR)"]),
+        ],
+    ),
+    Scenario(
+        "seat_assign_requires_pax_with_multiple_passengers",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_2_SEATS,
+            Step(
+                "-2SMITH/JOHN MR/JANE MRS",
+                expect_contains=["NAMES ADDED", "SMITH/JOHN MR", "SMITH/JANE MRS"],
+            ),
+            Step(
+                "41-1A",
+                expect_contains=["MULTIPLE PASSENGERS ON FILE", "SPECIFY PASSENGER NUMBER"],
+                expect_not_contains=["SEAT ASSIGNED"],
+            ),
+            Step("41-1A/2", expect_contains=["SEAT ASSIGNED", "PAX 2 (SMITH/JANE MRS)"]),
+            Step(
+                "41-1C/9",
+                expect_contains=["INVALID PASSENGER NUMBER"],
+                expect_not_contains=["SEAT ASSIGNED"],
+            ),
+        ],
+    ),
+    Scenario(
+        "divide_pnr_moves_attributed_seat_keeps_others_reindexed",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_2_SEATS,
+            Step(
+                "-2SMITH/JOHN MR/JANE MRS",
+                expect_contains=["NAMES ADDED"],
+            ),
+            Step("41-1A/1", expect_contains=["SEAT ASSIGNED", "PAX 1 (SMITH/JOHN MR)"]),
+            Step("41-1C/2", expect_contains=["SEAT ASSIGNED", "PAX 2 (SMITH/JANE MRS)"]),
+            PHONE_VALID,
+            RECEIVED_FROM,
+            PRICE,
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            # dividing passenger 2 (Jane) moves her seat with her, re-indexed to PAX 1 on
+            # the new PNR (asserted separately per-edition against the printed NEW RLOC,
+            # since this shared runner has no way to retrieve a randomly generated locator);
+            # here we confirm the retained side: John's seat survives, reindexed to stay
+            # PAX 1 (he was already 1, so this also guards against an accidental off-by-one),
+            # and the segment's own seat count drops from HK2 to HK1 for the one remaining
+            # passenger (see cancelling_a_saved_pnr... / new_pnr_still_requires... above for
+            # the general seats-count-follows-headcount behavior this also depends on).
+            Step("SP2", expect_contains=["PNR DIVIDED", "NEW RLOC", "SMITH/JANE MRS"]),
+            Step(
+                "*R",
+                expect_contains=["NM1", "SMITH/JOHN MR", "HK1", "SEAT", "PAX 1 (SMITH/JOHN MR)"],
+                expect_not_contains=["SMITH/JANE MRS", "HK2"],
+            ),
         ],
     ),
     Scenario(
@@ -549,6 +620,27 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "fqtv_tied_to_a_specific_passenger",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_2_SEATS,
+            NAME_SMITH,
+            Step("-DOE/JANE MRS", expect_contains=["NAME ADDED"]),
+            Step(
+                "3FQTVAA1234567-2/GLD",
+                expect_contains=["SSR ADDED", "PAX 2 (DOE/JANE MRS)", "TIER: GOLD"],
+            ),
+            # passenger number is optional and independent of the tier
+            Step("3FQTVAA7654321-1", expect_contains=["SSR ADDED", "PAX 1 (SMITH/JOHN MR)"]),
+            Step(
+                "3FQTVAA9999999-9",
+                expect_contains=["INVALID PASSENGER NUMBER"],
+                expect_not_contains=["SSR ADDED - FQTV AA FREQUENT FLYER NUMBER  AA9999999"],
+            ),
+        ],
+    ),
+    Scenario(
         "corporate_code_discount_applied",
         [
             SIGN_IN,
@@ -699,6 +791,47 @@ SCENARIOS: list[Scenario] = [
             Step("X1", expect_contains=["UNABLE TO CANCEL", "MARRIED TO ELEMENT 2"]),
             Step("X1,2", expect_contains=["ELEMENTS 1,2 CANCELLED"]),
             Step("*R", expect_contains=["PNR IS EMPTY"]),
+        ],
+    ),
+    Scenario(
+        "new_pnr_still_requires_a_segment",
+        [
+            # A brand-new (never-saved) PNR must still have at least one segment - only an
+            # already-locatored PNR being cancelled down to zero segments gets the bespoke
+            # bypass below.
+            SIGN_IN,
+            NAME_SMITH,
+            PHONE_VALID,
+            RECEIVED_FROM,
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("ER", expect_contains=["PNR INCOMPLETE", "NO ITINERARY SEGMENTS"]),
+        ],
+    ),
+    Scenario(
+        "cancelling_a_saved_pnr_to_zero_segments_persists_via_er",
+        [
+            # Real GDS workflow: cancel every segment on an already-saved PNR, then ER/ET
+            # to commit the cancellation - this must succeed (not hit the standard
+            # completeness gate) and must actually overwrite the saved snapshot, or a
+            # later retrieve would incorrectly hand back the stale, still-itineraried PNR.
+            *_priced_single_pax_setup(),
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            Step("X2", expect_contains=["ELEMENT 2 CANCELLED"]),
+            Step(
+                "ER",
+                expect_contains=["PNR CANCELLED", "ALL ITINERARY SEGMENTS REMOVED"],
+                expect_not_contains=["PNR INCOMPLETE", "NO ITINERARY SEGMENTS"],
+            ),
+            # remaining non-itinerary elements (name/phone/RF) survive the cancellation -
+            # it only clears the itinerary, not the whole PNR
+            Step("*R", expect_contains=["NM1", "SMITH/JOHN MR"]),
+            Step(
+                "ET",
+                expect_contains=["PNR CANCELLED", "ALL ITINERARY SEGMENTS REMOVED", "WORK AREA CLEARED"],
+            ),
         ],
     ),
 ]

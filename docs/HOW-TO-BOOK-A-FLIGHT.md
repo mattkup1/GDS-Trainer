@@ -137,12 +137,12 @@ Format: `3{SSRCODE}` for a service request (meals, wheelchair, etc.), optionally
 
 Common SSR codes: `WCHR`/`WCHS`/`WCHC` (wheelchair), `VGML`/`BBML`/`CHML`/`KSML`/`MOML`/`DBML`/`SPML` (meals), `BLND`/`DEAF` (accessibility), `UMNR` (unaccompanied minor), `PETC` (pet in cabin), `BSCT` (bassinet), `XBAG` (extra baggage), `DEPS` (group deposit received — see step 5).
 
-A frequent flyer number can optionally carry a loyalty tier:
+A frequent flyer number can optionally be tied to a specific passenger and/or carry a loyalty tier:
 
 ```
-3FQTVAA1234567/GLD
+3FQTVAA1234567-1/GLD
 ```
-Tiers: `SLV` (Silver), `GLD` (Gold), `PLT` (Platinum), `DIA` (Diamond).
+Tiers: `SLV` (Silver), `GLD` (Gold), `PLT` (Platinum), `DIA` (Diamond). Both the passenger number and the tier are optional and independent — `3FQTVAA1234567-1` (no tier) and `3FQTVAA1234567/GLD` (no passenger, applies to the PNR generally) both work too.
 
 To add an agency-internal note that isn't sent to the airline (distinct from OSI, which is carrier-facing):
 
@@ -154,11 +154,18 @@ To add an agency-internal note that isn't sent to the airline (distinct from OSI
 
 ### 8. Assign a seat (optional)
 
-Format: `4{N}` to display the seat map for itinerary segment N, then `4{N}-{SEAT}` to assign one.
+Format: `4{N}` to display the seat map for itinerary segment N, then `4{N}-{SEAT}` to assign one, optionally tied to a specific passenger with `/{PAX#}`.
 
 ```
 41
 41-14A
+```
+
+With a solo passenger on file, the passenger number can be omitted — it's assigned to them automatically. With more than one name on the PNR, it's required (there's no way to guess whose seat it is):
+
+```
+41-14A/1
+41-14B/2
 ```
 
 ---
@@ -276,7 +283,7 @@ Format: `SP` + passenger number(s)
 ```
 SP2
 ```
-Splits passenger 2 out of the current PNR into a brand-new, separately-locatored PNR — the itinerary and contact/ticketing info are copied to both. Needs a saved PNR (`ER`/`ET` already run) to work from; both resulting PNRs need a fresh `WP` (and `TKTT` if already ticketed) before they can be saved again, since the party size changed on each side.
+Splits passenger 2 out of the current PNR into a brand-new, separately-locatored PNR — the itinerary and contact/ticketing info are copied to both. Needs a saved PNR (`ER`/`ET` already run) to work from; both resulting PNRs need a fresh `WP` (and `TKTT` if already ticketed) before they can be saved again, since the party size changed on each side — each side's `WP` prices for its own headcount, not the original combined party. Any seat assignment tied to the divided passenger (see step 8) follows them into the new PNR; seats tied to passengers who stay behind stay with the original.
 
 ---
 
@@ -329,9 +336,9 @@ Two queues populate themselves automatically as you work a PNR, no entry require
 | Add travel document (APIS) | `3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}[.{INFANT#}]` | `3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1` or `...-1.1` for an infant |
 | Add SSR | `3{SSRCODE}[-{PAX#}][/{TEXT}]` | `3VGML` |
 | Add OSI | `3OSI{AL}{TEXT}` | `3OSIAA VIP PASSENGER` |
-| Add frequent flyer number (+ tier) | `3FQTV{AL}{NUMBER}[/{TIER}]` | `3FQTVAA1234567/GLD` |
+| Add frequent flyer number (+ pax, tier) | `3FQTV{AL}{NUMBER}[-{PAX#}][/{TIER}]` | `3FQTVAA1234567-1/GLD` |
 | Add general remark | `5{TEXT}` | `5VIP CLIENT` |
-| Seat map / assign seat | `4{N}` / `4{N}-{SEAT}` | `41` / `41-14A` |
+| Seat map / assign seat (+ pax) | `4{N}` / `4{N}-{SEAT}[/{PAX#}]` | `41` / `41-14A` or `41-14A/1` |
 | Decode airport code | `DC{CODE}` | `DCORD` |
 | Search airports by name | `DAN{TEXT}` | `DANCHICAGO` |
 | Price itinerary (+ corporate code) | `WP[/{CORPCODE}]` | `WP` or `WP/ACME01` |
@@ -464,13 +471,13 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 |---|---|
 | `3{SSRCODE}[-{PAX#}][/{TEXT}]` | Add a special service request |
 | `3OSI{AL}{TEXT}` | Add other-service-info free text to a carrier |
-| `3FQTV{AL}{NUMBER}[/{TIER}]` | Add a frequent flyer number, optionally with a loyalty tier |
+| `3FQTV{AL}{NUMBER}[-{PAX#}][/{TIER}]` | Add a frequent flyer number, optionally tied to a passenger, optionally with a loyalty tier |
 | `5{TEXT}` | Add a general remark (agency-internal, not sent to the carrier) |
 
 **Terminology**
 - **SSR** (Special Service Request) — a coded request to the airline: meals, wheelchair assistance, unaccompanied minor, extra baggage, a group deposit (`DEPS`), etc.
 - **OSI** (Other Service Info) — free-text information sent to a carrier that isn't a coded SSR
-- **FQTV** — frequent flyer number, stored as a special kind of SSR; can carry a loyalty tier (`SLV`/`GLD`/`PLT`/`DIA`)
+- **FQTV** — frequent flyer number, stored as a special kind of SSR; can be tied to a specific passenger by number (like a regular SSR), and can carry a loyalty tier (`SLV`/`GLD`/`PLT`/`DIA`)
 - **General remark** — an agency-internal note on the PNR, distinct from OSI (which the carrier sees)
 
 ### 7. Seat selection
@@ -478,10 +485,11 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 | Command | Does |
 |---|---|
 | `4{N}` | Display the seat map for segment `N` |
-| `4{N}-{SEAT}` | Assign a seat on segment `N` |
+| `4{N}-{SEAT}[/{PAX#}]` | Assign a seat on segment `N`, optionally tied to a passenger |
 
 **Terminology**
 - **Seat map** — the row/column grid of open (`.`) and occupied (`X`) seats for a segment
+- **Seat/passenger attribution** — which specific passenger a seat assignment belongs to; optional and auto-assumed for a solo passenger, required once there's more than one name on the PNR. Matters for `SP` (divide): only an attributed seat can follow its passenger into a new PNR
 
 ### 8. Price the itinerary
 
@@ -587,7 +595,7 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 | `SP{N},{M}` | Divide multiple passengers out at once |
 
 **Terminology**
-- **Divide** — splitting one or more passengers out of a PNR into a brand-new PNR; the itinerary and contact/ticketing details are copied to both, but each needs its own fresh fare quote (and reissue, if already ticketed) afterward since the party size changed on both sides
+- **Divide** — splitting one or more passengers out of a PNR into a brand-new PNR; the itinerary and contact/ticketing details are copied to both, but each needs its own fresh fare quote (and reissue, if already ticketed) afterward since the party size changed on both sides — each side prices for its own remaining/moved headcount, not the original combined party. A passenger's own seat assignment (if tied to them — see step 8) moves with them; an unattributed seat assignment is dropped from both sides
 
 ### 16. Queues
 

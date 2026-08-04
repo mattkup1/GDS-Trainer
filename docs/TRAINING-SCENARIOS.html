@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GDS Trainer — Practice Scenarios</title>
+<style>
+  @page { size: letter; margin: 0.85in 0.8in; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: #ffffff;
+    color: #1a2420;
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+  }
+  .mono {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+  }
+
+  /* ---- cover header ---- */
+  header.cover {
+    border-bottom: 3px solid #1e6e58;
+    padding-bottom: 16px;
+    margin-bottom: 26px;
+  }
+  .wordmark {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    font-size: 11pt;
+    letter-spacing: 0.08em;
+    color: #1e6e58;
+    font-weight: 700;
+  }
+  h1.doctitle {
+    font-size: 22pt;
+    margin: 8px 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: #4b5a54;
+    font-size: 10.5pt;
+    margin: 0;
+  }
+  .intro {
+    margin: 16px 0 28px;
+    max-width: 6.4in;
+  }
+  .intro code { background: #f0f3f0; border: 1px solid #d7e0da; border-radius: 3px; padding: 0.05em 0.4em; }
+  code { font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace; }
+
+  /* ---- scenario cards ---- */
+  section.scenario {
+    break-inside: avoid;
+    margin: 0 0 22px;
+    border: 1px solid #dde5e0;
+    border-radius: 7px;
+    overflow: hidden;
+  }
+  .scenario-head {
+    background: #eef4f0;
+    padding: 12px 16px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid #dde5e0;
+  }
+  .scenario-head-left { display: flex; align-items: baseline; gap: 12px; }
+  .scenario-num {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    font-weight: 700;
+    font-size: 11pt;
+    color: #1e6e58;
+    border: 1.5px solid #1e6e58;
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+  }
+  .scenario-head h2 { font-size: 13pt; margin: 0; }
+  .difficulty {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    font-size: 7.6pt;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+    align-self: center;
+  }
+  .diff-1 { background: #dff2e6; color: #16694f; }
+  .diff-2 { background: #e3f0da; color: #4c7a1f; }
+  .diff-3 { background: #fdf0d5; color: #92660b; }
+  .diff-4 { background: #fbe3d4; color: #a44a12; }
+  .diff-5 { background: #fadbdb; color: #a3272b; }
+  .scenario-body { padding: 12px 16px 16px; }
+  .scenario-body p { margin: 0 0 8px; }
+  .scenario-body p:last-child { margin-bottom: 0; }
+  .briefing { margin-bottom: 10px; }
+  .briefing b.locator { color: #1e6e58; }
+  ul.tasklist {
+    margin: 8px 0 10px;
+    padding-left: 20px;
+  }
+  ul.tasklist li { margin: 0 0 4px; }
+  p.skills {
+    margin: 10px 0 0;
+    padding-top: 8px;
+    border-top: 1px dashed #cfd9d3;
+    color: #4b5a54;
+    font-size: 8.8pt;
+  }
+  p.skills b { color: #1a2420; }
+
+  h2.section-head {
+    font-size: 14pt;
+    border-top: 2px solid #1e6e58;
+    padding-top: 10px;
+    margin-top: 34px;
+    break-before: page;
+  }
+  p.section-dek { color: #4b5a54; font-size: 9.5pt; margin: 4px 0 20px; }
+
+  /* ---- solutions ---- */
+  section.solution {
+    break-inside: avoid;
+    margin: 0 0 22px;
+  }
+  .solution-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .solution-head .scenario-num { width: 24px; height: 24px; font-size: 10pt; }
+  .solution-head h3 { font-size: 11.5pt; margin: 0; }
+  .cmdblock {
+    background: #10241d;
+    color: #b7f0d6;
+    border-radius: 5px;
+    padding: 10px 14px;
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    font-size: 9.3pt;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    margin: 0 0 8px;
+  }
+  .cmdblock .c { color: #6fd6a8; }
+  ol.annot {
+    margin: 8px 0 0;
+    padding-left: 20px;
+    font-size: 9pt;
+  }
+  ol.annot li { margin: 0 0 3px; }
+  ol.annot code { font-size: 8.8pt; }
+
+  footer.doc {
+    margin-top: 30px;
+    padding-top: 10px;
+    border-top: 1px solid #d7e0da;
+    color: #4b5a54;
+    font-size: 8pt;
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="wordmark">G&middot;D&middot;S&middot; T&middot;R&middot;A&middot;I&middot;N&middot;E&middot;R</div>
+  <h1 class="doctitle">Practice Scenarios</h1>
+  <p class="subtitle">Five booking exercises, beginner to advanced — try each one yourself before checking the solution</p>
+</header>
+
+<p class="intro">Open <code>../web/index.html</code> in a browser (or run the <code>gds-trainer</code> command-line edition) and sign in with <code>SI</code>. Each scenario below gives you a task and the specific flight/passenger details to use — flight data in this simulator is deterministic (seeded by route, date, and flight number), so entering the exact same details shown here will reproduce the exact same flights, seat maps, and fare quotes as the solutions at the end of this document. Work through each scenario on your own first; the <b>Solutions</b> section starting on the next page has the full command stream and a line-by-line explanation for every scenario. See <code>HOW-TO-BOOK-A-FLIGHT.md</code> or <code>GDS-TRAINER-BOOKING-GUIDE.html/.pdf</code> for command syntax if you get stuck.</p>
+
+<section class="scenario">
+  <div class="scenario-head">
+    <div class="scenario-head-left">
+      <span class="scenario-num">1</span>
+      <h2>A simple one-way ticket</h2>
+    </div>
+    <span class="difficulty diff-1">Beginner</span>
+  </div>
+  <div class="scenario-body">
+    <p class="briefing">A customer, <b>John Smith</b>, wants to fly from <b>Dallas/Ft. Worth (DFW)</b> to <b>Chicago O'Hare (ORD)</b> on <b>August 15, 2026</b>. He wants the earliest flight of the day and doesn't care about class of service — economy (Y) is fine. He'll pay cash and needs a ticket issued today.</p>
+    <ul class="tasklist">
+      <li>Search availability for the route/date above and sell 1 seat on the earliest departing flight.</li>
+      <li>Add his name, price the itinerary, and add a contact phone, received-from, ticketing arrangement, and form of payment.</li>
+      <li>Save the PNR and issue his ticket.</li>
+    </ul>
+    <p class="skills"><b>New ground covered:</b> sign-in, availability, sell, name field, pricing, phone/RF/ticketing/FOP, end transaction, ticketing.</p>
+  </div>
+</section>
+
+<section class="scenario">
+  <div class="scenario-head">
+    <div class="scenario-head-left">
+      <span class="scenario-num">2</span>
+      <h2>A family with an infant and special requests</h2>
+    </div>
+    <span class="difficulty diff-2">Beginner+</span>
+  </div>
+  <div class="scenario-body">
+    <p class="briefing"><b>John Smith</b> and <b>Jane Smith</b> are flying from <b>Los Angeles (LAX)</b> to <b>New York JFK</b> on <b>September 20, 2026</b>, with their lap infant, <b>baby Smith</b> (DOB <b>05JUL26</b>), who travels on John's lap. Book them on the <b>9:33 AM departure</b>. John would like a bassinet request noted, and Jane wants a vegetarian meal. Jane's frequent flyer number is <b>AA1234567</b>, Gold tier. Assign both adults window and aisle seats in row 14 of your choice (skip any seat the map shows as occupied). Their travel agency, <b>ACME Corp</b>, has a negotiated fare code (<code>ACME01</code>) — apply it when pricing. Payment is by Visa, card number <code>4111111111111111</code>, expiring <code>09/28</code>.</p>
+    <ul class="tasklist">
+      <li>Sell 2 seats on the correct flight, then add both names (with the infant attached to John's entry).</li>
+      <li>Add the bassinet SSR for passenger 1, the meal SSR for passenger 2, and the frequent flyer number.</li>
+      <li>Pull up the seat map and assign two seats in row 14.</li>
+      <li>Price with the corporate code, then complete the rest of the PNR and issue tickets for all 3 (2 adults + 1 infant).</li>
+    </ul>
+    <p class="skills"><b>New ground covered:</b> multiple passengers + lap infant, SSRs, FQTV/loyalty tier, seat maps and assignment, corporate fare codes, credit card form of payment.</p>
+  </div>
+</section>
+
+<section class="scenario">
+  <div class="scenario-head">
+    <div class="scenario-head-left">
+      <span class="scenario-num">3</span>
+      <h2>A connecting itinerary — and a schedule change</h2>
+    </div>
+    <span class="difficulty diff-3">Intermediate</span>
+  </div>
+  <div class="scenario-body">
+    <p class="briefing"><b>Jane Doe</b> needs to fly <b>DFW &rarr; ORD</b> on <b>August 15, 2026</b> — the same route as Scenario 1 — but this time book her onto the <b>connecting itinerary that routes through Fez (FAZ)</b>, in Y class, 1 seat. Price, complete, and save the PNR, then issue her ticket. Once you've saved it, see what the PNR display is telling you — something about this itinerary changed after booking. Handle it the way the on-screen instruction says to, then try to cancel just the <i>first</i> leg of her connection on its own. Note what happens, then cancel the whole connection correctly.</p>
+    <ul class="tasklist">
+      <li>Pull up the same availability display as Scenario 1 and identify the two lines that connect through FAZ.</li>
+      <li>Sell both legs together as one connection entry (1 seat, Y class both legs).</li>
+      <li>Complete and save the PNR as usual, then ticket it.</li>
+      <li>Read the alert on the redisplayed PNR and resolve it before moving on.</li>
+      <li>Attempt to cancel only the first segment — read the error.</li>
+      <li>Cancel both segments together, the way the error message tells you to.</li>
+    </ul>
+    <p class="skills"><b>New ground covered:</b> selling a connection (married segments), reading a schedule-change alert, re-pricing/reissuing after a schedule change, why a married pair can't be cancelled independently.</p>
+  </div>
+</section>
+
+<section class="scenario">
+  <div class="scenario-head">
+    <div class="scenario-head-left">
+      <span class="scenario-num">4</span>
+      <h2>Splitting a party</h2>
+    </div>
+    <span class="difficulty diff-4">Intermediate+</span>
+  </div>
+  <div class="scenario-body">
+    <p class="briefing">The White family — <b>Robert</b>, <b>Susan</b>, and <b>Emily White</b> — are booked <b>JFK &rarr; London Heathrow (LHR)</b> on <b>October 10, 2026</b>, on the <b>9:17 AM departure</b>, 3 seats in Y class. Build, price, complete, save, and ticket this PNR for all three. Then: Emily has decided to fly out a day later than her parents on a separate ticket (in this exercise, just split her into her own PNR — don't worry about actually changing her date). Split her out, and get <i>both</i> resulting PNRs — the parents' and Emily's — back to a fully re-priced, re-ticketed state.</p>
+    <ul class="tasklist">
+      <li>Sell 3 seats on the correct flight and add all three passengers in one name entry.</li>
+      <li>Price, complete, save, and ticket the PNR for all three.</li>
+      <li>Divide Emily out into a new PNR.</li>
+      <li>Notice what the PNR display tells you about pricing/tickets on the original — fix it and re-save/re-ticket.</li>
+      <li>Retrieve Emily's new PNR by its locator and get it re-priced, saved, and reticketed too. (Check what's already carried over from the original before re-entering anything.)</li>
+    </ul>
+    <p class="skills"><b>New ground covered:</b> multi-passenger name entries, PNR divide (<code>SP</code>), what carries over vs. what needs redoing on each side of a split, retrieving a PNR by locator.</p>
+  </div>
+</section>
+
+<section class="scenario">
+  <div class="scenario-head">
+    <div class="scenario-head-left">
+      <span class="scenario-num">5</span>
+      <h2>Booking a group</h2>
+    </div>
+    <span class="difficulty diff-5">Advanced</span>
+  </div>
+  <div class="scenario-body">
+    <p class="briefing">A tour operator, <b>Global Tours</b>, needs to hold <b>12 seats</b> on <b>UA flight 1900</b>, Y class, <b>DFW &rarr; ORD</b> on <b>November 15, 2026</b> — names aren't finalized yet. This is more space than any single availability line will show, so you'll need to book it directly by flight number rather than off a display. Build the PNR with placeholder names, price it, add contact/received-from/ticketing/payment, and try to save it — read what the terminal tells you is still missing for a group this size, and fix it. Once it's saved, one passenger's name has come in: <b>Carlos Diaz</b>. Replace the <i>first</i> placeholder with his real name and re-save.</p>
+    <ul class="tasklist">
+      <li>Long-sell 12 seats directly on UA1900 (Y class, 15NOV, DFW-ORD) — no availability display needed for this one.</li>
+      <li>Add 12 placeholder passengers in a single name entry.</li>
+      <li>Price the itinerary, then add phone, received-from, ticketing arrangement, and form of payment (cash is fine).</li>
+      <li>Try to end-transact. Read the error and resolve it with the correct entry.</li>
+      <li>Save the PNR.</li>
+      <li>Cancel the first placeholder passenger and add Carlos Diaz's real name in his place, then re-save.</li>
+    </ul>
+    <p class="skills"><b>New ground covered:</b> long/direct sell for space beyond what a display can offer, group placeholder names (<code>-{N}TBA/TBA</code>), the 10+ passenger group-deposit gate on end transaction (<code>3DEPS</code>), finalizing a placeholder passenger.</p>
+  </div>
+</section>
+
+<h2 class="section-head">Solutions</h2>
+<p class="section-dek">Full command streams, in order, with a line-by-line explanation. Every flight, fare, and seat map below is exactly what you'll see if you enter the same route/date/flight details from each scenario — nothing here is randomized except the record locator and generated ticket numbers, which will differ each time you run it yourself.</p>
+
+<section class="solution">
+  <div class="solution-head"><span class="scenario-num">1</span><h3>A simple one-way ticket</h3></div>
+  <div class="cmdblock">SI
+A15AUGDFWORD
+01Y1
+-SMITH/JOHN MR
+WP
+9214555-1234-A
+6JSMITH
+7TAW/
+FPCASH
+ER
+TKTT</div>
+  <ol class="annot">
+    <li><code>A15AUGDFWORD</code> — line 1 (AK2265, 5:39A departure) is the earliest flight on this display and always the first line shown for any route/date, so it's a safe "earliest flight" pick without needing to scan times.</li>
+    <li><code>01Y1</code> — sells 1 seat, Y class, from line 1.</li>
+    <li><code>-SMITH/JOHN MR</code> — adds the one passenger the single seat allows.</li>
+    <li><code>WP</code> — prices the itinerary (this flight/date has no schedule change on file, so nothing to resolve later).</li>
+    <li><code>9214555-1234-A</code> / <code>6JSMITH</code> / <code>7TAW/</code> / <code>FPCASH</code> — the remaining four fields end transaction always requires.</li>
+    <li><code>ER</code> — saves the PNR and returns a record locator.</li>
+    <li><code>TKTT</code> — issues one ticket number for SMITH/JOHN MR.</li>
+  </ol>
+</section>
+
+<section class="solution">
+  <div class="solution-head"><span class="scenario-num">2</span><h3>A family with an infant and special requests</h3></div>
+  <div class="cmdblock">SI
+A20SEPLAXJFK
+03Y2
+-SMITH/JOHN MR(INFSMITH/BABY/05JUL26)
+-SMITH/JANE MRS
+3BSCT-1
+3VGML-2
+3FQTVAA1234567/GLD
+41
+41-14A
+41-14G
+WP/ACME01
+9213555-2000-A
+6JDOE
+7TAW/
+FPCCVI4111111111111111/0928
+ER
+TKTT</div>
+  <ol class="annot">
+    <li><code>A20SEPLAXJFK</code> — line 3 (JQ772) departs 8:33A, the "9:33 AM" flight referenced in the brief.</li>
+    <li><code>03Y2</code> — sells 2 Y-class seats for the two adults (the infant doesn't count against this).</li>
+    <li>Two separate <code>-</code> entries since the adults don't share a surname format constraint here — John's entry carries the infant suffix.</li>
+    <li><code>3BSCT-1</code> / <code>3VGML-2</code> — SSRs tied to passenger 1 (John) and passenger 2 (Jane) respectively by their pax number in the name list.</li>
+    <li><code>3FQTVAA1234567/GLD</code> — frequent flyer number with a Gold tier suffix.</li>
+    <li><code>41</code> displays the seat map for segment 1 (a 777, 3-3-3 layout) — row 14 seats <code>B</code>/<code>C</code>/<code>D</code>/<code>E</code>/<code>F</code>/<code>H</code> are occupied on this generated map, so <code>14A</code> and <code>14G</code> are the two open seats actually assignable in that row.</li>
+    <li><code>WP/ACME01</code> — prices with the corporate discount code applied.</li>
+    <li><code>FPCCVI4111111111111111/0928</code> — Visa, masked to <code>XXXXXXXXXXXX1111</code> once stored.</li>
+    <li><code>ER</code> then <code>TKTT</code> — saves and issues 3 ticket numbers (John, Jane, and the infant).</li>
+  </ol>
+</section>
+
+<section class="solution">
+  <div class="solution-head"><span class="scenario-num">3</span><h3>A connecting itinerary — and a schedule change</h3></div>
+  <div class="cmdblock">SI
+A15AUGDFWORD
+01Y7Y8
+-DOE/JANE MS
+WP
+9214555-9999-A
+6JDOE
+7TAW/
+FPCASH
+ER
+WP
+TKTT
+X2
+X2,3</div>
+  <ol class="annot">
+    <li>Same <code>A15AUGDFWORD</code> display as Scenario 1 — lines 7 (ET1276, DFW&rarr;FAZ) and 8 (VA176, FAZ&rarr;ORD) are this route/date's generated connection: line 7's destination (FAZ) matches line 8's origin, with a workable 47-minute connection.</li>
+    <li><code>01Y7Y8</code> — 1 seat, Y class on both legs. Both segments come back tagged <code>MARRIED TO SEG2</code>/<code>MARRIED TO SEG1</code>.</li>
+    <li><code>WP</code> prices both legs together as one itinerary; the rest of the fields and <code>ER</code> save it as usual.</li>
+    <li>On redisplay after <code>ER</code>, a <code>** SCHEDULE CHANGE ON FILE **</code> notice appears against segment 1 (ET1276) — this flight/date combination always rolls a schedule change, so you'll see it every time. The notice tells you to re-price and reissue: a second <code>WP</code> clears it, and <code>TKTT</code> issues the ticket against the corrected time.</li>
+    <li><code>X2</code> (cancelling just segment 1 alone) is rejected: <code>UNABLE TO CANCEL - ELEMENT 2 IS MARRIED TO ELEMENT 3 - CANCEL BOTH TOGETHER (X2,3)</code> — exactly the entry the error message names.</li>
+    <li><code>X2,3</code> cancels both legs together, which succeeds.</li>
+  </ol>
+</section>
+
+<section class="solution">
+  <div class="solution-head"><span class="scenario-num">4</span><h3>Splitting a party</h3></div>
+  <div class="cmdblock">SI
+A10OCTJFKLHR
+03Y3
+-3WHITE/ROBERT MR/SUSAN MRS/EMILY MISS
+WP
+9212555-4400-A
+6RWHITE
+7TAW/
+FPCASH
+ER
+TKTT
+SP3
+WP
+ER
+TKTT
+*{NEW LOCATOR SHOWN BY SP3}
+WP
+ER
+TKTT</div>
+  <ol class="annot">
+    <li><code>A10OCTJFKLHR</code> — line 3 (BA542) departs 9:17A, matching the brief.</li>
+    <li><code>03Y3</code> then <code>-3WHITE/...</code> — one sell for all 3 seats, one name entry for all 3 passengers (shared surname, three given-name/title pairs).</li>
+    <li>Price, complete, save, and ticket as usual — 3 ticket numbers issued.</li>
+    <li><code>SP3</code> — divides passenger 3 (Emily, the last name added) out. The response names the new PNR's record locator and confirms the original's is unchanged but needs re-saving. It also invalidates pricing/tickets on the <i>original</i> PNR (party size dropped from 3 to 2), which is why it needs another <code>WP</code>/<code>ER</code>/<code>TKTT</code> before it's clean again.</li>
+    <li>Retrieving Emily's new PNR (<code>*{locator}</code>) shows her contact info, received-from, form of payment, and ticketing arrangement were all <b>copied</b> over automatically by the divide — only pricing and tickets need redoing on her side too, since her party size (now 1) also differs from the original 3. No need to re-enter phone/RF/FOP/ticketing on her PNR.</li>
+  </ol>
+</section>
+
+<section class="solution">
+  <div class="solution-head"><span class="scenario-num">5</span><h3>Booking a group</h3></div>
+  <div class="cmdblock">SI
+0UA1900Y15NOVDFWORDNN12
+-12TBA/TBA
+WP
+9214555-7000-A
+6GTOURS
+7TAW/
+FPCASH
+ER
+3DEPS
+ER
+X1
+-DIAZ/CARLOS MR
+ER</div>
+  <ol class="annot">
+    <li><code>0UA1900Y15NOVDFWORDNN12</code> — a long/direct sell: airline UA, flight 1900, Y class, 15NOV, DFW&rarr;ORD, status NN, 12 seats. This bypasses the availability display entirely, which is the only way to book more seats than any one display line offers.</li>
+    <li><code>-12TBA/TBA</code> — the group-placeholder shorthand: 12 identical, unnumbered <code>TBA/TBA</code> names in one entry, matching the real group-booking convention. Party size (12) matches the 12 seats just sold.</li>
+    <li><code>WP</code> and the phone/RF/ticketing/FOP entries complete every field the base <code>end transaction</code> rule requires.</li>
+    <li>The first <code>ER</code> is rejected: <code>PNR INCOMPLETE - GROUP DEPOSIT REQUIRED FOR 10+ PASSENGERS (ENTRY: 3DEPS)</code> — this only appears once every other field is already satisfied, since it's a bespoke check layered on top of (not a replacement for) the standard completeness rules.</li>
+    <li><code>3DEPS</code> — records the group deposit as an SSR (<code>DEPS</code>/"GROUP DEPOSIT RECEIVED"). The second <code>ER</code> now succeeds and returns a record locator.</li>
+    <li><code>X1</code> cancels the first <code>NM</code> element (the first <code>TBA/TBA</code> placeholder); <code>-DIAZ/CARLOS MR</code> adds his real name in an ordinary name entry — no dedicated "replace placeholder" command exists, since cancel-then-add already does the job. His name is appended as the new last name in the list (still 12 total).</li>
+    <li>The final <code>ER</code> re-saves under the same record locator, since only a name changed — no itinerary/pricing impact.</li>
+  </ol>
+</section>
+
+<footer class="doc">
+  <span>GDS Trainer &middot; Practice Scenarios</span>
+  <span>Source: TRAINING-SCENARIOS.html</span>
+</footer>
+
+</body>
+</html>

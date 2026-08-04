@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GDS Trainer — Command Quiz</title>
+<style>
+  :root{ --fg:#33ff66; --fg-dim:#1c9e42; --fg-rgb:51,255,102; --bad:#ff5c5c; --bad-rgb:255,92,92; }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; min-height:100%;
+    background:#0a0d0a;
+    background-image: radial-gradient(ellipse 60% 45% at 50% 0%, rgba(var(--fg-rgb),.08), rgba(var(--fg-rgb),0) 70%);
+    color:var(--fg);
+    font-family:'Courier New','IBM Plex Mono',Consolas,monospace;
+  }
+  #wrap{ max-width:760px; margin:0 auto; padding:28px 18px 60px; }
+
+  .wordmark{ letter-spacing:.15em; font-size:12px; color:var(--fg-dim); text-align:center; }
+  h1.title{
+    text-align:center; margin:6px 0 2px; font-size:26px; letter-spacing:.04em;
+    text-shadow:0 0 2px rgba(var(--fg-rgb),.9), 0 0 8px rgba(var(--fg-rgb),.45);
+  }
+  p.sub{ text-align:center; color:var(--fg-dim); font-size:12.5px; margin:0 0 26px; }
+
+  .screen{
+    background:#000804; border:1px solid rgba(var(--fg-rgb),.35); border-radius:8px;
+    box-shadow: 0 0 0 1px #000, 0 0 30px rgba(0,0,0,.6) inset, 0 0 24px rgba(var(--fg-rgb),.08);
+    padding:22px 22px 20px; position:relative; overflow:hidden;
+  }
+  .screen::before{
+    content:''; position:absolute; inset:0; pointer-events:none; opacity:.5;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 1px, rgba(0,0,0,.35) 2px, rgba(0,0,0,0) 3px);
+  }
+
+  .statusrow{ display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--fg-dim); margin-bottom:14px; letter-spacing:.03em; }
+  .barouter{ height:5px; background:rgba(var(--fg-rgb),.12); border-radius:3px; overflow:hidden; margin-bottom:18px; }
+  .barinner{ height:100%; background:rgb(var(--fg-rgb)); box-shadow:0 0 6px rgba(var(--fg-rgb),.8); transition:width .25s ease; }
+
+  .tag{
+    display:inline-block; font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+    border:1px solid rgba(var(--fg-rgb),.5); color:var(--fg); border-radius:10px;
+    padding:2px 9px; margin-bottom:12px; text-shadow:none;
+  }
+  .tag.mc{ border-color:rgba(255,208,90,.55); color:#ffd05a; }
+
+  .prompt{ font-size:14.5px; line-height:1.6; margin:0 0 18px; text-shadow:0 0 1px rgba(var(--fg-rgb),.6); }
+  .prompt b{ color:#fff; }
+  .prompt code{ background:rgba(var(--fg-rgb),.1); border:1px solid rgba(var(--fg-rgb),.3); border-radius:3px; padding:0 5px; }
+
+  .inputrow{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .inputrow .chevron{ color:var(--fg); text-shadow:0 0 2px rgba(var(--fg-rgb),.8); }
+  #answerInput{
+    flex:1; background:transparent; border:none; border-bottom:1px solid rgba(var(--fg-rgb),.5);
+    color:var(--fg); font-family:inherit; font-size:15px; padding:6px 2px;
+    text-shadow:0 0 2px rgba(var(--fg-rgb),.6); outline:none; letter-spacing:.03em;
+    text-transform:uppercase;
+  }
+  #answerInput:focus{ border-bottom-color:rgb(var(--fg-rgb)); }
+  #answerInput::placeholder{ color:var(--fg-dim); text-transform:none; opacity:.7; }
+
+  .options{ display:flex; flex-direction:column; gap:8px; margin-bottom:6px; }
+  .opt{
+    text-align:left; background:rgba(var(--fg-rgb),.04); border:1px solid rgba(var(--fg-rgb),.3);
+    color:var(--fg); font-family:inherit; font-size:13.5px; line-height:1.5;
+    border-radius:5px; padding:10px 12px; cursor:pointer;
+  }
+  .opt:hover:not(:disabled){ background:rgba(var(--fg-rgb),.12); border-color:rgba(var(--fg-rgb),.7); }
+  .opt:disabled{ cursor:default; }
+  .opt .letter{ display:inline-block; width:18px; color:var(--fg-dim); }
+  .opt.correct{ background:rgba(var(--fg-rgb),.18); border-color:rgb(var(--fg-rgb)); }
+  .opt.wrong{ background:rgba(var(--bad-rgb),.14); border-color:var(--bad); color:#ffb3b3; }
+  .opt.wrong .letter{ color:#ffb3b3; }
+  .opt.dim{ opacity:.45; }
+
+  button.submit{
+    background:linear-gradient(#193a24,#0e2417); border:1px solid rgba(var(--fg-rgb),.6);
+    color:var(--fg); font-family:inherit; font-size:12.5px; letter-spacing:.06em;
+    padding:8px 16px; border-radius:5px; cursor:pointer; text-transform:uppercase;
+  }
+  button.submit:hover:not(:disabled){ background:linear-gradient(#214b2e,#123019); }
+  button.submit:disabled{ opacity:.35; cursor:default; }
+
+  .feedback{ margin-top:16px; padding-top:14px; border-top:1px dashed rgba(var(--fg-rgb),.3); }
+  .verdict{ font-size:13px; font-weight:bold; letter-spacing:.05em; margin-bottom:8px; }
+  .verdict.ok{ color:rgb(var(--fg-rgb)); text-shadow:0 0 4px rgba(var(--fg-rgb),.6); }
+  .verdict.bad{ color:var(--bad); text-shadow:0 0 4px rgba(var(--bad-rgb),.5); }
+  .answerline{
+    font-size:13.5px; background:#06110a; border:1px solid rgba(var(--fg-rgb),.3); border-radius:4px;
+    padding:8px 10px; margin-bottom:10px; color:var(--fg); text-shadow:0 0 1px rgba(var(--fg-rgb),.5);
+  }
+  .answerline .lbl{ color:var(--fg-dim); }
+  .explain{ font-size:12.5px; line-height:1.6; color:#cfe8d9; opacity:.9; margin-bottom:16px; }
+
+  .navrow{ display:flex; justify-content:flex-end; }
+
+  /* ---- results ---- */
+  #results{ display:none; }
+  .scorebig{ text-align:center; font-size:44px; margin:6px 0 4px; text-shadow:0 0 3px rgba(var(--fg-rgb),.9), 0 0 14px rgba(var(--fg-rgb),.4); }
+  .scoreline{ text-align:center; color:var(--fg-dim); font-size:12.5px; margin-bottom:22px; letter-spacing:.04em; }
+  .reviewitem{ border-top:1px dashed rgba(var(--fg-rgb),.25); padding:12px 0; font-size:12.5px; }
+  .reviewitem:first-child{ border-top:none; }
+  .reviewitem .rq{ margin-bottom:6px; color:#cfe8d9; }
+  .reviewitem .rmark{ font-weight:bold; margin-right:6px; }
+  .reviewitem .rmark.ok{ color:rgb(var(--fg-rgb)); }
+  .reviewitem .rmark.bad{ color:var(--bad); }
+  .reviewitem .ra{ margin:3px 0; }
+  .reviewitem .ra .lbl{ color:var(--fg-dim); }
+  .reviewitem .ra.mine.wrong{ color:#ffb3b3; }
+  .reviewitem .ra.correct{ color:rgb(var(--fg-rgb)); }
+  .perfect{ text-align:center; font-size:12.5px; color:var(--fg-dim); margin-bottom:18px; }
+
+  .restartrow{ text-align:center; margin-top:22px; }
+
+  footer{ text-align:center; color:var(--fg-dim); font-size:10.5px; margin-top:18px; opacity:.7; letter-spacing:.03em; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="wordmark">G&middot;D&middot;S&middot; T&middot;R&middot;A&middot;I&middot;N&middot;E&middot;R</div>
+  <h1 class="title">COMMAND QUIZ</h1>
+  <p class="sub">10 scenarios &middot; type the exact entry, or parse a given command and pick what it does</p>
+
+  <div class="screen">
+    <div id="quiz">
+      <div class="statusrow">
+        <span id="qCounter">QUESTION 1 OF 10</span>
+        <span id="qScore">SCORE 0/0</span>
+      </div>
+      <div class="barouter"><div class="barinner" id="progBar" style="width:0%"></div></div>
+
+      <span class="tag" id="qTag">TYPE THE COMMAND</span>
+      <p class="prompt" id="qPrompt"></p>
+
+      <div id="typeArea">
+        <div class="inputrow">
+          <span class="chevron">&gt;</span>
+          <input id="answerInput" type="text" placeholder="ENTER THE EXACT ENTRY" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+
+      <div id="mcArea" class="options" style="display:none;"></div>
+
+      <div class="navrow">
+        <button class="submit" id="submitBtn">SUBMIT</button>
+      </div>
+
+      <div class="feedback" id="feedback" style="display:none;">
+        <div class="verdict" id="verdict"></div>
+        <div class="answerline" id="youAnswered" style="display:none;"></div>
+        <div class="answerline" id="correctAnswer"></div>
+        <div class="explain" id="explainText"></div>
+        <div class="navrow">
+          <button class="submit" id="nextBtn">NEXT &rarr;</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="results">
+      <div class="scorebig" id="scoreBig"></div>
+      <div class="scoreline" id="scoreLine"></div>
+      <div id="reviewList"></div>
+      <div class="perfect" id="perfectMsg" style="display:none;">Every command, exact on the first try. That's clean agent work.</div>
+      <div class="restartrow"><button class="submit" id="restartBtn">RESTART QUIZ</button></div>
+    </div>
+  </div>
+
+  <footer>GDS TRAINER SIMULATOR &middot; ALL DATA SYNTHETIC &middot; NO NETWORK CALLS</footer>
+</div>
+
+<script>
+(function(){
+
+  const QUESTIONS = [
+    {
+      type: 'command',
+      tag: 'TYPE THE COMMAND',
+      prompt: "You've just opened the terminal. Sign in using the simulator's default sine and PCC — no arguments needed.",
+      answer: /^SI$/,
+      canonical: 'SI',
+      explain: "SI with no arguments signs you in under the simulator's default sine (9TAA) and PCC (DFW1). SI{sine}/{pcc} — e.g. SI1234AA/DFW1 — signs in under specific credentials instead."
+    },
+    {
+      type: 'command',
+      tag: 'TYPE THE COMMAND',
+      prompt: "A customer wants to see what's available from <b>Dallas/Ft. Worth (DFW)</b> to <b>Chicago O'Hare (ORD)</b> on <b>August 15</b>. Pull the availability display.",
+      answer: /^[A1]15AUGDFWORD$/,
+      canonical: 'A15AUGDFWORD',
+      explain: "A{DD}{MON}{ORIG}{DEST} pulls availability for that route/date. 1{DD}{MON}{ORIG}{DEST} is the identical alternate entry (115AUGDFWORD) — both are accepted."
+    },
+    {
+      type: 'command',
+      tag: 'TYPE THE COMMAND',
+      prompt: "That availability display is still on screen. Sell <b>2 seats</b> in <b>Y class</b> on <b>line 3</b>.",
+      answer: /^03Y2$/,
+      canonical: '03Y2',
+      explain: "0{LINE}{CLASS}{SEATS} sells directly off the last availability display: line 3, class Y, 2 seats."
+    },
+    {
+      type: 'mc',
+      tag: 'PARSE THE COMMAND',
+      prompt: "An availability display is on screen. A trainee enters <code>02Y1M2</code>. What does this actually do?",
+      options: [
+        "Sells 2 seats in Y class on line 1, then 2 more seats in M class on line 2 — 4 seats total.",
+        "Sells one connection for 2 seats: Y class on the leg shown as line 1, M class on the leg shown as line 2.",
+        "Invalid — a sell entry can only reference one availability line at a time.",
+        "Sells seat 2Y on flight number M2."
+      ],
+      correct: 1,
+      explain: "0{SEATS}{CLASS1}{LINE1}{CLASS2}{LINE2} is the connection-sell entry. It only succeeds if line 1's destination matches line 2's origin and the layover is workable (≥30 min) — the two legs are then pushed as one married pair, sharing a marriedGroup id."
+    },
+    {
+      type: 'command',
+      tag: 'TYPE THE COMMAND',
+      prompt: "Add a name to the PNR for passenger <b>Maria Garcia</b> (Mrs.).",
+      answer: /^-GARCIA\/MARIA MRS$/,
+      canonical: '-GARCIA/MARIA MRS',
+      explain: "-{SURNAME}/{GIVEN} {TITLE} adds one passenger — surname first, given name after the slash, title last."
+    },
+    {
+      type: 'command',
+      tag: 'TYPE THE COMMAND',
+      prompt: "The PNR has 1 segment and Maria Garcia's name on file. Price the itinerary using her travel agency's negotiated fare code, <b>ACME01</b>.",
+      answer: /^(WP|WPNCS)\/ACME01$/,
+      canonical: 'WP/ACME01',
+      explain: "WP (or WPNCS) followed by /{CODE} applies a corporate/negotiated fare code while pricing. Without the code, a plain WP prices the published fare instead."
+    },
+    {
+      type: 'mc',
+      tag: 'PARSE THE COMMAND',
+      prompt: "Which of these four ticketing-arrangement entries is <b>invalid</b>?",
+      options: [
+        "7TAW/",
+        "7TAW16AUG/1800",
+        "7TAX16AUG/1800",
+        "7TAX/"
+      ],
+      correct: 3,
+      explain: "7TAX/ is invalid. 7TAX is a hard ticketing time limit and always requires a date and time (7TAX{DDMON}/{HHMM}). Only 7TAW (\"at will\") can be left open with just a trailing slash — it can also optionally be queued to a date/time, as in 7TAW16AUG/1800."
+    },
+    {
+      type: 'command',
+      tag: 'TYPE THE COMMAND',
+      prompt: "Passenger 2 needs a wheelchair noted — she can walk to and from her seat, she just needs one at the gate. Add the correct SSR, tied to her passenger number.",
+      answer: /^3WCHR-2$/,
+      canonical: '3WCHR-2',
+      explain: "3{CODE}-{PAX#} adds a special service request. WCHR is specifically \"can walk to/from seat.\" WCHS (\"must be carried short distance\") and WCHC (\"immobile, carried to seat\") are for passengers needing more assistance — using the wrong one misrepresents what the airline needs to arrange."
+    },
+    {
+      type: 'command',
+      tag: 'TYPE THE COMMAND',
+      prompt: "The seat map for segment 1 is already on screen, and two names are on the PNR. Assign seat <b>14A</b> on that segment to <b>passenger 2</b>.",
+      answer: /^41-14A\/2$/,
+      canonical: '41-14A/2',
+      explain: "4{SEGMENT}-{ROW}{LETTER}/{PAX#}. The passenger number is required whenever more than one name is on file — with only one passenger on the PNR it can be omitted, since it's unambiguous."
+    },
+    {
+      type: 'mc',
+      tag: 'PARSE THE COMMAND',
+      prompt: "The PNR currently displays 7 elements: 1 name, 2 segment, 3 seat, 4 SSR, 5 phone, 6 received-from, 7 ticketing arrangement. The agent enters <code>X3,5-7</code>. What happens?",
+      options: [
+        "Valid — cancels elements 3, 5, 6, and 7 (the seat, phone, received-from, and ticketing arrangement).",
+        "Invalid — X can only cancel a single element number, not a list or a range.",
+        "Valid — cancels every element from 3 through 7 inclusive (3, 4, 5, 6, 7).",
+        "Valid — cancels elements 3 and 5 only; the trailing \"-7\" is ignored as a stray character."
+      ],
+      correct: 0,
+      explain: "X's pattern accepts a comma/range list, so \"3,5-7\" parses as element 3 plus the range 5–7 — elements 3, 5, 6, and 7. Element 4 (the SSR) is left untouched since it isn't named. Multi-element cancels always process highest-numbered first internally so an earlier splice never shifts the index of an element still queued for removal."
+    }
+  ];
+
+  let idx = 0;
+  let score = 0;
+  let answered = false;
+  const results = []; // { correct: bool, yourAnswerText, correctText }
+
+  const qCounter = document.getElementById('qCounter');
+  const qScore = document.getElementById('qScore');
+  const progBar = document.getElementById('progBar');
+  const qTag = document.getElementById('qTag');
+  const qPrompt = document.getElementById('qPrompt');
+  const typeArea = document.getElementById('typeArea');
+  const mcArea = document.getElementById('mcArea');
+  const answerInput = document.getElementById('answerInput');
+  const submitBtn = document.getElementById('submitBtn');
+  const feedback = document.getElementById('feedback');
+  const verdict = document.getElementById('verdict');
+  const youAnswered = document.getElementById('youAnswered');
+  const correctAnswer = document.getElementById('correctAnswer');
+  const explainText = document.getElementById('explainText');
+  const nextBtn = document.getElementById('nextBtn');
+  const quizEl = document.getElementById('quiz');
+  const resultsEl = document.getElementById('results');
+
+  let selectedOptBtn = null;
+
+  function renderQuestion(){
+    answered = false;
+    selectedOptBtn = null;
+    const q = QUESTIONS[idx];
+
+    qCounter.textContent = `QUESTION ${idx+1} OF ${QUESTIONS.length}`;
+    qScore.textContent = `SCORE ${score}/${idx}`;
+    progBar.style.width = ((idx) / QUESTIONS.length * 100) + '%';
+
+    qTag.textContent = q.tag;
+    qTag.className = 'tag' + (q.type === 'mc' ? ' mc' : '');
+    qPrompt.innerHTML = q.prompt;
+
+    feedback.style.display = 'none';
+    submitBtn.style.display = 'inline-block';
+    submitBtn.disabled = false;
+
+    if(q.type === 'command'){
+      typeArea.style.display = 'block';
+      mcArea.style.display = 'none';
+      answerInput.value = '';
+      answerInput.disabled = false;
+      setTimeout(()=> answerInput.focus(), 10);
+    } else {
+      typeArea.style.display = 'none';
+      mcArea.style.display = 'flex';
+      mcArea.innerHTML = '';
+      const letters = ['A','B','C','D'];
+      q.options.forEach((opt, i) => {
+        const b = document.createElement('button');
+        b.className = 'opt';
+        b.innerHTML = `<span class="letter">${letters[i]}</span>${opt}`;
+        b.addEventListener('click', () => {
+          if(answered) return;
+          [...mcArea.children].forEach(c => c.classList.remove('selected'));
+          selectedOptBtn = b;
+          [...mcArea.children].forEach(c => c.style.outline = '');
+          b.style.outline = '2px solid rgba(51,255,102,.8)';
+        });
+        mcArea.appendChild(b);
+      });
+    }
+  }
+
+  function grade(){
+    if(answered) return;
+    const q = QUESTIONS[idx];
+    let isCorrect = false;
+    let yourText = '';
+
+    if(q.type === 'command'){
+      const raw = answerInput.value.trim();
+      if(!raw) return;
+      const norm = raw.toUpperCase().replace(/\s+/g, ' ').trim();
+      isCorrect = q.answer.test(norm);
+      yourText = raw;
+      answerInput.disabled = true;
+    } else {
+      if(!selectedOptBtn) return;
+      const chosenIdx = [...mcArea.children].indexOf(selectedOptBtn);
+      isCorrect = (chosenIdx === q.correct);
+      yourText = q.options[chosenIdx];
+      [...mcArea.children].forEach((c, i) => {
+        c.disabled = true;
+        c.style.outline = '';
+        if(i === q.correct) c.classList.add('correct');
+        else if(i === chosenIdx) c.classList.add('wrong');
+        else c.classList.add('dim');
+      });
+    }
+
+    answered = true;
+    if(isCorrect) score++;
+
+    results.push({
+      correct: isCorrect,
+      prompt: q.prompt,
+      yourText: yourText,
+      correctText: q.type === 'command' ? q.canonical : q.options[q.correct],
+      explain: q.explain
+    });
+
+    verdict.textContent = isCorrect ? '✓ CORRECT' : '✗ INCORRECT';
+    verdict.className = 'verdict ' + (isCorrect ? 'ok' : 'bad');
+
+    if(q.type === 'command'){
+      youAnswered.style.display = isCorrect ? 'none' : 'block';
+      if(!isCorrect) youAnswered.innerHTML = `<span class="lbl">YOU ENTERED:</span> ${escapeHtml(yourText)}`;
+      correctAnswer.innerHTML = `<span class="lbl">${isCorrect ? 'ENTRY' : 'CORRECT ENTRY'}:</span> ${q.canonical}`;
+    } else {
+      youAnswered.style.display = 'none';
+      correctAnswer.innerHTML = `<span class="lbl">CORRECT:</span> ${q.options[q.correct]}`;
+    }
+    explainText.textContent = q.explain;
+
+    submitBtn.style.display = 'none';
+    feedback.style.display = 'block';
+    nextBtn.textContent = (idx === QUESTIONS.length - 1) ? 'SEE RESULTS →' : 'NEXT →';
+  }
+
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function next(){
+    idx++;
+    if(idx >= QUESTIONS.length){
+      showResults();
+    } else {
+      renderQuestion();
+    }
+  }
+
+  function showResults(){
+    quizEl.style.display = 'none';
+    resultsEl.style.display = 'block';
+    progBar.style.width = '100%';
+
+    document.getElementById('scoreBig').textContent = `${score} / ${QUESTIONS.length}`;
+    let line;
+    if(score === QUESTIONS.length) line = 'PERFECT SCORE';
+    else if(score >= QUESTIONS.length * 0.7) line = 'STRONG RUN — REVIEW THE MISSES BELOW';
+    else line = 'KEEP PRACTICING — REVIEW BELOW';
+    document.getElementById('scoreLine').textContent = line;
+
+    const reviewList = document.getElementById('reviewList');
+    const missed = results.filter(r => !r.correct);
+    if(missed.length === 0){
+      document.getElementById('perfectMsg').style.display = 'block';
+      reviewList.innerHTML = '';
+    } else {
+      document.getElementById('perfectMsg').style.display = 'none';
+      reviewList.innerHTML = missed.map((r, i) => `
+        <div class="reviewitem">
+          <div class="rq"><span class="rmark bad">✗</span>${r.prompt}</div>
+          <div class="ra mine wrong"><span class="lbl">YOU:</span> ${escapeHtml(r.yourText)}</div>
+          <div class="ra correct"><span class="lbl">CORRECT:</span> ${escapeHtml(r.correctText)}</div>
+          <div class="explain">${r.explain}</div>
+        </div>
+      `).join('');
+    }
+  }
+
+  function restart(){
+    idx = 0; score = 0; answered = false;
+    results.length = 0;
+    quizEl.style.display = 'block';
+    resultsEl.style.display = 'none';
+    renderQuestion();
+  }
+
+  submitBtn.addEventListener('click', grade);
+  nextBtn.addEventListener('click', next);
+  document.getElementById('restartBtn').addEventListener('click', restart);
+  answerInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      if(!answered) grade(); else next();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if(answered && e.key === 'Enter' && document.activeElement !== answerInput){
+      next();
+    }
+  });
+
+  renderQuestion();
+})();
+</script>
+</body>
+</html>

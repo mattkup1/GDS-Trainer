@@ -135,7 +135,16 @@ Format: `3{SSRCODE}` for a service request (meals, wheelchair, etc.), optionally
 3OSIAA VIP PASSENGER
 ```
 
-Common SSR codes: `WCHR`/`WCHS`/`WCHC` (wheelchair), `VGML`/`BBML`/`CHML`/`KSML`/`MOML`/`DBML`/`SPML` (meals), `BLND`/`DEAF` (accessibility), `UMNR` (unaccompanied minor), `PETC` (pet in cabin), `BSCT` (bassinet), `XBAG` (extra baggage), `DEPS` (group deposit received — see step 5).
+Common SSR codes: `WCHR`/`WCHS`/`WCHC` (wheelchair), `VGML`/`BBML`/`CHML`/`KSML`/`MOML`/`DBML`/`SPML` (meals), `BLND`/`DEAF` (accessibility), `UMNR` (unaccompanied minor), `PETC` (pet in cabin), `BSCT` (bassinet), `XBAG` (extra baggage), `EXST` (extra seat purchased), `CBBG` (extra seat for cabin baggage/instrument), `STCR` (stretcher case), `DEPS` (group deposit received — see step 5).
+
+To book an extra seat (a comfort/oversized-passenger purchase, or one held for an instrument), sell one more seat than passengers and tag it with the SSR:
+
+```
+04Y2
+-SMITH/JOHN MR
+3EXST-1
+```
+Sells 2 seats but names only 1 passenger — the fare quote (`WP`) automatically prices for both seats, since it charges per seat sold on the segment, not per name.
 
 A frequent flyer number can optionally be tied to a specific passenger and/or carry a loyalty tier:
 

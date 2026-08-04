@@ -298,6 +298,22 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "extra_seat_ssr_and_fare_reflects_seats_sold_not_names",
+        [
+            # Booking an extra seat (comfort/oversized-passenger purchase, or an instrument/
+            # cabin-baggage seat) is real: sell one more seat than passengers, tag it with
+            # the EXST SSR - no new command code needed, same as DEPS/group deposit.
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            Step("01Y2", expect_contains=["SEGMENT SOLD"]),  # 2 seats, 1 passenger
+            NAME_SMITH,
+            Step("3EXST-1", expect_contains=["SSR ADDED", "EXTRA SEAT PURCHASED", "PAX 1 (SMITH/JOHN MR)"]),
+            # the fare quote must price for both seats sold, not just the 1 named passenger
+            Step("WP", expect_contains=["ITINERARY PRICING"]),
+            Step("*R", expect_contains=["SEG1", "HK2", "SSR", "EXST"]),
+        ],
+    ),
+    Scenario(
         "phone_format_rejected_then_accepted",
         [
             SIGN_IN,

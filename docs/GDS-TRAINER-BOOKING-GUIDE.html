@@ -303,7 +303,12 @@
     <div class="cmdblock">3VGML
 3WCHR-1/AISLE SEAT PREFERRED
 3OSIAA VIP PASSENGER</div>
-    <p class="note">Common SSR codes: <code>WCHR</code>/<code>WCHS</code>/<code>WCHC</code> (wheelchair), <code>VGML</code>/<code>BBML</code>/<code>CHML</code>/<code>KSML</code>/<code>MOML</code>/<code>DBML</code>/<code>SPML</code> (meals), <code>BLND</code>/<code>DEAF</code> (accessibility), <code>UMNR</code> (unaccompanied minor), <code>PETC</code> (pet in cabin), <code>BSCT</code> (bassinet), <code>XBAG</code> (extra baggage), <code>DEPS</code> (group deposit received — see step 5).</p>
+    <p class="note">Common SSR codes: <code>WCHR</code>/<code>WCHS</code>/<code>WCHC</code> (wheelchair), <code>VGML</code>/<code>BBML</code>/<code>CHML</code>/<code>KSML</code>/<code>MOML</code>/<code>DBML</code>/<code>SPML</code> (meals), <code>BLND</code>/<code>DEAF</code> (accessibility), <code>UMNR</code> (unaccompanied minor), <code>PETC</code> (pet in cabin), <code>BSCT</code> (bassinet), <code>XBAG</code> (extra baggage), <code>EXST</code> (extra seat purchased), <code>CBBG</code> (extra seat for cabin baggage/instrument), <code>STCR</code> (stretcher case), <code>DEPS</code> (group deposit received — see step 5).</p>
+    <p class="note">To book an extra seat (a comfort/oversized-passenger purchase, or one held for an instrument), sell one more seat than passengers and tag it with the SSR:</p>
+    <div class="cmdblock">04Y2
+-SMITH/JOHN MR
+3EXST-1</div>
+    <p class="note">Sells 2 seats but names only 1 passenger — the fare quote (<code>WP</code>) automatically prices for both seats, since it charges per seat sold on the segment, not per name.</p>
     <p class="note">A frequent flyer number can optionally be tied to a specific passenger and/or carry a loyalty tier:</p>
     <div class="cmdblock">3FQTVAA1234567-1/GLD</div>
     <p class="note">Tiers: <code>SLV</code> (Silver), <code>GLD</code> (Gold), <code>PLT</code> (Platinum), <code>DIA</code> (Diamond). The passenger number and tier are each optional and independent — <code>3FQTVAA1234567-1</code> (no tier) and <code>3FQTVAA1234567/GLD</code> (no passenger, applies to the PNR generally) both work too.</p>

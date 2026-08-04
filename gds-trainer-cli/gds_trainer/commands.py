@@ -560,6 +560,9 @@ def _trip_type(segments: list[dict]) -> str:
     return "OJ"
 
 
+TRIP_TYPE_LABELS = {"OW": "ONE WAY", "RT": "ROUND TRIP", "CT": "CIRCLE TRIP", "OJ": "OPEN JAW"}
+
+
 def _shuffled(items: list, rng) -> list:
     arr = list(items)
     for i in range(len(arr) - 1, 0, -1):
@@ -568,17 +571,37 @@ def _shuffled(items: list, rng) -> list:
     return arr
 
 
-def fare_quote_shop(orig: str, dest: str) -> None:
+def fare_quote_shop(orig: str, dest: str, booking_cls: str | None = None) -> None:
     """Real Sabre's "FQ" entry: a bare fare quote by city pair, independent of any PNR/
     itinerary - unlike price_itinerary below, there's no segment to derive a fare from, so
     this seeds off the route only and reuses the same shared spec constants (FARE_FORMULA/
     CLASS_FARE_MULT/TAX_POOL) via its own parallel calculation, one indicative total per
     booking class. Purely informational - no PNR mutation, no activity log entry, matching
     decode_airport/search_airports' existing precedent as pure lookups with no PNR side effects.
+    An optional /{CLASS} suffix switches to showing that class's fare rules instead.
     """
     if orig == dest:
         print_err("FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME")
         return
+    if booking_cls and booking_cls not in CLASSES:
+        print_err(f"UNKNOWN BOOKING CLASS {booking_cls} - VALID: {' '.join(CLASSES)}")
+        return
+
+    if booking_cls:
+        rules = FARE_RULES.get(booking_cls)
+        print_line(f"** FARE RULES **  {orig}-{dest}  CLASS {booking_cls}", "hd")
+        print_line(f"  {city_name(orig)}  TO  {city_name(dest)}", "dim")
+        print_blank()
+        if rules:
+            print_line(f"  CHANGE FEE                  USD {rules['changeFee']:.2f}")
+            print_line(f"  REFUNDABLE                  {'YES' if rules['refundable'] else 'NO'}")
+            print_line(f"  ADVANCE PURCHASE REQUIRED   {rules['advancePurchaseDays']} DAYS")
+        else:
+            print_line("  NO FARE RULE DATA ON FILE FOR THIS CLASS", "dim")
+        print_blank()
+        print_line("INDICATIVE ONLY - ACTUAL RULES APPLY AFTER WP", "dim")
+        return
+
     rng = mulberry32(hash_str(f"FQ{orig}{dest}"))
     dist = FARE_FORMULA["distanceMin"] + int(rng() * FARE_FORMULA["distanceRange"])
 
@@ -672,6 +695,7 @@ def price_itinerary(mode: str, corp_code: str | None = None) -> None:
         print_line(f"  {i + 1}  {format_segment_short(s)}", "dim")
     print_blank()
     print_line(f"FARE BASIS: {fare_basis}")
+    print_line(f"TRIP TYPE: {TRIP_TYPE_LABELS[_trip_type(p['segments'])]}", "dim")
     if corporate:
         print_line(
             f"CORPORATE CODE APPLIED - {corporate['label']} ({round(corporate['discount'] * 100)}% DISCOUNT)",
@@ -729,6 +753,7 @@ def build_itinerary_document(mode: str) -> dict:
         "issued": datetime.now(),
         "locator": p["locator"],
         "passengers": passengers,
+        "trip_type": TRIP_TYPE_LABELS[_trip_type(p["segments"])] if p["segments"] else None,
         "segments": p["segments"] if has("segments") else [],
         "seats": p["seats"] if has("seats") else [],
         "ssrs": p["ssrs"] if has("ssrs") else [],
@@ -768,7 +793,7 @@ def print_itinerary_document(doc: dict) -> None:
         for s in doc["seats"]:
             seats_by_seg.setdefault(s["seg_idx"], []).append(s["seat"])
         print_blank()
-        print_line("ITINERARY", "hd")
+        print_line(f"ITINERARY - {doc['trip_type']}" if doc["trip_type"] else "ITINERARY", "hd")
         for i, s in enumerate(doc["segments"]):
             status_label = SEGMENT_STATUS_LABELS.get(s["status"], s["status"])
             seat_list = ", ".join(seats_by_seg.get(i, [])) or "-"
@@ -1322,6 +1347,8 @@ def refresh_and_print_pnr() -> None:
     if not STATE.last_display:
         print_line("  ** PNR IS EMPTY **", "dim")
         return
+    if STATE.pnr["segments"]:
+        print_line(f"  TRIP TYPE: {TRIP_TYPE_LABELS[_trip_type(STATE.pnr['segments'])]}", "dim")
     for e in STATE.last_display:
         print_line(f" {pad(e['num'], 2)}  {pad(e['label'], 5)} {e['text']}")
 

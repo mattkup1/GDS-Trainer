@@ -22,6 +22,13 @@ FQDFWORD
 ```
 Shows a per-class table of indicative base fare, taxes, and total for that city pair — no PNR involved, nothing is booked. Useful for a quick "what would this cost" before searching availability.
 
+Add `/{CLASS}` to check a class's fare rules instead of its price:
+
+```
+FQDFWORD/Y
+```
+Shows that class's change fee, refundability, and advance-purchase requirement — the same rule data shown after you price an itinerary with `WP` (step 9), but queryable up front for any class on any route, no booking required.
+
 To see what flies a route across a whole week rather than one date — times and equipment only, no booking classes or seat counts, since it's not tied to sellable inventory:
 
 ```
@@ -186,7 +193,7 @@ Format: `WP` (once segments and at least one name are on the PNR)
 ```
 WP
 ```
-Prices the itinerary and shows a base fare, itemized taxes, a total, and fare rules (change fee, refundability, advance-purchase requirement) — this is stored on the PNR as a fare quote and is **required before ticketing**. `WPNCS` prices the lowest fare regardless of seat availability (informational only).
+Prices the itinerary and shows a base fare, itemized taxes, a total, the trip type (one way/round trip/circle trip/open jaw — worked out from how your segments' origins and destinations connect), and fare rules (change fee, refundability, advance-purchase requirement) — this is stored on the PNR as a fare quote and is **required before ticketing**. `WPNCS` prices the lowest fare regardless of seat availability (informational only).
 
 To apply a negotiated/corporate fare code, append it after a slash:
 
@@ -332,6 +339,7 @@ Two queues populate themselves automatically as you work a PNR, no entry require
 |---|---|---|
 | Sign in | `SI` | `SI` |
 | Shop fares by city pair (no PNR needed) | `FQ{ORIG}{DEST}` | `FQDFWORD` |
+| Check a class's fare rules by city pair (no PNR needed) | `FQ{ORIG}{DEST}/{CLASS}` | `FQDFWORD/Y` |
 | Flight schedule, 7-day window (no booking classes/seats) | `S{DD}{MON}{ORIG}{DEST}` | `S15AUGDFWORD` |
 | Search flights | `A{DD}{MON}{ORIG}{DEST}` | `A15AUGDFWORD` |
 | Sell from list | `0{LINE}{CLASS}{SEATS}` | `04Y1` |
@@ -416,10 +424,12 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 | Command | Does |
 |---|---|
 | `FQ{ORG}{DST}` | Fare quote shop by city pair — indicative only, no PNR involved |
+| `FQ{ORG}{DST}/{CLASS}` | Fare rules for that class on that route (change fee, refundable, advance purchase) — no PNR involved |
 | `S{DD}{MON}{ORG}{DST}` | Flight schedule across a 7-day window — no booking classes or seats |
 
 **Terminology**
 - **Fare shop** — an indicative, per-class fare check by city pair, independent of any itinerary; distinct from `WP`, which prices an already-sold itinerary
+- **Fare rules** — the change fee, refundability, and advance-purchase requirement tied to a booking class; viewable stand-alone via `FQ.../{CLASS}` or automatically shown after pricing with `WP`
 - **Schedule display** — a several-day view of what flies a route, independent of sellable inventory; distinct from availability, which shows one date's bookable classes/seats
 
 ### 3. Shop for availability
@@ -511,6 +521,7 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 **Terminology**
 - **Fare quote** — the stored pricing result on the PNR; required before ticketing, and cleared automatically if the itinerary changes afterward
 - **Fare basis** — the short code summarizing the fare's class and trip type (e.g. `YOW` = Y class, one-way)
+- **Trip type** — the itinerary's shape, printed alongside the fare basis and on every PNR display once a segment is sold: **one way** (a single segment), **round trip** (out and back on the same city pair), **circle trip** (multiple stops that return to the origin), or **open jaw** (the return leg starts or ends at a different city than the outbound)
 - **Base fare** — the pre-tax fare amount
 - **Taxes/fees** — the itemized government and carrier charges added on top of the base fare
 - **Fare rules** — the change fee, refundability, and advance-purchase requirement shown with every fare quote, keyed off the itinerary's class

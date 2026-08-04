@@ -389,8 +389,27 @@
   // CLASS_FARE_MULT/TAX_POOL) via its own parallel calculation, one indicative total per
   // booking class. Purely informational - no PNR mutation, no activity log entry, matching
   // DC/DAN's existing precedent as pure lookups with no PNR side effects.
-  function fareQuoteShop(orig, dest){
+  function fareQuoteShop(orig, dest, cls){
     if(orig === dest){ printErr('FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME'); return; }
+    if(cls && !CLASSES.includes(cls)){ printErr(`UNKNOWN BOOKING CLASS ${cls} - VALID: ${CLASSES.join(' ')}`); return; }
+
+    if(cls){
+      const rules = FARE_RULES[cls];
+      print(`** FARE RULES **  ${orig}-${dest}  CLASS ${cls}`, 'hd');
+      print(`  ${cityName(orig)}  TO  ${cityName(dest)}`, 'dim');
+      printBlank();
+      if(rules){
+        print(`  CHANGE FEE                  USD ${rules.changeFee.toFixed(2)}`);
+        print(`  REFUNDABLE                  ${rules.refundable ? 'YES' : 'NO'}`);
+        print(`  ADVANCE PURCHASE REQUIRED   ${rules.advancePurchaseDays} DAYS`);
+      } else {
+        print('  NO FARE RULE DATA ON FILE FOR THIS CLASS', 'dim');
+      }
+      printBlank();
+      print('INDICATIVE ONLY - ACTUAL RULES APPLY AFTER WP', 'dim');
+      return;
+    }
+
     const rng = mulberry32(hashStr(`FQ${orig}${dest}`));
     const dist = FARE_FORMULA.distanceMin + Math.floor(rng()*FARE_FORMULA.distanceRange);
 
@@ -423,6 +442,7 @@
     if(first.orig === last.dest) return 'CT';
     return 'OJ';
   }
+  const TRIP_TYPE_LABELS = { OW:'ONE WAY', RT:'ROUND TRIP', CT:'CIRCLE TRIP', OJ:'OPEN JAW' };
 
   function priceItinerary(mode, corpCode){
     const p = state.pnr;
@@ -468,6 +488,7 @@
     p.segments.forEach((s,i) => print(`  ${i+1}  ${formatSegmentShort(s)}`, 'dim'));
     printBlank();
     print(`FARE BASIS: ${fareBasis}`);
+    print(`TRIP TYPE: ${TRIP_TYPE_LABELS[tripType(p.segments)]}`, 'dim');
     if(corporate){ print(`CORPORATE CODE APPLIED - ${corporate.label} (${Math.round(corporate.discount*100)}% DISCOUNT)`, 'dim'); }
     print(`BASE FARE      USD ${baseFare.toFixed(2)}`);
     for(const t of taxes){ print(`  ${t.code}   USD ${t.amount.toFixed(2)}   ${t.label}`, 'dim'); }
@@ -504,6 +525,7 @@
       mode, label: cfg.label,
       pcc: state.pcc, sine: state.sine, issued: new Date(), locator: p.locator,
       passengers: p.names.map(n => ({ name: n, infants: p.infants.filter(inf => inf.adult === n) })),
+      tripType: p.segments.length ? TRIP_TYPE_LABELS[tripType(p.segments)] : null,
       segments: has('segments') ? p.segments : [],
       seats: has('seats') ? p.seats : [],
       ssrs: has('ssrs') ? p.ssrs : [],
@@ -737,7 +759,7 @@
       <div class="pax-list">${passengersHtml}</div>
     </section>
     <section>
-      <h2>Itinerary</h2>
+      <h2>Itinerary${doc.tripType ? ` <span class="dim" style="font-size:12px;font-weight:400;">— ${e(doc.tripType)}</span>` : ''}</h2>
       ${segmentsHtml || '<div class="dim">NO ITINERARY SEGMENTS</div>'}
     </section>
     ${ssrBlock}
@@ -1065,6 +1087,9 @@
     if(state.lastDisplay.length === 0){
       print('  ** PNR IS EMPTY **', 'dim');
       return;
+    }
+    if(state.pnr.segments.length){
+      print(`  TRIP TYPE: ${TRIP_TYPE_LABELS[tripType(state.pnr.segments)]}`, 'dim');
     }
     for(const e of state.lastDisplay){
       print(` ${pad(e.num,2)}  ${pad(e.label,5)} ${e.text}`);
@@ -2051,7 +2076,7 @@
     RECEIVED_FROM: (raw) => handleReceivedFrom(raw),
     GENERAL_REMARK: (raw) => handleGeneralRemark(raw),
     PRICE_ITINERARY: (raw, mode, corpCode) => priceItinerary(mode, corpCode),
-    FARE_QUOTE_SHOP: (raw, orig, dest) => fareQuoteShop(orig, dest),
+    FARE_QUOTE_SHOP: (raw, orig, dest, cls) => fareQuoteShop(orig, dest, cls),
     TICKETING_AT_WILL: () => addTicketingAtWill(),
     TICKETING_AT_WILL_DATED: (raw, day, mon, time) => addTicketingAtWillDated(day, mon, time),
     TICKETING_TIME_LIMIT: (raw, day, mon, time) => addTicketingTimeLimit(day, mon, time),

@@ -231,6 +231,9 @@
     <p class="format">Format: <code>FQ</code> + origin + destination, for an indicative fare quote independent of any booking</p>
     <div class="cmdblock">FQDFWORD</div>
     <p class="note">Shows a per-class table of indicative base fare, taxes, and total for that city pair — no PNR involved, nothing is booked. Useful for a quick "what would this cost" before searching availability.</p>
+    <p class="note">Add <code>/{CLASS}</code> to check a class's fare rules instead of its price:</p>
+    <div class="cmdblock">FQDFWORD/Y</div>
+    <p class="note">Shows that class's change fee, refundability, and advance-purchase requirement — the same rule data shown after you price an itinerary with <code>WP</code>, but queryable up front for any class on any route, no booking required.</p>
     <p class="note">To see what flies a route across a whole week rather than one date — times and equipment only, no booking classes or seat counts, since it's not tied to sellable inventory:</p>
     <div class="cmdblock">S15AUGDFWORD</div>
   </div>
@@ -336,7 +339,7 @@
     <h2>Price the itinerary</h2>
     <p class="format">Format: <code>WP</code> (once segments and at least one name are on the PNR)</p>
     <div class="cmdblock">WP</div>
-    <p class="note">Prices the itinerary and shows a base fare, itemized taxes, a total, and fare rules (change fee, refundability, advance-purchase requirement) — this is stored on the PNR as a fare quote and is <b>required before ticketing</b>. <code>WPNCS</code> prices the lowest fare regardless of seat availability (informational only).</p>
+    <p class="note">Prices the itinerary and shows a base fare, itemized taxes, a total, the trip type (one way/round trip/circle trip/open jaw — worked out from how your segments' origins and destinations connect), and fare rules (change fee, refundability, advance-purchase requirement) — this is stored on the PNR as a fare quote and is <b>required before ticketing</b>. <code>WPNCS</code> prices the lowest fare regardless of seat availability (informational only).</p>
     <p class="note">To apply a negotiated/corporate fare code, append it after a slash:</p>
     <div class="cmdblock">WP/ACME01</div>
     <p class="note">An unrecognized code is rejected with the list of valid codes; a valid one applies its discount to the base fare and is noted on the quote.</p>
@@ -455,6 +458,7 @@
   <tbody>
     <tr><td>Sign in</td><td class="mono">SI</td><td class="mono">SI</td></tr>
     <tr><td>Shop fares by city pair (no PNR needed)</td><td class="mono">FQ{ORIG}{DEST}</td><td class="mono">FQDFWORD</td></tr>
+    <tr><td>Check a class's fare rules by city pair (no PNR needed)</td><td class="mono">FQ{ORIG}{DEST}/{CLASS}</td><td class="mono">FQDFWORD/Y</td></tr>
     <tr><td>Flight schedule, 7-day window (no booking classes/seats)</td><td class="mono">S{DD}{MON}{ORIG}{DEST}</td><td class="mono">S15AUGDFWORD</td></tr>
     <tr><td>Search flights</td><td class="mono">A{DD}{MON}{ORIG}{DEST}</td><td class="mono">A15AUGDFWORD</td></tr>
     <tr><td>Sell from list</td><td class="mono">0{LINE}{CLASS}{SEATS}</td><td class="mono">04Y1</td></tr>
@@ -547,12 +551,14 @@ TKTT</div>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
       <tbody>
         <tr><td class="mono">FQ{ORG}{DST}</td><td>Fare quote shop by city pair — indicative only, no PNR involved</td></tr>
+        <tr><td class="mono">FQ{ORG}{DST}/{CLASS}</td><td>Fare rules for that class on that route (change fee, refundable, advance purchase) — no PNR involved</td></tr>
         <tr><td class="mono">S{DD}{MON}{ORG}{DST}</td><td>Flight schedule across a 7-day window — no booking classes or seats</td></tr>
       </tbody>
     </table>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
       <div class="entry"><dt>Fare shop</dt><dd>an indicative, per-class fare check by city pair, independent of any itinerary; distinct from <span class="mono">WP</span>, which prices an already-sold itinerary</dd></div>
+      <div class="entry"><dt>Fare rules</dt><dd>the change fee, refundability, and advance-purchase requirement tied to a booking class; viewable stand-alone via <span class="mono">FQ.../{CLASS}</span> or automatically shown after pricing with <span class="mono">WP</span></dd></div>
       <div class="entry"><dt>Schedule display</dt><dd>a several-day view of what flies a route, independent of sellable inventory; distinct from availability, which shows one date's bookable classes/seats</dd></div>
     </dl>
   </div>
@@ -686,6 +692,7 @@ TKTT</div>
     <dl class="terms">
       <div class="entry"><dt>Fare quote</dt><dd>the stored pricing result on the PNR; required before ticketing, and cleared automatically if the itinerary changes afterward</dd></div>
       <div class="entry"><dt>Fare basis</dt><dd>the short code summarizing the fare's class and trip type (e.g. YOW = Y class, one-way)</dd></div>
+      <div class="entry"><dt>Trip type</dt><dd>the itinerary's shape, printed alongside the fare basis and on every PNR display once a segment is sold: one way (a single segment), round trip (out and back on the same city pair), circle trip (multiple stops that return to the origin), or open jaw (the return leg starts or ends at a different city than the outbound)</dd></div>
       <div class="entry"><dt>Base fare</dt><dd>the pre-tax fare amount</dd></div>
       <div class="entry"><dt>Taxes/fees</dt><dd>the itemized government and carrier charges added on top of the base fare</dd></div>
       <div class="entry"><dt>Fare rules</dt><dd>the change fee, refundability, and advance-purchase requirement shown with every fare quote, keyed off the itinerary's class</dd></div>

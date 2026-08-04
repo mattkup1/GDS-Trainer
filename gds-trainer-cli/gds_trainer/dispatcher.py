@@ -37,7 +37,7 @@ HANDLERS = {
     "RECEIVED_FROM": lambda raw, *g: c.handle_received_from(raw),
     "GENERAL_REMARK": lambda raw, *g: c.handle_general_remark(raw),
     "PRICE_ITINERARY": lambda raw, mode, corp_code: c.price_itinerary(mode, corp_code),
-    "FARE_QUOTE_SHOP": lambda raw, orig, dest: c.fare_quote_shop(orig, dest),
+    "FARE_QUOTE_SHOP": lambda raw, orig, dest, cls: c.fare_quote_shop(orig, dest, cls),
     "TICKETING_AT_WILL": lambda raw, *g: c.add_ticketing_at_will(),
     "TICKETING_AT_WILL_DATED": lambda raw, day, mon, time: c.add_ticketing_at_will_dated(day, mon, time),
     "TICKETING_TIME_LIMIT": lambda raw, day, mon, time: c.add_ticketing_time_limit(day, mon, time),

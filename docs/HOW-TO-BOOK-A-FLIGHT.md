@@ -329,7 +329,7 @@ QN25
 ```
 This works one PNR at a time, first-in-first-out — exactly how an agent works a real queue. An empty or unused queue number just reports there's nothing there.
 
-Two queues populate themselves automatically as you work a PNR, no entry required: queue **1** picks up a PNR whose flight time changed after booking (a schedule change), and queue **18** picks up one whose waitlisted segment cleared to confirmed. Both are discovered the same way — checking `QC`/`QN{N}`, or noticing the on-screen note the next time the PNR is redisplayed.
+Three queues populate themselves automatically as you work a PNR, no entry required: queue **1** picks up a PNR whose flight time changed after booking (a schedule change), queue **2** picks up one whose flight was cancelled outright by the carrier, and queue **18** picks up one whose waitlisted segment cleared to confirmed. All three are discovered the same way — checking `QC`/`QN{N}`, or noticing the on-screen note the next time the PNR is redisplayed. A cancelled segment (queue 2) is the strictest of the three: the itinerary can't be re-priced with `WP` until you cancel that segment (`X{n}`) and sell a replacement — unlike a schedule change, which just needs a fresh `WP`.
 
 ---
 
@@ -375,7 +375,7 @@ Two queues populate themselves automatically as you work a PNR, no entry require
 | Divide passenger(s) into a new PNR | `SP{N}` or `SP{N},{M}` | `SP2` |
 | Place PNR on a queue | `QE{N}` | `QE25` |
 | Show queue counts | `QC` or `QC{N}` | `QC` or `QC25` |
-| Retrieve next PNR from a queue | `QN{N}` | `QN25` (queue `1` auto-populates on a schedule change, queue `18` on a waitlist clearing) |
+| Retrieve next PNR from a queue | `QN{N}` | `QN25` (queue `1` auto-populates on a schedule change, `2` on a flight cancellation, `18` on a waitlist clearing) |
 | Cancel an item | `X{N}`, `X{N}-{M}`, `X{N},{M}` | `X2` |
 | Cancel entire itinerary | `XI` | `XI` |
 | Discard unsaved work | `IG` | `IG` |
@@ -631,4 +631,5 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 - **Queue count** — how many PNRs are currently sitting on a given queue, shown by `QC`
 - **Working a queue** — repeatedly entering `QN{N}` to pull PNRs off a queue one at a time, in the order they were placed there
 - **Schedule change** — an airline-side change to a booked segment's time, discovered automatically: it auto-queues the PNR to queue **1** and shows a note on its next redisplay until re-priced
+- **Flight cancellation** — the airline drops a booked, confirmed (`HK`) flight entirely; the segment's status flips to `UN` and the PNR auto-queues to queue **2**. Unlike a schedule change, `WP` refuses to re-price while the dead segment is still on file — cancel it with `X{n}` and sell a replacement first
 - **Waitlist clearing** — a waitlisted (`HL`) segment clearing to confirmed (`HK`), discovered the same way via queue **18** — no re-pricing needed, since the fare and flight are unchanged

@@ -77,6 +77,9 @@
   "waitlistClear": {
     "chance": 0.4
   },
+  "flightCancellation": {
+    "chance": 0.015
+  },
   "ssrCodes": {
     "WCHR": "WHEELCHAIR - CAN WALK TO/FROM SEAT",
     "WCHS": "WHEELCHAIR - MUST BE CARRIED SHORT DISTANCE",
@@ -106,6 +109,7 @@
   "queueCategories": {
     "0": "GENERAL WORK QUEUE",
     "1": "SCHEDULE CHANGE",
+    "2": "FLIGHT CANCELLED - REBOOKING REQUIRED",
     "18": "WAITLIST CLEARED",
     "25": "TICKETING FOLLOW-UP",
     "97": "QUEUE MINIMUM CONNECT TIME"
@@ -136,6 +140,7 @@
   },
   "segmentStatusLabels": {
     "HK": "CONFIRMED",
-    "HL": "WAITLISTED"
+    "HL": "WAITLISTED",
+    "UN": "CANCELLED BY CARRIER - REBOOKING REQUIRED"
   }
 }

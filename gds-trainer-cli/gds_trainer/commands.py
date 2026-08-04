@@ -31,6 +31,7 @@ from .data import (
     EQUIP,
     FARE_FORMULA,
     FARE_RULES,
+    FLIGHT_CANCELLATION,
     LOYALTY_TIERS,
     MONTHS,
     PHONE_LOC_CODES,
@@ -632,6 +633,13 @@ def price_itinerary(mode: str, corp_code: str | None = None) -> None:
         return
     if len(p["names"]) == 0:
         print_err("UNABLE TO PRICE - NAME FIELD REQUIRED PRIOR TO PRICING")
+        return
+    cancelled_seg = next((s for s in p["segments"] if s.get("cancelledByCarrier")), None)
+    if cancelled_seg:
+        print_err(
+            f"UNABLE TO PRICE - {format_segment_short(cancelled_seg)} CANCELLED BY CARRIER - "
+            "CANCEL THE SEGMENT (X{n}) AND SELL A REPLACEMENT FIRST"
+        )
         return
     corporate = None
     if corp_code:
@@ -1352,6 +1360,18 @@ def refresh_and_print_pnr() -> None:
     for e in STATE.last_display:
         print_line(f" {pad(e['num'], 2)}  {pad(e['label'], 5)} {e['text']}")
 
+    # Persistent (not show-once): the only real fix is removing the dead segment, so this
+    # keeps firing on every redisplay until X{n} actually splices it out of p["segments"] -
+    # there's no separate acknowledgement flag to set, unlike the show-once waitlist notice
+    # below, because re-pricing alone (which resolves the schedule-change alert) can't
+    # resolve this one - price_itinerary refuses outright while the flag is still on file.
+    cancelled_segs = [s for s in STATE.pnr["segments"] if s.get("cancelledByCarrier")]
+    if cancelled_segs:
+        print_blank()
+        print_line("** FLIGHT CANCELLED BY CARRIER - CANCEL THE SEGMENT(S) AND SELL A REPLACEMENT **", "err")
+        for s in cancelled_segs:
+            print_line(f"  {format_segment_short(s)}", "dim")
+
     # Naturally stops once the agent re-prices (WP) - reuses the existing pricing-null-
     # means-stale convention rather than a separate acknowledgement flag.
     changed_segs = [s for s in STATE.pnr["segments"] if s.get("scheduleChanged")]
@@ -1535,10 +1555,50 @@ def gen_locator() -> str:
 # QC/QN1, or the alert refresh_and_print_pnr prints below whenever a redisplay (ER's own, *R,
 # or after QN1) shows an unpriced, changed segment. ET's redisplay is skipped (work area
 # cleared instead), so ET alone doesn't reveal it - a later *{LOCATOR}/QN1 does.
+# Same seeded-check-at-save-time pattern, for the third real IROP outcome besides a time
+# shift or a waitlist clearing: the carrier drops the flight entirely. Distinct hash prefix
+# (FLTCXL) so it can never collide with schedule change's (SKEDCHG) or waitlist clearing's
+# (WLCLEAR) seed for the same flight. Only ever rolled against currently-HK segments - an
+# HL segment was never confirmed, so "cancelled" doesn't apply to it (waitlist clearing owns
+# that lane), and this function's own cancelledByCarrier flag both gates re-rolling on a
+# later save (like scheduleChanged) and, via the guard added to _apply_schedule_changes below,
+# keeps the two outcomes mutually exclusive - a flight can't be both time-shifted and
+# cancelled in the same pass. Deliberately doesn't remove the segment or auto-rebook: real
+# life leaves the dead segment on the PNR for the agent to see and act on, same as this does
+# (status flips to UN, a real Sabre action code) - price_itinerary refuses to price while one
+# is on file, forcing the correct workflow (cancel it with X{n}, sell a replacement, WP
+# again) rather than silently pricing around a flight that no longer exists.
+def _apply_flight_cancellation(p: dict) -> None:
+    any_cancelled = False
+    for seg in p["segments"]:
+        if seg["status"] != "HK" or seg.get("cancelledByCarrier"):
+            continue
+        seed = hash_str(
+            f"FLTCXL{seg['airline']}{seg['flight_num']}{seg['orig']}{seg['dest']}"
+            f"{seg['dinfo'].day}{seg['dinfo'].mon}{seg['dinfo'].year}"
+        )
+        rng = mulberry32(seed)
+        if rng() >= FLIGHT_CANCELLATION["chance"]:
+            continue
+        seg["status"] = "UN"
+        seg["cancelledByCarrier"] = True
+        log_activity(
+            STATE,
+            f"FLIGHT CANCELLED BY CARRIER - {seg['airline']}{seg['flight_num']} "
+            f"{seg['orig']}{seg['dest']} {seg['dinfo'].day}{seg['dinfo'].mon} - REBOOKING REQUIRED",
+        )
+        any_cancelled = True
+    if any_cancelled:
+        _clear_pricing_and_tickets(p)
+        STATE.queues.setdefault("2", [])
+        if p["locator"] not in STATE.queues["2"]:
+            STATE.queues["2"].append(p["locator"])
+
+
 def _apply_schedule_changes(p: dict) -> None:
     any_changed = False
     for seg in p["segments"]:
-        if seg.get("scheduleChanged"):
+        if seg.get("scheduleChanged") or seg.get("cancelledByCarrier"):
             continue
         seed = hash_str(
             f"SKEDCHG{seg['airline']}{seg['flight_num']}{seg['orig']}{seg['dest']}"
@@ -1636,6 +1696,7 @@ def end_transaction(mode: str) -> None:
         print_line("PNR CANCELLED - ALL ITINERARY SEGMENTS REMOVED", "hd")
         print_line(f"  RLOC: {p['locator']}")
     else:
+        _apply_flight_cancellation(p)
         _apply_schedule_changes(p)
         _apply_waitlist_clearing(p)
         log_activity(STATE, f"PNR SAVED ({mode}) - RLOC {p['locator']}")

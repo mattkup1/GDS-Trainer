@@ -61,6 +61,7 @@
   const FARE_FORMULA = REFERENCE_DATA.fareFormula;
   const SCHEDULE_CHANGE = REFERENCE_DATA.scheduleChange;
   const WAITLIST_CLEAR = REFERENCE_DATA.waitlistClear;
+  const FLIGHT_CANCELLATION = REFERENCE_DATA.flightCancellation;
   const SSR_CODES = REFERENCE_DATA.ssrCodes;
   const CARD_TYPES = REFERENCE_DATA.cardTypes;
   const QUEUE_CATEGORIES = REFERENCE_DATA.queueCategories;
@@ -448,6 +449,8 @@
     const p = state.pnr;
     if(p.segments.length === 0){ printErr('UNABLE TO PRICE - NO ITINERARY SEGMENTS'); return; }
     if(p.names.length === 0){ printErr('UNABLE TO PRICE - NAME FIELD REQUIRED PRIOR TO PRICING'); return; }
+    const cancelledSeg = p.segments.find(s => s.cancelledByCarrier);
+    if(cancelledSeg){ printErr(`UNABLE TO PRICE - ${formatSegmentShort(cancelledSeg)} CANCELLED BY CARRIER - CANCEL THE SEGMENT (X{n}) AND SELL A REPLACEMENT FIRST`); return; }
     let corporate = null;
     if(corpCode){
       corporate = CORPORATE_CODES[corpCode];
@@ -587,7 +590,7 @@
     };
     const segmentsHtml = doc.segments.map((s, i) => {
       const statusLabel = SEGMENT_STATUS_LABELS[s.status] || s.status;
-      const statusClass = s.status === 'HK' ? 'ok' : 'wait';
+      const statusClass = s.status === 'HK' ? 'ok' : s.status === 'UN' ? 'cancelled' : 'wait';
       const seatList = (seatsBySeg[i] || []).join(', ');
       const airlineFull = AIRLINE_NAMES[s.airline] || s.airline;
       return `
@@ -711,6 +714,7 @@
   .status-pill{ font-size:10px; font-weight:700; letter-spacing:.5px; padding:3px 9px; border-radius:20px; }
   .status-pill.ok{ background:#e6f4ea; color:#1e7e34; }
   .status-pill.wait{ background:#fff4e0; color:#946200; }
+  .status-pill.cancelled{ background:#fbe1e1; color:#a3241f; }
   .flight-card-route{ background:#eaf3fc; color:#33414f; font-size:11px; padding:7px 14px; border-bottom:1px solid #d7dee6; }
   .flight-card-body{ display:grid; grid-template-columns:110px 1fr 1fr 130px; gap:14px; padding:14px; }
   .carrier-col{ display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
@@ -1094,6 +1098,17 @@
     for(const e of state.lastDisplay){
       print(` ${pad(e.num,2)}  ${pad(e.label,5)} ${e.text}`);
     }
+    // Persistent (not show-once): the only real fix is removing the dead segment, so this
+    // keeps firing on every redisplay until X{n} actually splices it out of p.segments -
+    // there's no separate acknowledgement flag to set, unlike the show-once waitlist notice
+    // below, because re-pricing alone (which resolves the schedule-change alert) can't
+    // resolve this one - priceItinerary refuses outright while the flag is still on file.
+    const cancelledSegs = state.pnr.segments.filter(s => s.cancelledByCarrier);
+    if(cancelledSegs.length){
+      printBlank();
+      print('** FLIGHT CANCELLED BY CARRIER - CANCEL THE SEGMENT(S) AND SELL A REPLACEMENT **', 'err');
+      for(const s of cancelledSegs){ print(`  ${formatSegmentShort(s)}`, 'dim'); }
+    }
     // Naturally stops once the agent re-prices (WP) - reuses the existing pricing-null-
     // means-stale convention rather than a separate acknowledgement flag.
     const changedSegs = state.pnr.segments.filter(s => s.scheduleChanged);
@@ -1241,10 +1256,42 @@
   // already checks: QC/QN1, or the alert refreshAndPrintPNR prints below whenever a redisplay
   // (ER's own, *R, or after QN1) shows an unpriced, changed segment. ET's redisplay is skipped
   // (work area cleared instead), so ET alone doesn't reveal it - a later *{LOCATOR}/QN1 does.
+  // Same seeded-check-at-save-time pattern, for the third real IROP outcome besides a time
+  // shift or a waitlist clearing: the carrier drops the flight entirely. Distinct hash prefix
+  // (FLTCXL) so it can never collide with schedule change's (SKEDCHG) or waitlist clearing's
+  // (WLCLEAR) seed for the same flight. Only ever rolled against currently-HK segments - an
+  // HL segment was never confirmed, so "cancelled" doesn't apply to it (waitlist clearing owns
+  // that lane), and this function's own cancelledByCarrier flag both gates re-rolling on a
+  // later save (like scheduleChanged) and, via the guard added to applyScheduleChanges below,
+  // keeps the two outcomes mutually exclusive - a flight can't be both time-shifted and
+  // cancelled in the same pass. Deliberately doesn't remove the segment or auto-rebook: real
+  // life leaves the dead segment on the PNR for the agent to see and act on, same as this does
+  // (status flips to UN, a real Sabre action code) - priceItinerary refuses to price while one
+  // is on file, forcing the correct workflow (cancel it with X{n}, sell a replacement, WP
+  // again) rather than silently pricing around a flight that no longer exists.
+  function applyFlightCancellation(p){
+    let anyCancelled = false;
+    for(const seg of p.segments){
+      if(seg.status !== 'HK' || seg.cancelledByCarrier) continue;
+      const seed = hashStr(`FLTCXL${seg.airline}${seg.flightNum}${seg.orig}${seg.dest}${seg.dinfo.day}${seg.dinfo.mon}${seg.dinfo.year}`);
+      const rng = mulberry32(seed);
+      if(rng() >= FLIGHT_CANCELLATION.chance) continue;
+      seg.status = 'UN';
+      seg.cancelledByCarrier = true;
+      logActivity(`FLIGHT CANCELLED BY CARRIER - ${seg.airline}${seg.flightNum} ${seg.orig}${seg.dest} ${seg.dinfo.day}${seg.dinfo.mon} - REBOOKING REQUIRED`);
+      anyCancelled = true;
+    }
+    if(anyCancelled){
+      clearPricingAndTickets(p);
+      if(!state.queues['2']) state.queues['2'] = [];
+      if(!state.queues['2'].includes(p.locator)) state.queues['2'].push(p.locator);
+    }
+  }
+
   function applyScheduleChanges(p){
     let anyChanged = false;
     for(const seg of p.segments){
-      if(seg.scheduleChanged) continue;
+      if(seg.scheduleChanged || seg.cancelledByCarrier) continue;
       const seed = hashStr(`SKEDCHG${seg.airline}${seg.flightNum}${seg.orig}${seg.dest}${seg.dinfo.day}${seg.dinfo.mon}${seg.dinfo.year}`);
       const rng = mulberry32(seed);
       if(rng() >= SCHEDULE_CHANGE.chance) continue;
@@ -1322,6 +1369,7 @@
       print('PNR CANCELLED - ALL ITINERARY SEGMENTS REMOVED', 'hd');
       print(`  RLOC: ${p.locator}`);
     } else {
+      applyFlightCancellation(p);
       applyScheduleChanges(p);
       applyWaitlistClearing(p);
       logActivity(`PNR SAVED (${mode}) - RLOC ${p.locator}`);

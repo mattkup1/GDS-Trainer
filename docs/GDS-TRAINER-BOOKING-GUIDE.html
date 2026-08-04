@@ -448,7 +448,7 @@
     <p class="note">To pull the next PNR off a queue and load it into the work area:</p>
     <div class="cmdblock">QN25</div>
     <p class="note">This works one PNR at a time, first-in-first-out — exactly how an agent works a real queue. An empty or unused queue number just reports there's nothing there.</p>
-    <p class="note">Two queues populate themselves automatically as you work a PNR, no entry required: queue <b>1</b> picks up a PNR whose flight time changed after booking (a schedule change), and queue <b>18</b> picks up one whose waitlisted segment cleared to confirmed. Both are discovered the same way — checking <code>QC</code>/<code>QN{N}</code>, or noticing the on-screen note the next time the PNR is redisplayed.</p>
+    <p class="note">Three queues populate themselves automatically as you work a PNR, no entry required: queue <b>1</b> picks up a PNR whose flight time changed after booking (a schedule change), queue <b>2</b> picks up one whose flight was cancelled outright by the carrier, and queue <b>18</b> picks up one whose waitlisted segment cleared to confirmed. All three are discovered the same way — checking <code>QC</code>/<code>QN{N}</code>, or noticing the on-screen note the next time the PNR is redisplayed. A cancelled segment (queue 2) is the strictest of the three: the itinerary can't be re-priced with <code>WP</code> until you cancel that segment (<code>X{n}</code>) and sell a replacement — unlike a schedule change, which just needs a fresh <code>WP</code>.</p>
   </div>
 </section>
 
@@ -494,7 +494,7 @@
     <tr><td>Divide passenger(s) into a new PNR</td><td class="mono">SP{N} or SP{N},{M}</td><td class="mono">SP2</td></tr>
     <tr><td>Place PNR on a queue</td><td class="mono">QE{N}</td><td class="mono">QE25</td></tr>
     <tr><td>Show queue counts</td><td class="mono">QC or QC{N}</td><td class="mono">QC or QC25</td></tr>
-    <tr><td>Retrieve next PNR from a queue</td><td class="mono">QN{N}</td><td class="mono">QN25 (queue 1 auto-populates on a schedule change, queue 18 on a waitlist clearing)</td></tr>
+    <tr><td>Retrieve next PNR from a queue</td><td class="mono">QN{N}</td><td class="mono">QN25 (queue 1 auto-populates on a schedule change, 2 on a flight cancellation, 18 on a waitlist clearing)</td></tr>
     <tr><td>Cancel an item</td><td class="mono">X{N}, X{N}-{M}, X{N},{M}</td><td class="mono">X2</td></tr>
     <tr><td>Cancel entire itinerary</td><td class="mono">XI</td><td class="mono">XI</td></tr>
     <tr><td>Discard unsaved work</td><td class="mono">IG</td><td class="mono">IG</td></tr>
@@ -858,6 +858,7 @@ TKTT</div>
       <div class="entry"><dt>Queue count</dt><dd>how many PNRs are currently sitting on a given queue, shown by QC</dd></div>
       <div class="entry"><dt>Working a queue</dt><dd>repeatedly entering QN{N} to pull PNRs off a queue one at a time, in the order they were placed there</dd></div>
       <div class="entry"><dt>Schedule change</dt><dd>an airline-side change to a booked segment's time, discovered automatically: it auto-queues the PNR to queue 1 and shows a note on its next redisplay until re-priced</dd></div>
+      <div class="entry"><dt>Flight cancellation</dt><dd>the airline drops a booked, confirmed (HK) flight entirely; the segment's status flips to UN and the PNR auto-queues to queue 2. Unlike a schedule change, WP refuses to re-price while the dead segment is still on file — cancel it with X{n} and sell a replacement first</dd></div>
       <div class="entry"><dt>Waitlist clearing</dt><dd>a waitlisted (HL) segment clearing to confirmed (HK), discovered the same way via queue 18 — no re-pricing needed, since the fare and flight are unchanged</dd></div>
     </dl>
   </div>

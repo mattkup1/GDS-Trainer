@@ -70,6 +70,7 @@
   const DOCUMENT_TYPES = REFERENCE_DATA.documentTypes;
   const LOYALTY_TIERS = REFERENCE_DATA.loyaltyTiers;
   const FARE_RULES = REFERENCE_DATA.fareRules;
+  const BAGGAGE_ALLOWANCE = REFERENCE_DATA.baggageAllowance;
   const CORPORATE_CODES = REFERENCE_DATA.corporateCodes;
   const EMAIL_DOCUMENTS = REFERENCE_DATA.emailDocuments;
   const SEGMENT_STATUS_LABELS = REFERENCE_DATA.segmentStatusLabels;
@@ -438,6 +439,7 @@
         print(`  CHANGE FEE                  USD ${rules.changeFee.toFixed(2)}`);
         print(`  REFUNDABLE                  ${rules.refundable ? 'YES' : 'NO'}`);
         print(`  ADVANCE PURCHASE REQUIRED   ${rules.advancePurchaseDays} DAYS`);
+        print(`  BAGGAGE ALLOWANCE           ${baggageAllowanceText(cls)}`);
       } else {
         print('  NO FARE RULE DATA ON FILE FOR THIS CLASS', 'dim');
       }
@@ -480,6 +482,16 @@
   }
   const TRIP_TYPE_LABELS = { OW:'ONE WAY', RT:'ROUND TRIP', CT:'CIRCLE TRIP', OJ:'OPEN JAW' };
 
+  function formatBaggagePieces(pieces){
+    if(pieces === undefined || pieces === null) return null;
+    if(pieces === 0) return '0PC - NO FREE CHECKED BAGS';
+    const kg = Math.round(BAGGAGE_ALLOWANCE.weightLimitLbs / 2.20462);
+    return `${pieces}PC (MAX ${BAGGAGE_ALLOWANCE.weightLimitLbs}LB/${kg}KG PER BAG)`;
+  }
+  function baggageAllowanceText(cls){
+    return formatBaggagePieces(BAGGAGE_ALLOWANCE.pieces[cls]);
+  }
+
   function priceItinerary(mode, corpCode){
     const p = state.pnr;
     if(p.segments.length === 0){ printErr('UNABLE TO PRICE - NO ITINERARY SEGMENTS'); return; }
@@ -516,9 +528,10 @@
     const total = Math.round((baseFare + taxTotal)*100)/100;
     const fareBasis = `${p.segments[0].cls}${tripType(p.segments)}`;
     const rules = FARE_RULES[p.segments[0].cls] || null;
+    const baggageAllowance = BAGGAGE_ALLOWANCE.pieces[p.segments[0].cls];
 
     p.pricing = {
-      mode, baseFare, taxes, taxTotal, total, fareBasis, currency:'USD', rules,
+      mode, baseFare, taxes, taxTotal, total, fareBasis, currency:'USD', rules, baggageAllowance,
       corporateCode: corporate ? { code: corpCode, label: corporate.label, discount: corporate.discount } : null,
     };
 
@@ -538,6 +551,10 @@
       print(`  CHANGE FEE                  USD ${rules.changeFee.toFixed(2)}`, 'dim');
       print(`  REFUNDABLE                  ${rules.refundable ? 'YES' : 'NO'}`, 'dim');
       print(`  ADVANCE PURCHASE REQUIRED   ${rules.advancePurchaseDays} DAYS`, 'dim');
+    }
+    if(baggageAllowance !== undefined){
+      printBlank();
+      print(`BAGGAGE ALLOWANCE            ${formatBaggagePieces(baggageAllowance)}`, 'dim');
     }
     printBlank();
     print('FARE QUOTE STORED - REQUIRED PRIOR TO TICKETING', 'dim');
@@ -684,6 +701,8 @@
       const taxRows = pr.taxes.map(t => `<tr><td>${e(t.code)} ${e(t.label)}</td><td class="amt">USD ${t.amount.toFixed(2)}</td></tr>`).join('');
       const rulesHtml = pr.rules ? `
         <div class="rules-line">CHANGE FEE USD ${pr.rules.changeFee.toFixed(2)} &nbsp; REFUNDABLE ${pr.rules.refundable ? 'YES' : 'NO'} &nbsp; ADVANCE PURCHASE ${pr.rules.advancePurchaseDays} DAYS</div>` : '';
+      const baggageHtml = formatBaggagePieces(pr.baggageAllowance) ? `
+        <div class="rules-line">BAGGAGE ALLOWANCE ${e(formatBaggagePieces(pr.baggageAllowance))}</div>` : '';
       pricingBlock = `
         <div class="doc-card">
           <div class="doc-card-head">FARE SUMMARY</div>
@@ -696,6 +715,7 @@
             </tbody>
           </table>
           ${rulesHtml}
+          ${baggageHtml}
         </div>`;
     }
 

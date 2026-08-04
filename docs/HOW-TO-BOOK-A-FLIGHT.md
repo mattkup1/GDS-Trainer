@@ -27,7 +27,7 @@ Add `/{CLASS}` to check a class's fare rules instead of its price:
 ```
 FQDFWORD/Y
 ```
-Shows that class's change fee, refundability, and advance-purchase requirement — the same rule data shown after you price an itinerary with `WP` (step 9), but queryable up front for any class on any route, no booking required.
+Shows that class's change fee, refundability, advance-purchase requirement, and checked-baggage allowance — the same rule data shown after you price an itinerary with `WP` (step 9), but queryable up front for any class on any route, no booking required.
 
 To see what flies a route across a whole week rather than one date — times and equipment only, no booking classes or seat counts, since it's not tied to sellable inventory:
 
@@ -197,7 +197,7 @@ Format: `WP` (once segments and at least one name are on the PNR)
 ```
 WP
 ```
-Prices the itinerary and shows a base fare, itemized taxes, a total, the trip type (one way/round trip/circle trip/open jaw — worked out from how your segments' origins and destinations connect), and fare rules (change fee, refundability, advance-purchase requirement) — this is stored on the PNR as a fare quote and is **required before ticketing**. `WPNCS` prices the lowest fare regardless of seat availability (informational only).
+Prices the itinerary and shows a base fare, itemized taxes, a total, the trip type (one way/round trip/circle trip/open jaw — worked out from how your segments' origins and destinations connect), fare rules (change fee, refundability, advance-purchase requirement), and the checked-baggage allowance for the booked class — this is stored on the PNR as a fare quote and is **required before ticketing**. `WPNCS` prices the lowest fare regardless of seat availability (informational only).
 
 To apply a negotiated/corporate fare code, append it after a slash:
 
@@ -434,6 +434,7 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 **Terminology**
 - **Fare shop** — an indicative, per-class fare check by city pair, independent of any itinerary; distinct from `WP`, which prices an already-sold itinerary
 - **Fare rules** — the change fee, refundability, and advance-purchase requirement tied to a booking class; viewable stand-alone via `FQ.../{CLASS}` or automatically shown after pricing with `WP`
+- **Baggage allowance** — the number of free checked bags tied to a booking class (0 for the lowest discount class up to 3 for first class), shown alongside fare rules via `FQ.../{CLASS}` or after pricing with `WP`
 - **Schedule display** — a several-day view of what flies a route, independent of sellable inventory; distinct from availability, which shows one date's bookable classes/seats
 
 ### 3. Shop for availability
@@ -530,6 +531,7 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 - **Base fare** — the pre-tax fare amount
 - **Taxes/fees** — the itemized government and carrier charges added on top of the base fare
 - **Fare rules** — the change fee, refundability, and advance-purchase requirement shown with every fare quote, keyed off the itinerary's class
+- **Baggage allowance** — the number of free checked bags shown with every fare quote, keyed off the itinerary's class (higher classes get more; the lowest discount economy class gets none)
 - **Corporate/negotiated fare code** — an account code that unlocks a discounted fare tier
 
 ### 9. Add contact &amp; booking info

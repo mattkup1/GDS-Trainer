@@ -22,6 +22,7 @@ from .airports import AIRPORTS, airport_country, city_name
 from .data import (
     AIRLINE_NUMERIC_CODES,
     AIRLINES,
+    BAGGAGE_ALLOWANCE,
     CARD_TYPES,
     CLASS_FARE_MULT,
     CLASSES,
@@ -587,6 +588,19 @@ def _trip_type(segments: list[dict]) -> str:
 TRIP_TYPE_LABELS = {"OW": "ONE WAY", "RT": "ROUND TRIP", "CT": "CIRCLE TRIP", "OJ": "OPEN JAW"}
 
 
+def _format_baggage_pieces(pieces: int | None) -> str | None:
+    if pieces is None:
+        return None
+    if pieces == 0:
+        return "0PC - NO FREE CHECKED BAGS"
+    kg = round(BAGGAGE_ALLOWANCE["weightLimitLbs"] / 2.20462)
+    return f"{pieces}PC (MAX {BAGGAGE_ALLOWANCE['weightLimitLbs']}LB/{kg}KG PER BAG)"
+
+
+def _baggage_allowance_text(cls: str) -> str | None:
+    return _format_baggage_pieces(BAGGAGE_ALLOWANCE["pieces"].get(cls))
+
+
 def _shuffled(items: list, rng) -> list:
     arr = list(items)
     for i in range(len(arr) - 1, 0, -1):
@@ -620,6 +634,7 @@ def fare_quote_shop(orig: str, dest: str, booking_cls: str | None = None) -> Non
             print_line(f"  CHANGE FEE                  USD {rules['changeFee']:.2f}")
             print_line(f"  REFUNDABLE                  {'YES' if rules['refundable'] else 'NO'}")
             print_line(f"  ADVANCE PURCHASE REQUIRED   {rules['advancePurchaseDays']} DAYS")
+            print_line(f"  BAGGAGE ALLOWANCE           {_baggage_allowance_text(booking_cls)}")
         else:
             print_line("  NO FARE RULE DATA ON FILE FOR THIS CLASS", "dim")
         print_blank()
@@ -701,6 +716,7 @@ def price_itinerary(mode: str, corp_code: str | None = None) -> None:
     total = round((base_fare + tax_total) * 100) / 100
     fare_basis = f"{p['segments'][0]['cls']}{_trip_type(p['segments'])}"
     rules = FARE_RULES.get(p["segments"][0]["cls"])
+    baggage_allowance = BAGGAGE_ALLOWANCE["pieces"].get(p["segments"][0]["cls"])
 
     p["pricing"] = {
         "mode": mode,
@@ -711,6 +727,7 @@ def price_itinerary(mode: str, corp_code: str | None = None) -> None:
         "fare_basis": fare_basis,
         "currency": "USD",
         "rules": rules,
+        "baggage_allowance": baggage_allowance,
         "corporate_code": {"code": corp_code, "label": corporate["label"], "discount": corporate["discount"]}
         if corporate
         else None,
@@ -743,6 +760,9 @@ def price_itinerary(mode: str, corp_code: str | None = None) -> None:
         print_line(f"  CHANGE FEE                  USD {rules['changeFee']:.2f}", "dim")
         print_line(f"  REFUNDABLE                  {'YES' if rules['refundable'] else 'NO'}", "dim")
         print_line(f"  ADVANCE PURCHASE REQUIRED   {rules['advancePurchaseDays']} DAYS", "dim")
+    if baggage_allowance is not None:
+        print_blank()
+        print_line(f"BAGGAGE ALLOWANCE            {_format_baggage_pieces(baggage_allowance)}", "dim")
     print_blank()
     print_line("FARE QUOTE STORED - REQUIRED PRIOR TO TICKETING", "dim")
     log_activity(STATE, f"PRICED - {format_pricing_short(p['pricing'])}")
@@ -862,6 +882,9 @@ def print_itinerary_document(doc: dict) -> None:
                 f"ADVANCE PURCHASE {pr['rules']['advancePurchaseDays']} DAYS",
                 "dim",
             )
+        baggage_text = _format_baggage_pieces(pr.get("baggage_allowance"))
+        if baggage_text:
+            print_line(f"  BAGGAGE ALLOWANCE {baggage_text}", "dim")
 
     if doc["form_of_payment"]:
         print_blank()

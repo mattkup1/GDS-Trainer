@@ -246,6 +246,7 @@
     <p class="format">Format: <code>A</code> + day + month + origin + destination (or <code>1</code> in place of <code>A</code> — both are real GDS entries)</p>
     <div class="cmdblock">A15AUGDFWORD</div>
     <p class="note">This requests flights from <b>DFW</b> (Dallas/Ft Worth) to <b>ORD</b> (Chicago O'Hare) on <b>August 15</b>. You'll get back a numbered list of flights, each with airline, flight number, seats open per class (F/J/C/Y/B/M), departure/arrival times. Most lines share the searched city pair, but a few may show a different one — that's a connecting flight's leg (see the next step).</p>
+    <p class="note">A long enough flight departing late in the day lands after midnight — its arrival time shows a <code>+1</code> suffix (e.g. <code>1206A+1</code>) to mark that it's the next calendar day, the same convention real Sabre uses. This shows up anywhere an arrival time is printed: availability, schedule display, the PNR, and the itinerary document.</p>
     <p class="aside">Any real-world IATA airport code works — the simulator ships with data for ~6,000 airports worldwide.</p>
   </div>
 </section>

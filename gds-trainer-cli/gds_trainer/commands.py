@@ -45,7 +45,7 @@ from .data import (
     WAITLIST_CLEAR,
     WEEKDAYS,
 )
-from .dates import minutes_to_clock, parse_date
+from .dates import format_arrival, minutes_to_clock, parse_date
 from .printer import print_blank, print_err, print_line
 from .rng import hash_str, mulberry32
 from .state import STATE, fresh_pnr, log_activity, now_stamp
@@ -172,14 +172,14 @@ def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
     # identical rationale.
     print_line(
         f" {pad('LN', 2)} {pad('FLT', 7)}  {pad('RTE', 6)}  "
-        f"{''.join(pad(c, 3) for c in CLASSES)} {pad('DEP', 6)} {pad('ARR', 6)} EQP",
+        f"{''.join(pad(c, 3) for c in CLASSES)} {pad('DEP', 6)} {pad('ARR', 8)} EQP",
         "dim",
     )
     for f in flights:
         class_str = "".join(pad(c["cls"] + str(c["seats"]), 3) for c in f["class_avail"])
         print_line(
             f" {pad(f['line'], 2)} {f['airline']} {pad(f['flight_num'], 4)}  {f['orig']}{f['dest']}  {class_str} "
-            f"{pad(minutes_to_clock(f['dep']), 6)} {pad(minutes_to_clock(f['arr']), 6)} {f['equip']}"
+            f"{pad(minutes_to_clock(f['dep']), 6)} {pad(format_arrival(f['dep'], f['arr']), 8)} {f['equip']}"
         )
     print_blank()
     print_line(f"SELL WITH: 0{{LINE}}{{CLASS}}{{SEATS}}   e.g. 0{flights[0]['line']}Y1", "dim")
@@ -226,13 +226,13 @@ def gen_schedule(day_str: str, mon_str: str, orig: str, dest: str) -> None:
         dep = 300 + int(rng() * 90)
         print_blank()
         print_line(f"{pad(day['day'], 2)}{day['mon']} {day['weekday']}", "hd")
-        print_line("  FLT       DEP    ARR    ELAPSED EQP", "dim")
+        print_line("  FLT       DEP    ARR      ELAPSED EQP", "dim")
         for _ in range(num_flights):
             f = _gen_flight(rng, dep, orig, dest)
             elapsed = f"{f['duration'] // 60}:{f['duration'] % 60:02d}"
             print_line(
                 f"  {f['airline']} {pad(f['flight_num'], 4)}  {pad(minutes_to_clock(f['dep']), 6)} "
-                f"{pad(minutes_to_clock(f['arr']), 6)} {pad(elapsed, 7)} {f['equip']}"
+                f"{pad(format_arrival(f['dep'], f['arr']), 8)} {pad(elapsed, 7)} {f['equip']}"
             )
             dep += 55 + int(rng() * 95)
             if dep > 1380:
@@ -446,7 +446,7 @@ def format_segment_short(seg: dict) -> str:
     return (
         f"{seg['airline']}{seg['flight_num']} {seg['cls']} {dinfo.day}{dinfo.mon} "
         f"{seg['orig']}{seg['dest']} {seg['status']}{seg['seats']}  "
-        f"{minutes_to_clock(seg['dep'])} {minutes_to_clock(seg['arr'])}"
+        f"{minutes_to_clock(seg['dep'])} {format_arrival(seg['dep'], seg['arr'])}"
     )
 
 
@@ -831,7 +831,7 @@ def print_itinerary_document(doc: dict) -> None:
             print_line(
                 f"  {s['airline']}{s['flight_num']} {s['cls']}  {s['dinfo'].day}{s['dinfo'].mon} {s['dinfo'].weekday}  "
                 f"{city_name(s['orig'])} ({s['orig']}) {minutes_to_clock(s['dep'])} -> "
-                f"{city_name(s['dest'])} ({s['dest']}) {minutes_to_clock(s['arr'])}  {status_label}  SEAT {seat_list}"
+                f"{city_name(s['dest'])} ({s['dest']}) {format_arrival(s['dep'], s['arr'])}  {status_label}  SEAT {seat_list}"
             )
 
     if doc["ssrs"]:
@@ -1640,7 +1640,7 @@ def _apply_schedule_changes(p: dict) -> None:
         log_activity(
             STATE,
             f"SCHEDULE CHANGE - {seg['airline']}{seg['flight_num']} {seg['orig']}{seg['dest']} "
-            f"NOW {minutes_to_clock(seg['dep'])}-{minutes_to_clock(seg['arr'])}",
+            f"NOW {minutes_to_clock(seg['dep'])}-{format_arrival(seg['dep'], seg['arr'])}",
         )
         any_changed = True
     if any_changed:

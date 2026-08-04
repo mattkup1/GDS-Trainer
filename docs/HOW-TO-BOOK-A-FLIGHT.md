@@ -46,6 +46,8 @@ A15AUGDFWORD
 ```
 This requests flights from **DFW** (Dallas/Ft Worth) to **ORD** (Chicago O'Hare) on **August 15**. You'll get back a numbered list of flights, each with airline, flight number, seats open per class (F/J/C/Y/B/M), departure/arrival times. Most lines share the searched city pair, but a few may show a different one — that's a connecting flight's leg (see the next step).
 
+A long enough flight departing late in the day lands after midnight — its arrival time shows a `+1` suffix (e.g. `1206A+1`) to mark that it's the next calendar day, the same convention real Sabre uses. This shows up anywhere an arrival time is printed: availability, schedule display, the PNR, and the itinerary document.
+
 > Any real-world IATA airport code works — the simulator ships with data for ~6,000 airports worldwide.
 
 ---

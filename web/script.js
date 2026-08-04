@@ -121,6 +121,18 @@
     let hh12 = hh % 12; if(hh12 === 0) hh12 = 12;
     return `${hh12}${String(mm).padStart(2,'0')}${ampm}`;
   }
+  // Real Sabre marks an arrival that lands on a different calendar day than its departure
+  // with a +N suffix (e.g. "245A+1") rather than silently showing a same-day clock time -
+  // without it, a red-eye/long-haul flight looks like it arrives before it departs, or like
+  // a suspiciously short trip. Computed as a diff of whole-day counts between the two raw
+  // minute values (not just "does arr exceed 1440") so it stays correct even after a
+  // schedule change shifts both dep and arr by an identical delta - genuinely relative, not
+  // tied to either value being in [0,1440) to begin with.
+  function formatArrival(dep, arr){
+    const offset = Math.floor(arr/1440) - Math.floor(dep/1440);
+    const suffix = offset === 0 ? '' : (offset > 0 ? `+${offset}` : `${offset}`);
+    return minutesToClock(arr) + suffix;
+  }
   function pad(s, n){ s = String(s); return s + ' '.repeat(Math.max(0, n - s.length)); }
 
   // ---------- state ----------
@@ -218,10 +230,10 @@
     // Built from the same field widths as the data rows below (not hand-counted spaces)
     // so the header can't drift out of alignment with them - see the seat map header's
     // identical rationale.
-    print(` ${pad('LN',2)} ${pad('FLT',7)}  ${pad('RTE',6)}  ${CLASSES.map(c=>pad(c,3)).join('')} ${pad('DEP',6)} ${pad('ARR',6)} EQP`, 'dim');
+    print(` ${pad('LN',2)} ${pad('FLT',7)}  ${pad('RTE',6)}  ${CLASSES.map(c=>pad(c,3)).join('')} ${pad('DEP',6)} ${pad('ARR',8)} EQP`, 'dim');
     for(const f of flights){
       const classStr = f.classAvail.map(c => pad(c.cls + c.seats, 3)).join('');
-      print(` ${pad(f.line,2)} ${f.airline} ${pad(f.flightNum,4)}  ${f.orig}${f.dest}  ${classStr} ${pad(minutesToClock(f.dep),6)} ${pad(minutesToClock(f.arr),6)} ${f.equip}`);
+      print(` ${pad(f.line,2)} ${f.airline} ${pad(f.flightNum,4)}  ${f.orig}${f.dest}  ${classStr} ${pad(minutesToClock(f.dep),6)} ${pad(formatArrival(f.dep,f.arr),8)} ${f.equip}`);
     }
     printBlank();
     print('SELL WITH: 0{LINE}{CLASS}{SEATS}   e.g. 0' + flights[0].line + 'Y1', 'dim');
@@ -257,11 +269,11 @@
       let dep = 300 + Math.floor(rng()*90);
       printBlank();
       print(`${pad(day.day,2)}${day.mon} ${day.weekday}`, 'hd');
-      print(`  FLT       DEP    ARR    ELAPSED EQP`, 'dim');
+      print(`  FLT       DEP    ARR      ELAPSED EQP`, 'dim');
       for(let i=0;i<numFlights;i++){
         const f = genFlight(rng, dep, orig, dest);
         const elapsed = `${Math.floor(f.duration/60)}:${String(f.duration%60).padStart(2,'0')}`;
-        print(`  ${f.airline} ${pad(f.flightNum,4)}  ${pad(minutesToClock(f.dep),6)} ${pad(minutesToClock(f.arr),6)} ${pad(elapsed,7)} ${f.equip}`);
+        print(`  ${f.airline} ${pad(f.flightNum,4)}  ${pad(minutesToClock(f.dep),6)} ${pad(formatArrival(f.dep,f.arr),8)} ${pad(elapsed,7)} ${f.equip}`);
         dep += 55 + Math.floor(rng()*95);
         if(dep > 1380) dep = 300 + Math.floor(rng()*60);
       }
@@ -403,7 +415,7 @@
   }
 
   function formatSegmentShort(seg){
-    return `${seg.airline}${seg.flightNum} ${seg.cls} ${seg.dinfo.day}${seg.dinfo.mon} ${seg.orig}${seg.dest} ${seg.status}${seg.seats}  ${minutesToClock(seg.dep)} ${minutesToClock(seg.arr)}`;
+    return `${seg.airline}${seg.flightNum} ${seg.cls} ${seg.dinfo.day}${seg.dinfo.mon} ${seg.orig}${seg.dest} ${seg.status}${seg.seats}  ${minutesToClock(seg.dep)} ${formatArrival(seg.dep, seg.arr)}`;
   }
 
   // ---------- pricing (WP / WPNCS) ----------
@@ -637,7 +649,7 @@
             <div class="leg-col">
               <div class="leg-label">ARRIVE</div>
               ${airportBlock(s.dest)}
-              <div class="leg-time">${minutesToClock(s.arr)}</div>
+              <div class="leg-time">${e(formatArrival(s.dep, s.arr))}</div>
             </div>
             <div class="info-col">
               <div>DURATION <strong>${formatDuration(s.arr - s.dep)}</strong></div>
@@ -1323,7 +1335,7 @@
       seg.dep += shift;
       seg.arr += shift;
       seg.scheduleChanged = true;
-      logActivity(`SCHEDULE CHANGE - ${seg.airline}${seg.flightNum} ${seg.orig}${seg.dest} NOW ${minutesToClock(seg.dep)}-${minutesToClock(seg.arr)}`);
+      logActivity(`SCHEDULE CHANGE - ${seg.airline}${seg.flightNum} ${seg.orig}${seg.dest} NOW ${minutesToClock(seg.dep)}-${formatArrival(seg.dep, seg.arr)}`);
       anyChanged = true;
     }
     if(anyChanged){

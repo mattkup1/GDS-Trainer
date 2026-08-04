@@ -53,3 +53,17 @@ def minutes_to_clock(mins: int) -> str:
     if hh12 == 0:
         hh12 = 12
     return f"{hh12}{mm:02d}{ampm}"
+
+
+def format_arrival(dep: int, arr: int) -> str:
+    """Real Sabre marks an arrival that lands on a different calendar day than its
+    departure with a +N suffix (e.g. "245A+1") rather than silently showing a same-day
+    clock time - without it, a red-eye/long-haul flight looks like it arrives before it
+    departs, or like a suspiciously short trip. Computed as a diff of whole-day counts
+    between the two raw minute values (not just "does arr exceed 1440") so it stays
+    correct even after a schedule change shifts both dep and arr by an identical delta -
+    genuinely relative, not tied to either value being in [0,1440) to begin with.
+    """
+    offset = arr // 1440 - dep // 1440
+    suffix = "" if offset == 0 else (f"+{offset}" if offset > 0 else str(offset))
+    return minutes_to_clock(arr) + suffix

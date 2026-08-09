@@ -11,3 +11,12 @@ notes
 spec/airline-logos/*
 !spec/airline-logos/README.md
 web/generated/airline-logos.js
+
+# Media
+docs/social-preview.png
+docs/social-preview.svg
+
+#Docs
+docs/TRAINING-SCENARIOS.html
+docs/GDS-TRAINER-BOOKING-GUIDE.html
+

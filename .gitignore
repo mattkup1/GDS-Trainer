@@ -2,6 +2,10 @@
 __pycache__/
 *.pyc
 
+# Local-only symlink into a private Obsidian vault outside the repo - see
+# the Obsidian integration section in CLAUDE.md. Never track or distribute.
+notes
+
 # Real airline logos are trademarked/copyrighted third-party assets - see
 # spec/airline-logos/README.md. Keep them local, never distribute via git.
 spec/airline-logos/*

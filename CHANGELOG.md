@@ -36,4 +36,4 @@ and a first version number — rather than a specific feature milestone.
 - **Documentation** — a step-by-step booking walkthrough, a printable
   booking guide, and printable training scenarios in `docs/`.
 
-[1.0.0]: https://github.com/mattkup1/GDS/releases/tag/v1.0.0
+[1.0.0]: https://github.com/mattkup1/GDS-Simulator/releases/tag/v1.0.0

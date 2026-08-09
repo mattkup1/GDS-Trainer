@@ -4,7 +4,7 @@
 
 # GDS Trainer
 
-[![Tests](https://github.com/mattkup1/GDS/actions/workflows/tests.yml/badge.svg)](https://github.com/mattkup1/GDS/actions/workflows/tests.yml)
+[![Tests](https://github.com/mattkup1/GDS-Simulator/actions/workflows/tests.yml/badge.svg)](https://github.com/mattkup1/GDS-Simulator/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A green-phosphor CRT terminal simulator for learning classic GDS (Global

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/banner.svg" alt="GDS Trainer — terminal emulator" width="100%">
+</p>
+
 # GDS Trainer
 
 [![Tests](https://github.com/mattkup1/GDS/actions/workflows/tests.yml/badge.svg)](https://github.com/mattkup1/GDS/actions/workflows/tests.yml)

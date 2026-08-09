@@ -7,6 +7,8 @@
 [![Tests](https://github.com/mattkup1/GDS-Trainer/actions/workflows/tests.yml/badge.svg)](https://github.com/mattkup1/GDS-Trainer/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+**[Try it live →](https://mattkup1.github.io/GDS-Trainer/)** — no install, runs entirely in your browser.
+
 A green-phosphor CRT terminal simulator for learning classic GDS (Global
 Distribution System) entry mnemonics — sign-in, availability, sell, PNR
 build, pricing, ticketing, and end transaction — the way travel agents

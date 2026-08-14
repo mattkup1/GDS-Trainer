@@ -11,7 +11,6 @@
     <div id="bar">
       <span class="title"><span class="led"></span> GDS TRAINER</span>
       <span class="toolbtns">
-        <button id="btnToggleDock" title="Show/hide PNR panel">&#9776; PANEL</button>
         <button id="btnSettings" title="Display settings">&#9881; SETTINGS</button>
         <button id="btnClear">CLEAR SCREEN</button>
         <button id="btnReset">RESET SESSION</button>
@@ -26,6 +25,7 @@
             <input id="cmdline" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" />
           </div>
         </div>
+        <button id="dockToggleTab" title="Hide panel" aria-label="Hide panel">&#8250;</button>
       </div>
       <div id="dock">
         <div class="segmented" id="dockTabs">
@@ -36,7 +36,13 @@
         </div>
         <div id="dockPnrTab">
           <div id="dockStatus" class="dim"></div>
-          <div id="dockRloc"></div>
+          <div id="dockRlocRow">
+            <span id="dockRloc"></span>
+            <button id="btnCopyRloc" class="dock-iconbtn hidden" title="Copy record locator" aria-label="Copy record locator">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+          </div>
+          <button id="btnDownloadPnr" class="dock-textbtn hidden">&#8681; DOWNLOAD PNR (.TXT)</button>
           <div id="dockPnrBody"></div>
         </div>
         <div id="seatMapPanel" class="hidden">
@@ -64,6 +70,13 @@
     <button id="btnCloseSettings" class="iconbtn" aria-label="Close settings">&#10005;</button>
   </div>
   <div class="panel-body">
+    <div class="setting-group">
+      <label>DISPLAY MODE</label>
+      <div class="segmented" data-setting="mode">
+        <button data-value="dark">DARK</button>
+        <button data-value="light">LIGHT</button>
+      </div>
+    </div>
     <div class="setting-group">
       <label>COLOR THEME</label>
       <div class="swatches" id="themeSwatches">

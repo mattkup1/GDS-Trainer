@@ -1124,6 +1124,8 @@
       ? `SIGNED IN - SINE ${state.sine}  PCC ${state.pcc}`
       : 'NOT SIGNED IN';
     dockRloc.textContent = `RLOC: ${state.pnr.locator || '(NOT SAVED)'}`;
+    btnCopyRloc.classList.toggle('hidden', !state.pnr.locator);
+    btnDownloadPnr.classList.toggle('hidden', state.lastDisplay.length === 0);
     dockPnrBody.innerHTML = '';
     if(state.lastDisplay.length === 0){
       dockPnrBody.textContent = 'PNR IS EMPTY';
@@ -1135,6 +1137,66 @@
       row.textContent = `${pad(e.num,2)} ${pad(e.label,5)} ${e.text}`;
       dockPnrBody.appendChild(row);
     }
+  }
+
+  // Legacy execCommand fallback: file:// pages don't reliably get the async
+  // Clipboard API (it's gated behind a secure-context/permission check that
+  // treats file: origins inconsistently across browsers), so try it first
+  // and fall back to the older selection-based copy rather than silently
+  // failing.
+  function copyToClipboard(text, onDone){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(onDone).catch(() => legacyCopy(text, onDone));
+    } else {
+      legacyCopy(text, onDone);
+    }
+  }
+  function legacyCopy(text, onDone){
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try{ document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta);
+    if(onDone) onDone();
+  }
+
+  function buildPnrTextDump(){
+    const p = state.pnr;
+    const lines = [];
+    lines.push('GDS TRAINER - PNR EXPORT');
+    lines.push(`RLOC: ${p.locator || '(NOT SAVED)'}`);
+    lines.push(`GENERATED: ${nowStamp()}`);
+    lines.push('');
+    if(state.lastDisplay.length === 0){
+      lines.push('** PNR IS EMPTY **');
+    } else {
+      for(const e of state.lastDisplay){
+        lines.push(`${pad(e.num,2)}  ${pad(e.label,5)} ${e.text}`);
+      }
+    }
+    const log = p.activityLog || [];
+    if(log.length){
+      lines.push('');
+      lines.push('ACTIVITY HISTORY');
+      for(const entry of log){
+        lines.push(` ${entry.stamp}  ${pad(entry.sine,6)} ${entry.text}`);
+      }
+    }
+    return lines.join('\n');
+  }
+  function downloadPnrTxt(){
+    const blob = new Blob([buildPnrTextDump()], { type:'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `PNR-${state.pnr.locator || 'UNSAVED'}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   function refreshAndPrintPNR(){
@@ -2298,9 +2360,9 @@
   const shellEl = document.getElementById('shell');
   const settingsPanel = document.getElementById('settingsPanel');
   const btnSettings = document.getElementById('btnSettings');
-  const btnToggleDock = document.getElementById('btnToggleDock');
+  const dockToggleTab = document.getElementById('dockToggleTab');
   const SETTINGS_KEY = 'gdsTrainerSettings';
-  const DEFAULT_SETTINGS = { theme:'green', scanlines:true, glow:'med', vignette:true, fontSize:'md', dockVisible:true };
+  const DEFAULT_SETTINGS = { theme:'green', scanlines:true, glow:'med', vignette:true, fontSize:'md', dockVisible:true, mode:'dark' };
 
   function loadSettings(){
     try{
@@ -2319,10 +2381,14 @@
     shellEl.dataset.theme = settings.theme;
     shellEl.dataset.glow = settings.glow;
     shellEl.dataset.fontsize = settings.fontSize;
+    shellEl.dataset.mode = settings.mode;
+    document.body.dataset.mode = settings.mode;
     shellEl.classList.toggle('scanlines-off', !settings.scanlines);
     shellEl.classList.toggle('vignette-off', !settings.vignette);
     shellEl.classList.toggle('dock-hidden', !settings.dockVisible);
-    btnToggleDock.classList.toggle('active', settings.dockVisible);
+    dockToggleTab.innerHTML = settings.dockVisible ? '&#8250;' : '&#8249;';
+    dockToggleTab.title = settings.dockVisible ? 'Hide panel' : 'Show panel';
+    dockToggleTab.setAttribute('aria-label', dockToggleTab.title);
     syncPanelUI();
   }
 
@@ -2384,7 +2450,7 @@
   document.getElementById('btnCloseSettings').addEventListener('click', () => {
     settingsPanel.classList.add('hidden');
   });
-  btnToggleDock.addEventListener('click', () => {
+  dockToggleTab.addEventListener('click', () => {
     settings.dockVisible = !settings.dockVisible;
     applySettings(); saveSettings();
   });
@@ -2405,6 +2471,21 @@
   const dockPnrTab = document.getElementById('dockPnrTab');
   const dockStatus = document.getElementById('dockStatus');
   const dockRloc = document.getElementById('dockRloc');
+  const btnCopyRloc = document.getElementById('btnCopyRloc');
+  const btnDownloadPnr = document.getElementById('btnDownloadPnr');
+  btnCopyRloc.addEventListener('click', () => {
+    if(!state.pnr.locator) return;
+    copyToClipboard(state.pnr.locator, () => {
+      const original = btnCopyRloc.innerHTML;
+      btnCopyRloc.textContent = 'COPIED';
+      btnCopyRloc.classList.add('copied');
+      setTimeout(() => {
+        btnCopyRloc.innerHTML = original;
+        btnCopyRloc.classList.remove('copied');
+      }, 1200);
+    });
+  });
+  btnDownloadPnr.addEventListener('click', downloadPnrTxt);
   const dockPnrBody = document.getElementById('dockPnrBody');
   const seatMapPanel = document.getElementById('seatMapPanel');
   const seatMapTitle = document.getElementById('seatMapTitle');

@@ -16,6 +16,142 @@ body{
 #shell[data-theme="ice"]  { --fg:#5fe1ff; --fg-dim:#2a7f96; --fg-rgb:95,225,255; }
 #shell[data-theme="paper"]{ --fg:#eaeaea; --fg-dim:#8a8a8a; --fg-rgb:234,234,234; }
 
+/* light mode: white screen, kills the CRT phosphor glow (only makes sense on a
+   dark screen) regardless of theme. Deliberately scoped to #shell (not body,
+   like the rest of this section) - --glow is a custom property, and #shell's
+   own [data-theme]/[data-glow] rules set it directly on #shell itself; a
+   directly-set value always wins over one inherited from an ancestor (body
+   here) no matter that ancestor rule's specificity, so overriding from body
+   would silently lose to whichever theme/glow level is selected. */
+#shell[data-mode="light"]{ --glow:none; }
+/* Each color theme gets its own light-mode variant (dark ink of the same hue,
+   readable on white) rather than light mode forcing one fixed color - otherwise
+   switching COLOR THEME while in light mode would visibly do nothing. Same
+   #shell-scoping reasoning as above, and these need to beat the plain
+   [data-theme="x"] rules above too (both direct rules on #shell - the extra
+   [data-mode] attribute gives the combined selector higher specificity, so it
+   wins regardless of source order). PAPER's light variant is literal dark ink
+   on paper, since its dark-mode "near-white" text would otherwise vanish. */
+#shell[data-theme="green"][data-mode="light"]{ --fg:#15803d; --fg-dim:#4d7c62; --fg-rgb:21,128,61; }
+#shell[data-theme="amber"][data-mode="light"]{ --fg:#92400e; --fg-dim:#a8784a; --fg-rgb:146,64,14; }
+#shell[data-theme="ice"][data-mode="light"]{ --fg:#1e3a8a; --fg-dim:#5568a8; --fg-rgb:30,58,138; }
+#shell[data-theme="paper"][data-mode="light"]{ --fg:#262626; --fg-dim:#6b6b6b; --fg-rgb:38,38,38; }
+body[data-mode="light"] #crt,
+body[data-mode="light"] #dock{
+  background:#fbfbfa;
+  box-shadow:
+    inset 0 0 0 6px #dcdcda,
+    inset 0 0 30px rgba(0,0,0,.10),
+    inset 0 0 60px rgba(0,0,0,.06);
+}
+body[data-mode="light"] #lookupInput,
+body[data-mode="light"] #formatsInput{ background:#fff; }
+/* the scanline/vignette overlays are tuned dark-on-dark by default, which reads
+   as dirty grey static on a white light-mode screen at the same intensity - so
+   light mode gets its own softer tuning rather than losing the effect outright.
+   Still fully responsive to the SCANLINES/SCREEN CURVATURE settings, same as
+   dark mode: #shell.scanlines-off/.vignette-off (below) only set opacity/
+   box-shadow:none, which is a higher-specificity match (two IDs) than these
+   body[data-mode] rules (one ID) and so still wins when a setting is off,
+   without needing to duplicate the off-state here. */
+body[data-mode="light"] #crt::after{
+  background: repeating-linear-gradient(
+    to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 1px,
+    rgba(0,0,0,.06) 2px, rgba(0,0,0,.06) 3px
+  );
+}
+body[data-mode="light"] #crt::before{
+  box-shadow: inset 0 0 30px rgba(0,0,0,.12), inset 0 0 70px rgba(0,0,0,.06);
+}
+body[data-mode="light"] #screen::-webkit-scrollbar-thumb,
+body[data-mode="light"] #dockPnrTab::-webkit-scrollbar-thumb,
+body[data-mode="light"] #seatMapPanel::-webkit-scrollbar-thumb,
+body[data-mode="light"] #lookupPanel::-webkit-scrollbar-thumb,
+body[data-mode="light"] #formatsPanel::-webkit-scrollbar-thumb{
+  background: rgba(var(--fg-rgb),.4);
+}
+
+/* light mode, part 2: the "hardware" chrome around the screen (body, bezel,
+   toolbar, settings panel, dock tab strip, seat map) is styled dark regardless
+   of color theme today, on the idea that it's a physical case rather than the
+   phosphor display. Light mode instead recolors it all to a light desk/plastic
+   look, so nothing is left rendering as an unthemed black box next to a white
+   screen. */
+body[data-mode="light"]{
+  background: radial-gradient(ellipse 70% 55% at 50% 28%, #f7f7f5 0%, #ececeb 55%, #e2e2e0 100%);
+}
+body[data-mode="light"] #housing{
+  background: linear-gradient(160deg, #f6f6f5 0%, #ececea 45%, #dededc 100%);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.8) inset,
+    0 -1px 0 rgba(0,0,0,.08) inset;
+}
+body[data-mode="light"] #bar{
+  border-bottom-color: rgba(0,0,0,.08);
+  color:#555;
+}
+body[data-mode="light"] #bar .title{ color:#222; }
+body[data-mode="light"] #bar button{
+  background: linear-gradient(#fff,#ececea);
+  color:#444; border-color:#ccc;
+}
+body[data-mode="light"] #bar button:hover{
+  background: linear-gradient(#f7f7f6,#e4e4e2); border-color:#999; color:#111;
+}
+body[data-mode="light"] #bar button:disabled:hover{
+  background: linear-gradient(#fff,#ececea); border-color:#ccc; color:#444;
+}
+body[data-mode="light"] #hint{ color:#666; }
+
+body[data-mode="light"] #dockToggleTab{
+  background: linear-gradient(160deg,#fff,#ececea); border-color:#ccc; color:#777;
+}
+body[data-mode="light"] #dockToggleTab:hover{
+  background: linear-gradient(160deg,#f7f7f6,#e4e4e2); color:#222;
+}
+
+body[data-mode="light"] #dockTabs button:nth-child(odd){ border-right-color:#ddd; }
+body[data-mode="light"] #dockTabs button:nth-child(-n+2){ border-bottom-color:#ddd; }
+
+body[data-mode="light"] .panel{
+  background: linear-gradient(160deg,#fff,#f3f3f2);
+  border-color:#ccc;
+  box-shadow: 0 20px 50px rgba(0,0,0,.15), 0 0 0 1px rgba(255,255,255,.6) inset;
+  color:#333;
+}
+body[data-mode="light"] .panel-head{
+  background: rgba(0,0,0,.03); border-bottom-color:#ddd; color:#222;
+}
+body[data-mode="light"] .iconbtn{ color:#888; }
+body[data-mode="light"] .iconbtn:hover{ color:#111; }
+body[data-mode="light"] .setting-group label{ color:#777; }
+body[data-mode="light"] .swatch{ background:#f7f7f6; color:#555; border-color:#ccc; }
+body[data-mode="light"] .swatch:hover{ border-color:#999; }
+body[data-mode="light"] .swatch.active{ background:rgba(0,0,0,.04); color:#111; }
+body[data-mode="light"] .segmented{ border-color:#ccc; }
+body[data-mode="light"] .segmented button{ background:#f7f7f6; color:#555; }
+body[data-mode="light"] .segmented button + button{ border-left-color:#ccc; }
+body[data-mode="light"] .segmented button:hover{ background:#ececea; color:#222; }
+body[data-mode="light"] .segmented button.active{
+  background: rgba(var(--fg-rgb),.15); color:var(--fg);
+}
+
+body[data-mode="light"] .seatmap-decklabel{ color:#1a56db; }
+body[data-mode="light"] .seatcell{ border-color:#ccc; background:#f2f2f0; color:#999; }
+body[data-mode="light"] .seatcell.open{ border-color:#3fae5c; background:#e9f9ee; color:#1f8a44; }
+body[data-mode="light"] .seatcell.open:hover{
+  border-color:#1f8a44; background:#d3f3dd; box-shadow:0 0 6px rgba(31,138,68,.35);
+}
+body[data-mode="light"] .seatcell.occupied{ border-color:#ddd; background:#ebebe9; color:#aaa; }
+body[data-mode="light"] .seatcell.mine{
+  border-color:#1f8a44; background:#c9f0d8; color:#0b4423;
+  box-shadow:0 0 8px rgba(31,138,68,.3);
+}
+body[data-mode="light"] .seatcell.mine:hover{
+  border-color:#d33; background:#fbdada; color:#7a1414;
+  box-shadow:0 0 8px rgba(211,51,51,.3);
+}
+
 /* glow intensity */
 #shell[data-glow="off"]{ --glow: none; }
 #shell[data-glow="low"]{ --glow: 0 0 1px rgba(var(--fg-rgb),.7); }
@@ -122,6 +258,23 @@ body{
 }
 #shell.vignette-off #crt::before{ box-shadow:none; }
 
+/* side tab that shows/hides the dock - lives on #crt (always rendered, whether
+   or not the dock itself is visible) anchored to its right edge, so it sits at
+   the crt/dock boundary when the dock is open and at the screen's right edge
+   when the dock is hidden. */
+#dockToggleTab{
+  position:absolute; top:50%; right:-1px; z-index:5;
+  transform:translateY(-50%);
+  width:16px; height:52px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(160deg,#333,#232323);
+  border:1px solid #3c3c3c; border-right:none;
+  border-radius:6px 0 0 6px;
+  color:#999; font-size:15px; line-height:1; cursor:pointer;
+  transition: background .15s ease, color .15s ease;
+}
+#dockToggleTab:hover{ background:linear-gradient(160deg,#3a3a3a,#282828); color:#fff; }
+
 #screen{
   position:absolute; inset:0; padding:18px 20px;
   overflow-y:auto; overflow-x:hidden;
@@ -190,8 +343,30 @@ body{
 }
 
 #dockStatus{ color:var(--fg-dim); text-shadow:none; margin-bottom:4px; }
-#dockRloc{ font-weight:bold; margin-bottom:10px; }
+#dockRlocRow{ display:flex; align-items:center; gap:6px; margin-bottom:8px; }
+#dockRloc{ font-weight:bold; }
 #dockPnrBody .docklinerow{ white-space:pre-wrap; word-break:break-word; padding:2px 0; }
+
+.dock-iconbtn{
+  display:inline-flex; align-items:center; justify-content:center;
+  background:transparent; border:1px solid rgba(var(--fg-rgb),.35); border-radius:4px;
+  color:var(--fg); font-size:11px; line-height:1; padding:4px 6px; cursor:pointer;
+  font-family:inherit; white-space:nowrap;
+}
+.dock-iconbtn:hover{ background:rgba(var(--fg-rgb),.12); border-color:rgba(var(--fg-rgb),.6); }
+.dock-iconbtn.copied{ color:#4ade80; border-color:#4ade80; }
+/* .hidden (display:none) has the same specificity as .dock-iconbtn/.dock-textbtn's
+   own display declaration and comes earlier in the file, so without this it
+   silently loses the cascade and the "hidden" button stays visible. */
+.dock-iconbtn.hidden, .dock-textbtn.hidden{ display:none; }
+
+.dock-textbtn{
+  display:block; width:100%; text-align:left;
+  background:transparent; border:1px solid rgba(var(--fg-rgb),.35); border-radius:5px;
+  color:var(--fg); text-shadow:var(--glow); font-family:inherit; font-size:11px;
+  padding:6px 8px; margin-bottom:10px; cursor:pointer; letter-spacing:.5px;
+}
+.dock-textbtn:hover{ background:rgba(var(--fg-rgb),.12); border-color:rgba(var(--fg-rgb),.6); }
 
 @media (max-width: 900px){
   #mainrow{ flex-direction:column; }

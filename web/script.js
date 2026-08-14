@@ -2091,7 +2091,7 @@
 
   function addFqtv(airline, num, paxStr, tierCode){
     const paxNum = paxStr ? parseInt(paxStr,10) : null;
-    if(paxNum && (paxNum < 1 || paxNum > state.pnr.names.length)){ printErr('INVALID PASSENGER NUMBER - CHECK NAME FIELD'); return; }
+    if(paxStr && (paxNum < 1 || paxNum > state.pnr.names.length)){ printErr('INVALID PASSENGER NUMBER - CHECK NAME FIELD'); return; }
     let text = `FQTV ${airline} FREQUENT FLYER NUMBER  ${airline}${num}`;
     if(paxNum) text += `  PAX ${paxNum} (${state.pnr.names[paxNum-1]})`;
     if(tierCode){
@@ -2161,7 +2161,7 @@
     const desc = SSR_CODES[code];
     if(!desc){ printErr(`UNKNOWN SSR CODE ${code} - TYPE HELP FOR LIST`); return; }
     const paxNum = paxStr ? parseInt(paxStr,10) : null;
-    if(paxNum && (paxNum < 1 || paxNum > state.pnr.names.length)){ printErr('INVALID PASSENGER NUMBER - CHECK NAME FIELD'); return; }
+    if(paxStr && (paxNum < 1 || paxNum > state.pnr.names.length)){ printErr('INVALID PASSENGER NUMBER - CHECK NAME FIELD'); return; }
     const freeText = freeTextRaw ? freeTextRaw.trim() : '';
     let text = `${code} ${desc}`;
     if(paxNum) text += `  PAX ${paxNum} (${state.pnr.names[paxNum-1]})`;

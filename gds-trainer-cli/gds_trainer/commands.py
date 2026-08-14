@@ -1134,7 +1134,7 @@ def add_fop_credit_card(card_type: str, num: str, mm_str: str, yy: str) -> None:
 
 def add_fqtv(airline: str, num: str, pax_str: str | None = None, tier_code: str | None = None) -> None:
     pax_num = int(pax_str) if pax_str else None
-    if pax_num and (pax_num < 1 or pax_num > len(STATE.pnr["names"])):
+    if pax_str and (pax_num < 1 or pax_num > len(STATE.pnr["names"])):
         print_err("INVALID PASSENGER NUMBER - CHECK NAME FIELD")
         return
     text = f"FQTV {airline} FREQUENT FLYER NUMBER  {airline}{num}"
@@ -1254,7 +1254,7 @@ def add_ssr(code: str, pax_str: str | None, free_text_raw: str | None) -> None:
         print_err(f"UNKNOWN SSR CODE {code} - TYPE HELP FOR LIST")
         return
     pax_num = int(pax_str) if pax_str else None
-    if pax_num and (pax_num < 1 or pax_num > len(STATE.pnr["names"])):
+    if pax_str and (pax_num < 1 or pax_num > len(STATE.pnr["names"])):
         print_err("INVALID PASSENGER NUMBER - CHECK NAME FIELD")
         return
     free_text = free_text_raw.strip() if free_text_raw else ""

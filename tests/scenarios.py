@@ -298,6 +298,20 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "ssr_and_fqtv_reject_passenger_number_zero",
+        [
+            # Regression: -{PAX#} of "0" must be rejected like any other out-of-range
+            # passenger number. Both handlers used to gate the range check on the
+            # *parsed int* being truthy (`if pax_num and ...`) rather than on whether a
+            # -{PAX#} suffix was given at all (`if pax_str and ...`) - since 0 is falsy
+            # in both JS and Python, "-0" silently skipped validation and was accepted
+            # as if no passenger number had been given, instead of erroring.
+            *_priced_single_pax_setup(),
+            Step("3WCHR-0", expect_contains=["INVALID PASSENGER NUMBER"]),
+            Step("3FQTVAA1234567-0", expect_contains=["INVALID PASSENGER NUMBER"]),
+        ],
+    ),
+    Scenario(
         "extra_seat_ssr_and_fare_reflects_seats_sold_not_names",
         [
             # Booking an extra seat (comfort/oversized-passenger purchase, or an instrument/

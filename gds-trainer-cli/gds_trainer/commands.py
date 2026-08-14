@@ -454,6 +454,7 @@ def format_segment_short(seg: dict) -> str:
 # ---------- name / phone / received-from ----------
 
 _INF_RE = re.compile(r"\(INF([A-Z][A-Z\-' ]*)/([A-Z][A-Z\-' ]*)/(\d{1,2}[A-Z]{3}\d{2})\)\s*$")
+_CHD_RE = re.compile(r"^([A-Z][A-Z\-' ]*?)\s*\(CHD\)$")
 _HEAD_RE = re.compile(r"^(\d{1,2})?([A-Z][A-Z\-' ]*)$")
 _DOB_RE = re.compile(r"^(\d{1,2})([A-Z]{3})(\d{2})$")
 _PHONE_RE = re.compile(r"^(?:/([A-Z]{3}))?(\d[\d\-]{4,14})-([A-Z]{1,3})$")
@@ -510,14 +511,33 @@ def handle_name(u: str) -> None:
             "SELL ADDITIONAL SEATS OR CANCEL A NAME"
         )
         return
+    # Child fare: a (CHD) suffix on any one /-separated given-name token (e.g.
+    # -SMITH/JOHN MR/JOHNNY MSTR(CHD)) tags that specific passenger, unlike the lap
+    # infant suffix above which is stripped from the end of the whole entry instead -
+    # a child is a fully named, seat-occupying passenger already handled by the loop
+    # below, not a second person to record separately, so this only needs a fare-type
+    # flag (STATE.pnr["children"], referencing the pax index the same way docs/seats do)
+    # for price_itinerary to apply CLASS_FARE_MULT's sibling discount to. No DOB is
+    # captured (unlike infants) since nothing here does age-based eligibility checks -
+    # just a fare type.
     added = []
+    added_display = []
     for g in incoming:
-        full = f"{surname}/{g}"
+        chd_match = _CHD_RE.match(g)
+        given = chd_match.group(1).strip() if chd_match else g
+        full = f"{surname}/{given}"
         STATE.pnr["names"].append(full)
         added.append(full)
+        if chd_match:
+            STATE.pnr["children"].append({"pax": len(STATE.pnr["names"])})
+            # Single space here (vs. the double-space join between names below) so "(CHD)"
+            # visibly binds to the name right before it, not to whichever name comes next.
+            added_display.append(f"{full} (CHD)")
+        else:
+            added_display.append(full)
     suffix = "S" if len(added) > 1 else ""
-    print_line(f"NAME{suffix} ADDED - {'  '.join(added)}")
-    log_activity(STATE, f"NAME{suffix} ADDED - {'  '.join(added)}")
+    print_line(f"NAME{suffix} ADDED - {'  '.join(added_display)}")
+    log_activity(STATE, f"NAME{suffix} ADDED - {'  '.join(added_display)}")
     if infant_data:
         dv = _DOB_RE.match(infant_data["dob"])
         day = int(dv.group(1)) if dv else 0
@@ -696,11 +716,22 @@ def price_itinerary(mode: str, corp_code: str | None = None) -> None:
     )
     rng = mulberry32(hash_str(seed_key))
 
+    # Child fare: each seat attributed to a child-tagged passenger (STATE.pnr["children"],
+    # set by handle_name's (CHD) suffix) prices at fareFormula.childFareMultiplier instead
+    # of full fare, same "everyone travels the whole itinerary" simplification every other
+    # per-passenger simplification in this app already makes (baggage, fare rules, etc.) -
+    # so the same child count applies on every segment. Capped at the segment's own seat
+    # count (not just len(names)) since an extra, unnamed seat (EXST/CBBG/STCR) can never
+    # be a child seat - it has no name, let alone a child-tagged one.
+    child_count = len(p["children"])
     base_fare = 0
     for s in p["segments"]:
         mult = CLASS_FARE_MULT.get(s["cls"], 1.4)
         dist = FARE_FORMULA["distanceMin"] + int(rng() * FARE_FORMULA["distanceRange"])
-        base_fare += round((FARE_FORMULA["baseFareCoefficient"] + dist * FARE_FORMULA["baseFarePerMile"]) * mult * s["seats"])
+        per_seat = (FARE_FORMULA["baseFareCoefficient"] + dist * FARE_FORMULA["baseFarePerMile"]) * mult
+        child_seats = min(child_count, s["seats"])
+        adult_seats = s["seats"] - child_seats
+        base_fare += round(per_seat * adult_seats) + round(per_seat * FARE_FORMULA["childFareMultiplier"] * child_seats)
     if corporate:
         base_fare = round(base_fare * (1 - corporate["discount"]))
 
@@ -731,6 +762,7 @@ def price_itinerary(mode: str, corp_code: str | None = None) -> None:
         "corporate_code": {"code": corp_code, "label": corporate["label"], "discount": corporate["discount"]}
         if corporate
         else None,
+        "child_count": child_count,
     }
 
     print_line(
@@ -749,6 +781,9 @@ def price_itinerary(mode: str, corp_code: str | None = None) -> None:
             f"CORPORATE CODE APPLIED - {corporate['label']} ({round(corporate['discount'] * 100)}% DISCOUNT)",
             "dim",
         )
+    if child_count:
+        pct = round((1 - FARE_FORMULA["childFareMultiplier"]) * 100)
+        print_line(f"CHILD FARE APPLIED - {child_count} PAX ({pct}% OFF BASE)", "dim")
     print_line(f"BASE FARE      USD {base_fare:.2f}")
     for t in taxes:
         print_line(f"  {t['code']}   USD {t['amount']:.2f}   {t['label']}", "dim")
@@ -792,8 +827,12 @@ def build_itinerary_document(mode: str) -> dict:
         return name in sections
 
     passengers = [
-        {"name": name, "infants": [inf for inf in p["infants"] if inf["adult"] == name]}
-        for name in p["names"]
+        {
+            "name": name,
+            "is_child": any(c["pax"] == i + 1 for c in p["children"]),
+            "infants": [inf for inf in p["infants"] if inf["adult"] == name],
+        }
+        for i, name in enumerate(p["names"])
     ]
 
     return {
@@ -833,7 +872,8 @@ def print_itinerary_document(doc: dict) -> None:
     print_line("PASSENGER(S)", "hd")
     if doc["passengers"]:
         for pax in doc["passengers"]:
-            print_line(f"  {pax['name']}")
+            child_badge = "  (CHILD FARE)" if pax["is_child"] else ""
+            print_line(f"  {pax['name']}{child_badge}")
             for inf in pax["infants"]:
                 print_line(f"    + INFANT: {inf['surname']}/{inf['given']}  DOB {inf['dob']}", "dim")
     else:
@@ -1321,7 +1361,8 @@ def build_elements() -> list[dict]:
     p = STATE.pnr
     els: list[dict] = []
     for i, n in enumerate(p["names"]):
-        els.append({"kind": "name", "idx": i, "label": f"NM{i + 1}", "text": n})
+        is_child = any(c["pax"] == i + 1 for c in p["children"])
+        els.append({"kind": "name", "idx": i, "label": f"NM{i + 1}", "text": n + ("  (CHD)" if is_child else "")})
     for i, inf in enumerate(p["infants"]):
         els.append(
             {
@@ -1848,11 +1889,26 @@ def divide_pnr(nums_str: str) -> None:
             remaining_seats.append({**st, "pax": original_idx - shift + 1})
     p["seats"] = remaining_seats
 
+    # Same pax-attribution/reindex pattern as docs/seats above - a child tag always has
+    # a pax (set unconditionally in handle_name, unlike seats' optional attribution), so
+    # there's no "unattributed, drop from both" case to handle here.
+    moved_children = []
+    remaining_children = []
+    for c in p["children"]:
+        original_idx = c["pax"] - 1
+        if original_idx in removed_idx_set:
+            moved_children.append({**c, "pax": idx_to_new_pax[original_idx]})
+        else:
+            shift = sum(1 for ri in removed_idx_asc if ri < original_idx)
+            remaining_children.append({**c, "pax": original_idx - shift + 1})
+    p["children"] = remaining_children
+
     new_pnr = fresh_pnr()
     new_pnr["names"] = moved_names
     new_pnr["infants"] = moved_infants
     new_pnr["docs"] = moved_docs
     new_pnr["seats"] = moved_seats
+    new_pnr["children"] = moved_children
     new_pnr["segments"] = copy.deepcopy(p["segments"])
     # Each segment's `seats` count is what price_itinerary multiplies the per-seat fare by
     # (see there) - left at the pre-divide party size on both sides, a WP after dividing
@@ -2133,6 +2189,8 @@ def show_help() -> None:
     print_line("  -{SURNAME}/{GIVEN} {TITLE}(INF{ISURNAME}/{IGIVEN}/{DOB})")
     print_line("                                       Name with an associated lap infant")
     print_line("                                       e.g. -SMITH/JOHN MR(INFSMITH/BABY/12JAN26)")
+    print_line("  -{SURNAME}/{GIVEN} {TITLE}(CHD)     Child fare - discounted fare, still occupies a seat")
+    print_line("                                       e.g. -SMITH/JOHNNY MSTR(CHD)")
     print_line("  9{NUMBER}-{LOC}                     Phone field   e.g. 9214555-1234-A")
     print_line("  9/{CTY}{NUMBER}-{LOC}               Phone field, out-of-area   e.g. 9/BOS617-555-1234-A")
     print_line("  6{TEXT}                             Received from   e.g. 6JSMITH")

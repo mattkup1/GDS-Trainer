@@ -67,7 +67,8 @@
     "minTaxes": 2,
     "additionalTaxesRange": 3,
     "taxAmountMin": 3,
-    "taxAmountRange": 22
+    "taxAmountRange": 22,
+    "childFareMultiplier": 0.75
   },
   "scheduleChange": {
     "chance": 0.35,

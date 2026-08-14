@@ -328,6 +328,31 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "child_fare_tag_discounts_price_and_survives_divide",
+        [
+            # (CHD) on a specific /-separated given-name token tags that one passenger as a
+            # child fare - still a fully named, seat-occupying passenger (unlike a lap
+            # infant), just priced at a discount.
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            Step("01Y2", expect_contains=["SEGMENT SOLD"]),
+            Step(
+                "-SMITH/JOHN MR/JOHNNY MSTR(CHD)",
+                expect_contains=["NAMES ADDED", "SMITH/JOHN MR", "SMITH/JOHNNY MSTR (CHD)"],
+            ),
+            Step("WP", expect_contains=["ITINERARY PRICING", "CHILD FARE APPLIED - 1 PAX"]),
+            Step("*R", expect_contains=["NM2", "SMITH/JOHNNY MSTR", "(CHD)"]),
+            PHONE_VALID,
+            RECEIVED_FROM,
+            Step("FPCASH", expect_contains=["FORM OF PAYMENT ADDED"]),
+            TICKETING_AT_WILL,
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            # the child tag must move with the child on divide, reindexed to pax 1 in the
+            # new PNR - same pax-attribution pattern already covered for docs/seats.
+            Step("SP2", expect_contains=["PNR DIVIDED", "NEW RLOC", "SMITH/JOHNNY MSTR"]),
+        ],
+    ),
+    Scenario(
         "phone_format_rejected_then_accepted",
         [
             SIGN_IN,

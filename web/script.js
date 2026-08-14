@@ -154,7 +154,7 @@
   function freshPNR(){
     return { locator:null, names:[], segments:[], phones:[], receivedFrom:null, ticketing:null, pricing:null,
               infants:[], ssrs:[], osis:[], seats:[], formOfPayment:null, activityLog:[], tickets:[],
-              docs:[], remarks:[], priorTickets:[], priorPricing:null };
+              docs:[], remarks:[], priorTickets:[], priorPricing:null, children:[] };
   }
 
   function nowStamp(){
@@ -507,11 +507,22 @@
     const seed = hashStr(p.segments.map(s => `${s.airline}${s.flightNum}${s.cls}${s.dinfo.day}${s.dinfo.mon}${s.orig}${s.dest}${s.seats}`).join('|') + mode);
     const rng = mulberry32(seed);
 
+    // Child fare: each seat attributed to a child-tagged passenger (state.pnr.children,
+    // set by handleName's (CHD) suffix) prices at fareFormula.childFareMultiplier instead
+    // of full fare, same "everyone travels the whole itinerary" simplification every other
+    // per-passenger simplification in this app already makes (baggage, fare rules, etc.) -
+    // so the same child count applies on every segment. Capped at the segment's own seat
+    // count (not just names.length) since an extra, unnamed seat (EXST/CBBG/STCR) can never
+    // be a child seat - it has no name, let alone a child-tagged one.
+    const childCount = state.pnr.children.length;
     let baseFare = 0;
     for(const s of p.segments){
       const mult = CLASS_FARE_MULT[s.cls] || 1.4;
       const dist = FARE_FORMULA.distanceMin + Math.floor(rng()*FARE_FORMULA.distanceRange);
-      baseFare += Math.round((FARE_FORMULA.baseFareCoefficient + dist*FARE_FORMULA.baseFarePerMile) * mult * s.seats);
+      const perSeat = (FARE_FORMULA.baseFareCoefficient + dist*FARE_FORMULA.baseFarePerMile) * mult;
+      const childSeats = Math.min(childCount, s.seats);
+      const adultSeats = s.seats - childSeats;
+      baseFare += Math.round(perSeat * adultSeats) + Math.round(perSeat * FARE_FORMULA.childFareMultiplier * childSeats);
     }
     if(corporate){ baseFare = Math.round(baseFare * (1 - corporate.discount)); }
 
@@ -533,6 +544,7 @@
     p.pricing = {
       mode, baseFare, taxes, taxTotal, total, fareBasis, currency:'USD', rules, baggageAllowance,
       corporateCode: corporate ? { code: corpCode, label: corporate.label, discount: corporate.discount } : null,
+      childCount,
     };
 
     print(mode === 'WPNCS' ? '** LOWEST FARE - WPNCS (SUBJECT TO AVAILABILITY) **' : '** ITINERARY PRICING - WP **', 'hd');
@@ -541,6 +553,7 @@
     print(`FARE BASIS: ${fareBasis}`);
     print(`TRIP TYPE: ${TRIP_TYPE_LABELS[tripType(p.segments)]}`, 'dim');
     if(corporate){ print(`CORPORATE CODE APPLIED - ${corporate.label} (${Math.round(corporate.discount*100)}% DISCOUNT)`, 'dim'); }
+    if(childCount){ print(`CHILD FARE APPLIED - ${childCount} PAX (${Math.round((1-FARE_FORMULA.childFareMultiplier)*100)}% OFF BASE)`, 'dim'); }
     print(`BASE FARE      USD ${baseFare.toFixed(2)}`);
     for(const t of taxes){ print(`  ${t.code}   USD ${t.amount.toFixed(2)}   ${t.label}`, 'dim'); }
     print(`TAXES/FEES     USD ${taxTotal.toFixed(2)}`);
@@ -579,7 +592,11 @@
     return {
       mode, label: cfg.label,
       pcc: state.pcc, sine: state.sine, issued: new Date(), locator: p.locator,
-      passengers: p.names.map(n => ({ name: n, infants: p.infants.filter(inf => inf.adult === n) })),
+      passengers: p.names.map((n, i) => ({
+        name: n,
+        isChild: p.children.some(c => c.pax === i+1),
+        infants: p.infants.filter(inf => inf.adult === n),
+      })),
       tripType: p.segments.length ? TRIP_TYPE_LABELS[tripType(p.segments)] : null,
       segments: has('segments') ? p.segments : [],
       seats: has('seats') ? p.seats : [],
@@ -627,7 +644,8 @@
 
     const passengersHtml = doc.passengers.map(p => {
       const infantsHtml = p.infants.map(inf => `<div class="pax-sub">+ INFANT ${e(inf.surname)}/${e(inf.given)} &nbsp; DOB ${e(inf.dob)}</div>`).join('');
-      return `<div class="pax-row"><div class="pax-name">${e(p.name)}</div>${infantsHtml}</div>`;
+      const childBadge = p.isChild ? ' <span class="dim">(CHILD FARE)</span>' : '';
+      return `<div class="pax-row"><div class="pax-name">${e(p.name)}${childBadge}</div>${infantsHtml}</div>`;
     }).join('') || '<div class="dim">NO PASSENGERS ON FILE</div>';
 
     const seatsBySeg = {};
@@ -1091,7 +1109,10 @@
 
   function buildElements(){
     const els = [];
-    state.pnr.names.forEach((n, i) => els.push({ kind:'name', idx:i, label:`NM${i+1}`, text:n }));
+    state.pnr.names.forEach((n, i) => {
+      const isChild = state.pnr.children.some(c => c.pax === i+1);
+      els.push({ kind:'name', idx:i, label:`NM${i+1}`, text: n + (isChild ? '  (CHD)' : '') });
+    });
     state.pnr.infants.forEach((inf, i) => els.push({ kind:'infant', idx:i, label:'IN', text:`${inf.surname}/${inf.given}  DOB ${inf.dob}  (INFANT - TRAVELS WITH ${inf.adult})` }));
     state.pnr.docs.forEach((d, i) => { const t = resolveDocTraveler(d.pax, d.infantNum); els.push({ kind:'docs', idx:i, label:'DOC', text:`${d.desc} ${d.country} ${d.number}  NATIONALITY ${d.nationality}  DOB ${d.dob}  ${d.sex}  EXP ${d.expiry}  PAX ${t.label} (${t.name})` }); });
     state.pnr.segments.forEach((s, i) => {
@@ -1596,11 +1617,28 @@
     }
     p.seats = remainingSeats;
 
+    // Same pax-attribution/reindex pattern as docs/seats above - a child tag always has
+    // a pax (set unconditionally in handleName, unlike seats' optional attribution), so
+    // there's no "unattributed, drop from both" case to handle here.
+    const movedChildren = [];
+    const remainingChildren = [];
+    for(const c of p.children){
+      const originalIdx = c.pax - 1;
+      if(removedIdxSet.has(originalIdx)){
+        movedChildren.push({ ...c, pax: idxToNewPax[originalIdx] });
+      } else {
+        const shift = removedIdxAsc.filter(ri => ri < originalIdx).length;
+        remainingChildren.push({ ...c, pax: originalIdx - shift + 1 });
+      }
+    }
+    p.children = remainingChildren;
+
     const newPnr = freshPNR();
     newPnr.names = movedNames;
     newPnr.infants = movedInfants;
     newPnr.docs = movedDocs;
     newPnr.seats = movedSeats;
+    newPnr.children = movedChildren;
     newPnr.segments = JSON.parse(JSON.stringify(p.segments));
     // Each segment's `seats` count is what priceItinerary multiplies the per-seat fare by
     // (see there) - left at the pre-divide party size on both sides, a WP after dividing
@@ -1845,6 +1883,8 @@
     print('  -{SURNAME}/{GIVEN} {TITLE}(INF{ISURNAME}/{IGIVEN}/{DOB})');
     print('                                       Name with an associated lap infant');
     print('                                       e.g. -SMITH/JOHN MR(INFSMITH/BABY/12JAN26)');
+    print('  -{SURNAME}/{GIVEN} {TITLE}(CHD)     Child fare - discounted fare, still occupies a seat');
+    print('                                       e.g. -SMITH/JOHNNY MSTR(CHD)');
     print('  9{NUMBER}-{LOC}                     Phone field   e.g. 9214555-1234-A');
     print('  9/{CTY}{NUMBER}-{LOC}               Phone field, out-of-area   e.g. 9/BOS617-555-1234-A');
     print('  6{TEXT}                             Received from   e.g. 6JSMITH');
@@ -1993,14 +2033,34 @@
       printErr(`UNABLE TO ADD NAME - PARTY SIZE EXCEEDS SEATS SOLD (${maxParty}) - SELL ADDITIONAL SEATS OR CANCEL A NAME`);
       return;
     }
+    // Child fare: a (CHD) suffix on any one /-separated given-name token (e.g.
+    // -SMITH/JOHN MR/JOHNNY MSTR(CHD)) tags that specific passenger, unlike the lap
+    // infant suffix above which is stripped from the end of the whole entry instead -
+    // a child is a fully named, seat-occupying passenger already handled by the loop
+    // below, not a second person to record separately, so this only needs a fare-type
+    // flag (state.pnr.children, referencing the pax index the same way docs/seats do)
+    // for priceItinerary to apply CLASS_FARE_MULT's sibling discount to. No DOB is
+    // captured (unlike infants) since nothing here does age-based eligibility checks -
+    // just a fare type.
     const added = [];
+    const addedDisplay = [];
     for(const g of incoming){
-      const full = `${surname}/${g}`;
+      const chdMatch = g.match(/^([A-Z][A-Z\-' ]*?)\s*\(CHD\)$/);
+      const given = chdMatch ? chdMatch[1].trim() : g;
+      const full = `${surname}/${given}`;
       state.pnr.names.push(full);
       added.push(full);
+      if(chdMatch){
+        state.pnr.children.push({ pax: state.pnr.names.length });
+        // Single space here (vs. the double-space join between names below) so "(CHD)"
+        // visibly binds to the name right before it, not to whichever name comes next.
+        addedDisplay.push(`${full} (CHD)`);
+      } else {
+        addedDisplay.push(full);
+      }
     }
-    print(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${added.join('  ')}`);
-    logActivity(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${added.join('  ')}`);
+    print(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${addedDisplay.join('  ')}`);
+    logActivity(`NAME${added.length > 1 ? 'S' : ''} ADDED - ${addedDisplay.join('  ')}`);
     if(infantData){
       const dv = infantData.dob.match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);
       const day = dv ? parseInt(dv[1],10) : 0;

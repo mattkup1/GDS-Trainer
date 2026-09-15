@@ -85,6 +85,9 @@
     "domestic": 45,
     "international": 90
   },
+  "codeshare": {
+    "chance": 0.3
+  },
   "ssrCodes": {
     "WCHR": "WHEELCHAIR - CAN WALK TO/FROM SEAT",
     "WCHS": "WHEELCHAIR - MUST BE CARRIED SHORT DISTANCE",
@@ -127,12 +130,12 @@
     "SLV": "SILVER", "GLD": "GOLD", "PLT": "PLATINUM", "DIA": "DIAMOND"
   },
   "fareRules": {
-    "F": {"changeFee": 0,   "refundable": true,  "advancePurchaseDays": 0},
-    "J": {"changeFee": 75,  "refundable": true,  "advancePurchaseDays": 0},
-    "C": {"changeFee": 100, "refundable": false, "advancePurchaseDays": 3},
-    "Y": {"changeFee": 150, "refundable": false, "advancePurchaseDays": 7},
-    "B": {"changeFee": 200, "refundable": false, "advancePurchaseDays": 14},
-    "M": {"changeFee": 250, "refundable": false, "advancePurchaseDays": 21}
+    "F": {"changeFee": 0,   "refundable": true,  "advancePurchaseDays": 0,  "minStayDays": 0, "maxStayDays": 365, "cancellationFee": 0},
+    "J": {"changeFee": 75,  "refundable": true,  "advancePurchaseDays": 0,  "minStayDays": 0, "maxStayDays": 365, "cancellationFee": 50},
+    "C": {"changeFee": 100, "refundable": false, "advancePurchaseDays": 3,  "minStayDays": 0, "maxStayDays": 180, "cancellationFee": 0},
+    "Y": {"changeFee": 150, "refundable": false, "advancePurchaseDays": 7,  "minStayDays": 3, "maxStayDays": 90,  "cancellationFee": 0},
+    "B": {"changeFee": 200, "refundable": false, "advancePurchaseDays": 14, "minStayDays": 5, "maxStayDays": 60,  "cancellationFee": 0},
+    "M": {"changeFee": 250, "refundable": false, "advancePurchaseDays": 21, "minStayDays": 7, "maxStayDays": 30,  "cancellationFee": 0}
   },
   "baggageAllowance": {
     "pieces": {"F": 3, "J": 2, "C": 2, "Y": 1, "B": 1, "M": 0},

@@ -15,6 +15,20 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   between adult and child portions accordingly.
 - **Light mode** — a theme toggle alongside the existing glow/scanline
   settings, persisted the same way via `localStorage`.
+- **Codeshare flights** — availability/schedule display and the PNR now show
+  a flight's operating carrier when it differs from the marketing carrier
+  (`OPERATED BY {NAME} ({CODE}{NUM})`), matching real GDS availability.
+  Deterministic per flight, derived from a seed independent of the shared
+  availability RNG stream so it can't perturb any other generated value.
+- **Fuller fare rules** — each booking class's fare rules gained a
+  cancellation fee (distinct from the change fee), minimum stay, and maximum
+  stay, shown in `FQ.../{CLASS}`, `WP`/`WPNCS`, and the itinerary document.
+  `TKTR` now deducts the cancellation fee from the refund amount instead of
+  always refunding the fare in full.
+- **Flexible-date availability (`AF{DD}{MMM}{ORIG}{DEST}`)** — a fare-calendar
+  view showing the lowest indicative fare per day across a ±3 day window
+  around the given date, nonstop only, not bookable directly (search that
+  date with `A` to book).
 
 ### Fixed
 

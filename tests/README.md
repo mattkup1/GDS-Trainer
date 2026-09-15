@@ -38,7 +38,9 @@ pytest                           # everything (testpaths configured in root pypr
   SSR accept/reject, phone format accept/reject, seat re-assignment rejection,
   cancel forms (single/range/list/whole-itinerary), `ER` vs `ET`, PNR and
   ticketing completeness gates, retrieve-by-locator, invalid-entry fallback,
-  `HELP` sanity, airport encode/decode.
+  `HELP` sanity, airport encode/decode, codeshare display/carry-through,
+  flexible-date availability, fuller fare-rules display and refund
+  cancellation-fee deduction.
 - **`cdp.py`** — the minimal CDP client. `ChromeSession.run_commands()` drives
   the real `#cmdline` input with real `keydown` events (exactly like a user
   typing + pressing Enter) and returns the accumulated `#output` transcript;

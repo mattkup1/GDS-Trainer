@@ -63,6 +63,7 @@
   const WAITLIST_CLEAR = REFERENCE_DATA.waitlistClear;
   const FLIGHT_CANCELLATION = REFERENCE_DATA.flightCancellation;
   const MIN_CONNECT_TIME = REFERENCE_DATA.minimumConnectTime;
+  const CODESHARE = REFERENCE_DATA.codeshare;
   const SSR_CODES = REFERENCE_DATA.ssrCodes;
   const CARD_TYPES = REFERENCE_DATA.cardTypes;
   const QUEUE_CATEGORIES = REFERENCE_DATA.queueCategories;
@@ -178,7 +179,19 @@
     const arr = dep + duration;
     const equip = EQUIP[Math.floor(rng()*EQUIP.length)];
     const classAvail = CLASSES.map(c => ({ cls:c, seats: Math.floor(rng()*10) }));
-    return { airline, flightNum, dep, arr, duration, equip, classAvail, orig, dest };
+    // Codeshare: real availability often shows a flight marketed by one carrier but
+    // operated by another. Derived from a SEPARATE rng stream seeded off this flight's
+    // own identity (not the shared `rng` passed in) so adding this can't shift any other
+    // draw from that stream - every other generated field, and every flight generated
+    // after this one, stays byte-for-byte unaffected by this feature existing at all.
+    const csRng = mulberry32(hashStr(`CS${airline}${flightNum}${orig}${dest}${dep}`));
+    let operatingAirline = null, operatingFlightNum = null;
+    if(csRng() < CODESHARE.chance){
+      const others = AIRLINES.filter(a => a !== airline);
+      operatingAirline = others[Math.floor(csRng()*others.length)];
+      operatingFlightNum = 100 + Math.floor(csRng()*2899);
+    }
+    return { airline, flightNum, dep, arr, duration, equip, classAvail, orig, dest, operatingAirline, operatingFlightNum };
   }
 
   function genAvailability(dayStr, monStr, orig, dest){
@@ -235,6 +248,9 @@
     for(const f of flights){
       const classStr = f.classAvail.map(c => pad(c.cls + c.seats, 3)).join('');
       print(` ${pad(f.line,2)} ${f.airline} ${pad(f.flightNum,4)}  ${f.orig}${f.dest}  ${classStr} ${pad(minutesToClock(f.dep),6)} ${pad(formatArrival(f.dep,f.arr),8)} ${f.equip}`);
+      if(f.operatingAirline){
+        print(`      OPERATED BY ${AIRLINE_NAMES[f.operatingAirline] || f.operatingAirline} (${f.operatingAirline}${f.operatingFlightNum})`, 'dim');
+      }
     }
     printBlank();
     print('SELL WITH: 0{LINE}{CLASS}{SEATS}   e.g. 0' + flights[0].line + 'Y1', 'dim');
@@ -275,10 +291,72 @@
         const f = genFlight(rng, dep, orig, dest);
         const elapsed = `${Math.floor(f.duration/60)}:${String(f.duration%60).padStart(2,'0')}`;
         print(`  ${f.airline} ${pad(f.flightNum,4)}  ${pad(minutesToClock(f.dep),6)} ${pad(formatArrival(f.dep,f.arr),8)} ${pad(elapsed,7)} ${f.equip}`);
+        if(f.operatingAirline){
+          print(`      OPERATED BY ${AIRLINE_NAMES[f.operatingAirline] || f.operatingAirline} (${f.operatingAirline}${f.operatingFlightNum})`, 'dim');
+        }
         dep += 55 + Math.floor(rng()*95);
         if(dep > 1380) dep = 300 + Math.floor(rng()*60);
       }
     }
+  }
+
+  // Real-world "flexible date" shopping: a fare-calendar glance across a window around
+  // the target date, so an agent/traveler can see which nearby day is cheapest before
+  // committing to a specific A{DD}{MMM}{ORIG}{DEST} search. Modeled on genSchedule's
+  // "same shape, different letter" precedent (AF instead of A/S) and deliberately reuses
+  // genAvailability's exact per-date seed for each date in the window, so a date here
+  // that's also directly searched via A or S shows the literal same flights - same
+  // established "one underlying schedule, different view" philosophy. Nonstop only, like
+  // schedule (connections are a booking-time concept) - this is read-only, non-bookable
+  // shopping, so no PNR interaction and no completeness rule, matching FQ/DC/DAN's
+  // existing precedent as pure lookups. Each date's fare estimate continues drawing from
+  // that date's own local rng (discarded right after that iteration) rather than a
+  // separate stream, so it can't affect anything else's generation either.
+  function genFlexibleAvailability(dayStr, monStr, orig, dest){
+    if(orig === dest){ printErr('FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME'); return; }
+    const anchor = parseDate(dayStr, monStr);
+    if(!anchor){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
+
+    const days = [];
+    for(let offset=-3; offset<=3; offset++){
+      const d = new Date(anchor.date.getTime());
+      d.setDate(d.getDate()+offset);
+      days.push({ day: d.getDate(), mon: MONTHS[d.getMonth()], year: d.getFullYear(), weekday: WEEKDAYS[d.getDay()] });
+    }
+
+    print(`** FLEXIBLE DATE AVAILABILITY **  ${orig}-${dest}  (${days[0].day}${days[0].mon}${days[0].year} - ${days[6].day}${days[6].mon}${days[6].year})`, 'hd');
+    print(`  ${cityName(orig)}  TO  ${cityName(dest)}`, 'dim');
+    printBlank();
+    print(` ${pad('DATE',11)} ${pad('DAY',5)} ${pad('LOWEST FARE',13)} ${pad('CLASS',6)} NONSTOPS`, 'dim');
+    for(const day of days){
+      const seed = hashStr(`${orig}${dest}${day.day}${day.mon}${day.year}`);
+      const rng = mulberry32(seed);
+      const numFlights = 5 + Math.floor(rng()*4);
+      let dep = 300 + Math.floor(rng()*90);
+      const flights = [];
+      for(let i=0;i<numFlights;i++){
+        flights.push(genFlight(rng, dep, orig, dest));
+        dep += 55 + Math.floor(rng()*95);
+        if(dep > 1380) dep = 300 + Math.floor(rng()*60);
+      }
+      // Same distance-roll-then-per-class-multiplier approach fareQuoteShop uses.
+      const dist = FARE_FORMULA.distanceMin + Math.floor(rng()*FARE_FORMULA.distanceRange);
+      let best = null;
+      for(const f of flights){
+        for(const c of f.classAvail){
+          if(c.seats <= 0) continue;
+          const mult = CLASS_FARE_MULT[c.cls] || 1.4;
+          const fare = Math.round((FARE_FORMULA.baseFareCoefficient + dist*FARE_FORMULA.baseFarePerMile) * mult);
+          if(!best || fare < best.fare) best = { fare, cls: c.cls };
+        }
+      }
+      const dateStr = `${pad(day.day,2)}${day.mon}${day.year}`;
+      const fareStr = best ? `USD ${best.fare.toFixed(2)}` : 'SOLD OUT';
+      const clsStr = best ? best.cls : '-';
+      print(` ${pad(dateStr,11)} ${pad(day.weekday,5)} ${pad(fareStr,13)} ${pad(clsStr,6)} ${numFlights}`);
+    }
+    printBlank();
+    print(`INDICATIVE BASE FARE ONLY - SEARCH THAT DATE (A{DD}{MMM}${orig}${dest}) TO VIEW/BOOK`, 'dim');
   }
 
   function sellFromAvail(lineNum, cls, seats){
@@ -296,7 +374,8 @@
       const seg = {
         airline: f.airline, flightNum: f.flightNum, cls: cls.toUpperCase(), seats,
         dinfo: state.lastAvail.dinfo, orig: f.orig, dest: f.dest,
-        dep: f.dep, arr: f.arr, status: 'HL', equip: f.equip
+        dep: f.dep, arr: f.arr, status: 'HL', equip: f.equip,
+        operatingAirline: f.operatingAirline, operatingFlightNum: f.operatingFlightNum
       };
       state.pnr.segments.push(seg);
       print(`SEGMENT WAITLISTED - ${formatSegmentShort(seg)}`);
@@ -310,7 +389,8 @@
     const seg = {
       airline: f.airline, flightNum: f.flightNum, cls: cls.toUpperCase(), seats,
       dinfo: state.lastAvail.dinfo, orig: f.orig, dest: f.dest,
-      dep: f.dep, arr: f.arr, status: 'HK', equip: f.equip
+      dep: f.dep, arr: f.arr, status: 'HK', equip: f.equip,
+      operatingAirline: f.operatingAirline, operatingFlightNum: f.operatingFlightNum
     };
     state.pnr.segments.push(seg);
     cinfo.seats -= seats;
@@ -355,6 +435,7 @@
         airline: flight.airline, flightNum: flight.flightNum, cls, seats,
         dinfo: state.lastAvail.dinfo, orig: flight.orig, dest: flight.dest,
         dep: flight.dep, arr: flight.arr, status: waitlisted ? 'HL' : 'HK', equip: flight.equip,
+        operatingAirline: flight.operatingAirline, operatingFlightNum: flight.operatingFlightNum,
         marriedGroup
       };
       state.pnr.segments.push(seg);
@@ -416,7 +497,8 @@
   }
 
   function formatSegmentShort(seg){
-    return `${seg.airline}${seg.flightNum} ${seg.cls} ${seg.dinfo.day}${seg.dinfo.mon} ${seg.orig}${seg.dest} ${seg.status}${seg.seats}  ${minutesToClock(seg.dep)} ${formatArrival(seg.dep, seg.arr)}`;
+    const oprSuffix = seg.operatingAirline ? `  OPR BY ${seg.operatingAirline}${seg.operatingFlightNum}` : '';
+    return `${seg.airline}${seg.flightNum} ${seg.cls} ${seg.dinfo.day}${seg.dinfo.mon} ${seg.orig}${seg.dest} ${seg.status}${seg.seats}  ${minutesToClock(seg.dep)} ${formatArrival(seg.dep, seg.arr)}${oprSuffix}`;
   }
 
   // ---------- pricing (WP / WPNCS) ----------
@@ -426,6 +508,26 @@
   // CLASS_FARE_MULT/TAX_POOL) via its own parallel calculation, one indicative total per
   // booking class. Purely informational - no PNR mutation, no activity log entry, matching
   // DC/DAN's existing precedent as pure lookups with no PNR side effects.
+  // Shared by fareQuoteShop's /{CLASS} rule view and priceItinerary's post-total FARE
+  // RULES block, so the two can't drift apart on which fields they show. Cancellation
+  // fee only means anything for a refundable fare (a nonrefundable fare is already
+  // blocked from TKTR entirely, regardless of what this field holds) - shown as N/A
+  // rather than a misleading dollar figure when refundable is false. Minimum/maximum
+  // stay are informational only, same "no booking-time enforcement" precedent as
+  // baggage allowance - this app doesn't model return-trip stay-duration checking.
+  function fareRulesLines(rules){
+    const cancelText = rules.refundable ? `USD ${rules.cancellationFee.toFixed(2)}` : 'N/A - NONREFUNDABLE';
+    const minStayText = rules.minStayDays === 0 ? 'NONE' : `${rules.minStayDays} NIGHTS`;
+    return [
+      `  CHANGE FEE                  USD ${rules.changeFee.toFixed(2)}`,
+      `  CANCELLATION FEE            ${cancelText}`,
+      `  REFUNDABLE                  ${rules.refundable ? 'YES' : 'NO'}`,
+      `  MINIMUM STAY                 ${minStayText}`,
+      `  MAXIMUM STAY                 ${rules.maxStayDays} DAYS`,
+      `  ADVANCE PURCHASE REQUIRED   ${rules.advancePurchaseDays} DAYS`,
+    ];
+  }
+
   function fareQuoteShop(orig, dest, cls){
     if(orig === dest){ printErr('FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME'); return; }
     if(cls && !CLASSES.includes(cls)){ printErr(`UNKNOWN BOOKING CLASS ${cls} - VALID: ${CLASSES.join(' ')}`); return; }
@@ -436,9 +538,7 @@
       print(`  ${cityName(orig)}  TO  ${cityName(dest)}`, 'dim');
       printBlank();
       if(rules){
-        print(`  CHANGE FEE                  USD ${rules.changeFee.toFixed(2)}`);
-        print(`  REFUNDABLE                  ${rules.refundable ? 'YES' : 'NO'}`);
-        print(`  ADVANCE PURCHASE REQUIRED   ${rules.advancePurchaseDays} DAYS`);
+        for(const line of fareRulesLines(rules)) print(line);
         print(`  BAGGAGE ALLOWANCE           ${baggageAllowanceText(cls)}`);
       } else {
         print('  NO FARE RULE DATA ON FILE FOR THIS CLASS', 'dim');
@@ -561,9 +661,7 @@
     if(rules){
       printBlank();
       print('FARE RULES', 'dim');
-      print(`  CHANGE FEE                  USD ${rules.changeFee.toFixed(2)}`, 'dim');
-      print(`  REFUNDABLE                  ${rules.refundable ? 'YES' : 'NO'}`, 'dim');
-      print(`  ADVANCE PURCHASE REQUIRED   ${rules.advancePurchaseDays} DAYS`, 'dim');
+      for(const line of fareRulesLines(rules)) print(line, 'dim');
     }
     if(baggageAllowance !== undefined){
       printBlank();
@@ -675,6 +773,7 @@
               ${airlineLogoHTML(s.airline)}
               <div class="carrier-name">${e(airlineFull)}</div>
               <div class="flight-num">${e(s.airline)}${e(s.flightNum)} &nbsp; CLASS ${e(s.cls)}</div>
+              ${s.operatingAirline ? `<div class="flight-num">OPERATED BY ${e(AIRLINE_NAMES[s.operatingAirline] || s.operatingAirline)} ${e(s.operatingAirline)}${e(s.operatingFlightNum)}</div>` : ''}
             </div>
             <div class="leg-col">
               <div class="leg-label">DEPART</div>
@@ -718,7 +817,8 @@
       const pr = doc.pricing;
       const taxRows = pr.taxes.map(t => `<tr><td>${e(t.code)} ${e(t.label)}</td><td class="amt">USD ${t.amount.toFixed(2)}</td></tr>`).join('');
       const rulesHtml = pr.rules ? `
-        <div class="rules-line">CHANGE FEE USD ${pr.rules.changeFee.toFixed(2)} &nbsp; REFUNDABLE ${pr.rules.refundable ? 'YES' : 'NO'} &nbsp; ADVANCE PURCHASE ${pr.rules.advancePurchaseDays} DAYS</div>` : '';
+        <div class="rules-line">CHANGE FEE USD ${pr.rules.changeFee.toFixed(2)} &nbsp; CANCELLATION FEE ${pr.rules.refundable ? 'USD ' + pr.rules.cancellationFee.toFixed(2) : 'N/A'} &nbsp; REFUNDABLE ${pr.rules.refundable ? 'YES' : 'NO'}</div>
+        <div class="rules-line">MIN STAY ${pr.rules.minStayDays === 0 ? 'NONE' : pr.rules.minStayDays + ' NIGHTS'} &nbsp; MAX STAY ${pr.rules.maxStayDays} DAYS &nbsp; ADVANCE PURCHASE ${pr.rules.advancePurchaseDays} DAYS</div>` : '';
       const baggageHtml = formatBaggagePieces(pr.baggageAllowance) ? `
         <div class="rules-line">BAGGAGE ALLOWANCE ${e(formatBaggagePieces(pr.baggageAllowance))}</div>` : '';
       pricingBlock = `
@@ -1779,12 +1879,14 @@
     const rules = FARE_RULES[p.segments[0].cls] || null;
     if(rules && !rules.refundable){ printErr('UNABLE TO REFUND - NONREFUNDABLE FARE BASIS'); return; }
 
-    const amount = p.pricing ? p.pricing.total : 0;
+    const total = p.pricing ? p.pricing.total : 0;
+    const fee = rules ? rules.cancellationFee : 0;
+    const amount = Math.max(0, total - fee);
     print('** TICKET(S) REFUNDED **', 'hd');
     for(const t of p.tickets){
       print(`  ${pad(t.passenger + (t.isInfant ? ' (INF)' : ''), 28)} ${t.ticketNum}`);
     }
-    print(`REFUND AMOUNT: USD ${amount.toFixed(2)}`, 'dim');
+    print(`REFUND AMOUNT: USD ${amount.toFixed(2)}${fee ? `  (CANCELLATION FEE USD ${fee.toFixed(2)} DEDUCTED)` : ''}`, 'dim');
     const count = p.tickets.length;
     p.tickets = [];
     p.pricing = null;
@@ -1860,6 +1962,9 @@
     print('AVAILABILITY', 'hd');
     print('  A{DD}{MMM}{ORG}{DST}   Air availability   e.g. A15AUGDFWORD');
     print('  1{DD}{MMM}{ORG}{DST}   Air availability (alternate entry)  e.g. 115AUGDFWORD');
+    print('  AF{DD}{MMM}{ORG}{DST}  Flexible-date availability - lowest indicative fare per day');
+    print('                         across a +/-3 day window, nonstop only, not bookable directly');
+    print('                         e.g. AF15AUGDFWORD');
     printBlank();
     print('SCHEDULE', 'hd');
     print('  S{DD}{MMM}{ORG}{DST}   Flight schedule, 7-day window from the given date -');
@@ -2293,6 +2398,7 @@
     SIGN_OUT: () => signOut(),
     HELP: () => showHelp(),
     AVAILABILITY: (raw, day, mon, orig, dest) => genAvailability(day, mon, orig, dest),
+    AVAILABILITY_FLEXIBLE: (raw, day, mon, orig, dest) => genFlexibleAvailability(day, mon, orig, dest),
     SCHEDULE_DISPLAY: (raw, day, mon, orig, dest) => genSchedule(day, mon, orig, dest),
     SELL_FROM_AVAIL: (raw, line, cls, seats) => sellFromAvail(parseInt(line,10), cls, parseInt(seats,10)),
     SELL_CONNECTION: (raw, seats, cls1, line1, cls2, line2) => sellConnection(parseInt(seats,10), cls1, parseInt(line1,10), cls2, parseInt(line2,10)),

@@ -20,12 +20,14 @@ from pathlib import Path
 
 from .airports import AIRPORTS, airport_country, city_name
 from .data import (
+    AIRLINE_NAMES,
     AIRLINE_NUMERIC_CODES,
     AIRLINES,
     BAGGAGE_ALLOWANCE,
     CARD_TYPES,
     CLASS_FARE_MULT,
     CLASSES,
+    CODESHARE,
     CORPORATE_CODES,
     DOCUMENT_TYPES,
     EMAIL_DOCUMENTS,
@@ -88,6 +90,18 @@ def _gen_flight(rng, dep: int, orig: str, dest: str) -> dict:
     arr = dep + duration
     equip = EQUIP[int(rng() * len(EQUIP))]
     class_avail = [{"cls": c, "seats": int(rng() * 10)} for c in CLASSES]
+    # Codeshare: real availability often shows a flight marketed by one carrier but
+    # operated by another. Derived from a SEPARATE rng stream seeded off this flight's
+    # own identity (not the shared `rng` passed in) so adding this can't shift any other
+    # draw from that stream - every other generated field, and every flight generated
+    # after this one, stays byte-for-byte unaffected by this feature existing at all.
+    cs_rng = mulberry32(hash_str(f"CS{airline}{flight_num}{orig}{dest}{dep}"))
+    operating_airline = None
+    operating_flight_num = None
+    if cs_rng() < CODESHARE["chance"]:
+        others = [a for a in AIRLINES if a != airline]
+        operating_airline = others[int(cs_rng() * len(others))]
+        operating_flight_num = 100 + int(cs_rng() * 2899)
     return {
         "airline": airline,
         "flight_num": flight_num,
@@ -98,6 +112,8 @@ def _gen_flight(rng, dep: int, orig: str, dest: str) -> dict:
         "class_avail": class_avail,
         "orig": orig,
         "dest": dest,
+        "operating_airline": operating_airline,
+        "operating_flight_num": operating_flight_num,
     }
 
 
@@ -182,6 +198,11 @@ def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
             f" {pad(f['line'], 2)} {f['airline']} {pad(f['flight_num'], 4)}  {f['orig']}{f['dest']}  {class_str} "
             f"{pad(minutes_to_clock(f['dep']), 6)} {pad(format_arrival(f['dep'], f['arr']), 8)} {f['equip']}"
         )
+        if f["operating_airline"]:
+            opr_name = AIRLINE_NAMES.get(f["operating_airline"], f["operating_airline"])
+            print_line(
+                f"      OPERATED BY {opr_name} ({f['operating_airline']}{f['operating_flight_num']})", "dim"
+            )
     print_blank()
     print_line(f"SELL WITH: 0{{LINE}}{{CLASS}}{{SEATS}}   e.g. 0{flights[0]['line']}Y1", "dim")
     print_line(
@@ -235,9 +256,79 @@ def gen_schedule(day_str: str, mon_str: str, orig: str, dest: str) -> None:
                 f"  {f['airline']} {pad(f['flight_num'], 4)}  {pad(minutes_to_clock(f['dep']), 6)} "
                 f"{pad(format_arrival(f['dep'], f['arr']), 8)} {pad(elapsed, 7)} {f['equip']}"
             )
+            if f["operating_airline"]:
+                opr_name = AIRLINE_NAMES.get(f["operating_airline"], f["operating_airline"])
+                print_line(
+                    f"      OPERATED BY {opr_name} ({f['operating_airline']}{f['operating_flight_num']})", "dim"
+                )
             dep += 55 + int(rng() * 95)
             if dep > 1380:
                 dep = 300 + int(rng() * 60)
+
+
+# Real-world "flexible date" shopping: a fare-calendar glance across a window around
+# the target date, so an agent/traveler can see which nearby day is cheapest before
+# committing to a specific A{DD}{MMM}{ORIG}{DEST} search. Modeled on gen_schedule's
+# "same shape, different letter" precedent (AF instead of A/S) and deliberately reuses
+# gen_availability's exact per-date seed for each date in the window, so a date here
+# that's also directly searched via A or S shows the literal same flights - same
+# established "one underlying schedule, different view" philosophy. Nonstop only, like
+# schedule (connections are a booking-time concept) - this is read-only, non-bookable
+# shopping, so no PNR interaction and no completeness rule, matching FQ/DC/DAN's
+# existing precedent as pure lookups. Each date's fare estimate continues drawing from
+# that date's own local rng (discarded right after that iteration) rather than a
+# separate stream, so it can't affect anything else's generation either.
+def gen_flexible_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
+    if orig == dest:
+        print_err("FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME")
+        return
+    anchor = parse_date(day_str, mon_str)
+    if anchor is None:
+        print_err("INVALID DATE - CHECK ENTRY AND REENTER")
+        return
+
+    days = []
+    for offset in range(-3, 4):
+        d = anchor.date + timedelta(days=offset)
+        weekday = WEEKDAYS[(d.weekday() + 1) % 7]
+        days.append({"day": d.day, "mon": MONTHS[d.month - 1], "year": d.year, "weekday": weekday})
+
+    print_line(
+        f"** FLEXIBLE DATE AVAILABILITY **  {orig}-{dest}  "
+        f"({days[0]['day']}{days[0]['mon']}{days[0]['year']} - {days[6]['day']}{days[6]['mon']}{days[6]['year']})",
+        "hd",
+    )
+    print_line(f"  {city_name(orig)}  TO  {city_name(dest)}", "dim")
+    print_blank()
+    print_line(f" {pad('DATE', 11)} {pad('DAY', 5)} {pad('LOWEST FARE', 13)} {pad('CLASS', 6)} NONSTOPS", "dim")
+    for day in days:
+        seed = hash_str(f"{orig}{dest}{day['day']}{day['mon']}{day['year']}")
+        rng = mulberry32(seed)
+        num_flights = 5 + int(rng() * 4)
+        dep = 300 + int(rng() * 90)
+        flights = []
+        for _ in range(num_flights):
+            flights.append(_gen_flight(rng, dep, orig, dest))
+            dep += 55 + int(rng() * 95)
+            if dep > 1380:
+                dep = 300 + int(rng() * 60)
+        # Same distance-roll-then-per-class-multiplier approach fare_quote_shop uses.
+        dist = FARE_FORMULA["distanceMin"] + int(rng() * FARE_FORMULA["distanceRange"])
+        best = None
+        for f in flights:
+            for c in f["class_avail"]:
+                if c["seats"] <= 0:
+                    continue
+                mult = CLASS_FARE_MULT.get(c["cls"], 1.4)
+                fare = round((FARE_FORMULA["baseFareCoefficient"] + dist * FARE_FORMULA["baseFarePerMile"]) * mult)
+                if best is None or fare < best["fare"]:
+                    best = {"fare": fare, "cls": c["cls"]}
+        date_str = f"{pad(day['day'], 2)}{day['mon']}{day['year']}"
+        fare_str = f"USD {best['fare']:.2f}" if best else "SOLD OUT"
+        cls_str = best["cls"] if best else "-"
+        print_line(f" {pad(date_str, 11)} {pad(day['weekday'], 5)} {pad(fare_str, 13)} {pad(cls_str, 6)} {num_flights}")
+    print_blank()
+    print_line(f"INDICATIVE BASE FARE ONLY - SEARCH THAT DATE (A{{DD}}{{MMM}}{orig}{dest}) TO VIEW/BOOK", "dim")
 
 
 def sell_from_avail(line_num: int, cls: str, seats: int) -> None:
@@ -270,6 +361,8 @@ def sell_from_avail(line_num: int, cls: str, seats: int) -> None:
             "arr": f["arr"],
             "status": "HL",
             "equip": f["equip"],
+            "operating_airline": f["operating_airline"],
+            "operating_flight_num": f["operating_flight_num"],
         }
         STATE.pnr["segments"].append(seg)
         print_line(f"SEGMENT WAITLISTED - {format_segment_short(seg)}")
@@ -293,6 +386,8 @@ def sell_from_avail(line_num: int, cls: str, seats: int) -> None:
         "arr": f["arr"],
         "status": "HK",
         "equip": f["equip"],
+        "operating_airline": f["operating_airline"],
+        "operating_flight_num": f["operating_flight_num"],
     }
     STATE.pnr["segments"].append(seg)
     cinfo["seats"] -= seats
@@ -361,6 +456,8 @@ def sell_connection(seats: int, cls1: str, line1_num: int, cls2: str, line2_num:
             "arr": flight["arr"],
             "status": "HL" if waitlisted else "HK",
             "equip": flight["equip"],
+            "operating_airline": flight["operating_airline"],
+            "operating_flight_num": flight["operating_flight_num"],
             "marriedGroup": married_group,
         }
         STATE.pnr["segments"].append(seg)
@@ -444,10 +541,12 @@ def invalidate_pricing() -> None:
 
 def format_segment_short(seg: dict) -> str:
     dinfo = seg["dinfo"]
+    opr = seg.get("operating_airline")
+    opr_suffix = f"  OPR BY {opr}{seg['operating_flight_num']}" if opr else ""
     return (
         f"{seg['airline']}{seg['flight_num']} {seg['cls']} {dinfo.day}{dinfo.mon} "
         f"{seg['orig']}{seg['dest']} {seg['status']}{seg['seats']}  "
-        f"{minutes_to_clock(seg['dep'])} {format_arrival(seg['dep'], seg['arr'])}"
+        f"{minutes_to_clock(seg['dep'])} {format_arrival(seg['dep'], seg['arr'])}{opr_suffix}"
     )
 
 
@@ -629,6 +728,26 @@ def _shuffled(items: list, rng) -> list:
     return arr
 
 
+# Shared by fare_quote_shop's /{CLASS} rule view and price_itinerary's post-total FARE
+# RULES block, so the two can't drift apart on which fields they show. Cancellation fee
+# only means anything for a refundable fare (a nonrefundable fare is already blocked
+# from TKTR entirely, regardless of what this field holds) - shown as N/A rather than a
+# misleading dollar figure when refundable is false. Minimum/maximum stay are
+# informational only, same "no booking-time enforcement" precedent as baggage allowance
+# - this app doesn't model return-trip stay-duration checking.
+def _fare_rules_lines(rules: dict) -> list[str]:
+    cancel_text = f"USD {rules['cancellationFee']:.2f}" if rules["refundable"] else "N/A - NONREFUNDABLE"
+    min_stay_text = "NONE" if rules["minStayDays"] == 0 else f"{rules['minStayDays']} NIGHTS"
+    return [
+        f"  CHANGE FEE                  USD {rules['changeFee']:.2f}",
+        f"  CANCELLATION FEE            {cancel_text}",
+        f"  REFUNDABLE                  {'YES' if rules['refundable'] else 'NO'}",
+        f"  MINIMUM STAY                 {min_stay_text}",
+        f"  MAXIMUM STAY                 {rules['maxStayDays']} DAYS",
+        f"  ADVANCE PURCHASE REQUIRED   {rules['advancePurchaseDays']} DAYS",
+    ]
+
+
 def fare_quote_shop(orig: str, dest: str, booking_cls: str | None = None) -> None:
     """Real Sabre's "FQ" entry: a bare fare quote by city pair, independent of any PNR/
     itinerary - unlike price_itinerary below, there's no segment to derive a fare from, so
@@ -651,9 +770,8 @@ def fare_quote_shop(orig: str, dest: str, booking_cls: str | None = None) -> Non
         print_line(f"  {city_name(orig)}  TO  {city_name(dest)}", "dim")
         print_blank()
         if rules:
-            print_line(f"  CHANGE FEE                  USD {rules['changeFee']:.2f}")
-            print_line(f"  REFUNDABLE                  {'YES' if rules['refundable'] else 'NO'}")
-            print_line(f"  ADVANCE PURCHASE REQUIRED   {rules['advancePurchaseDays']} DAYS")
+            for line in _fare_rules_lines(rules):
+                print_line(line)
             print_line(f"  BAGGAGE ALLOWANCE           {_baggage_allowance_text(booking_cls)}")
         else:
             print_line("  NO FARE RULE DATA ON FILE FOR THIS CLASS", "dim")
@@ -792,9 +910,8 @@ def price_itinerary(mode: str, corp_code: str | None = None) -> None:
     if rules:
         print_blank()
         print_line("FARE RULES", "dim")
-        print_line(f"  CHANGE FEE                  USD {rules['changeFee']:.2f}", "dim")
-        print_line(f"  REFUNDABLE                  {'YES' if rules['refundable'] else 'NO'}", "dim")
-        print_line(f"  ADVANCE PURCHASE REQUIRED   {rules['advancePurchaseDays']} DAYS", "dim")
+        for line in _fare_rules_lines(rules):
+            print_line(line, "dim")
     if baggage_allowance is not None:
         print_blank()
         print_line(f"BAGGAGE ALLOWANCE            {_format_baggage_pieces(baggage_allowance)}", "dim")
@@ -893,6 +1010,9 @@ def print_itinerary_document(doc: dict) -> None:
                 f"{city_name(s['orig'])} ({s['orig']}) {minutes_to_clock(s['dep'])} -> "
                 f"{city_name(s['dest'])} ({s['dest']}) {format_arrival(s['dep'], s['arr'])}  {status_label}  SEAT {seat_list}"
             )
+            if s.get("operating_airline"):
+                opr_name = AIRLINE_NAMES.get(s["operating_airline"], s["operating_airline"])
+                print_line(f"    OPERATED BY {opr_name} ({s['operating_airline']}{s['operating_flight_num']})", "dim")
 
     if doc["ssrs"]:
         print_blank()
@@ -916,10 +1036,19 @@ def print_itinerary_document(doc: dict) -> None:
         print_line(f"  TAXES/FEES     USD {pr['tax_total']:.2f}")
         print_line(f"  TOTAL          USD {pr['total']:.2f}", "hd")
         if pr["rules"]:
+            r = pr["rules"]
+            cancel_text = f"USD {r['cancellationFee']:.2f}" if r["refundable"] else "N/A"
+            min_stay_text = "NONE" if r["minStayDays"] == 0 else f"{r['minStayDays']} NIGHTS"
             print_line(
-                f"  CHANGE FEE USD {pr['rules']['changeFee']:.2f}   "
-                f"REFUNDABLE {'YES' if pr['rules']['refundable'] else 'NO'}   "
-                f"ADVANCE PURCHASE {pr['rules']['advancePurchaseDays']} DAYS",
+                f"  CHANGE FEE USD {r['changeFee']:.2f}   "
+                f"CANCELLATION FEE {cancel_text}   "
+                f"REFUNDABLE {'YES' if r['refundable'] else 'NO'}",
+                "dim",
+            )
+            print_line(
+                f"  MIN STAY {min_stay_text}   "
+                f"MAX STAY {r['maxStayDays']} DAYS   "
+                f"ADVANCE PURCHASE {r['advancePurchaseDays']} DAYS",
                 "dim",
             )
         baggage_text = _format_baggage_pieces(pr.get("baggage_allowance"))
@@ -2073,12 +2202,15 @@ def refund_tickets() -> None:
         print_err("UNABLE TO REFUND - NONREFUNDABLE FARE BASIS")
         return
 
-    amount = p["pricing"]["total"] if p["pricing"] else 0
+    total = p["pricing"]["total"] if p["pricing"] else 0
+    fee = rules["cancellationFee"] if rules else 0
+    amount = max(0, total - fee)
     print_line("** TICKET(S) REFUNDED **", "hd")
     for t in p["tickets"]:
         label = t["passenger"] + (" (INF)" if t["is_infant"] else "")
         print_line(f"  {pad(label, 28)} {t['ticket_num']}")
-    print_line(f"REFUND AMOUNT: USD {amount:.2f}", "dim")
+    fee_note = f"  (CANCELLATION FEE USD {fee:.2f} DEDUCTED)" if fee else ""
+    print_line(f"REFUND AMOUNT: USD {amount:.2f}{fee_note}", "dim")
     count = len(p["tickets"])
     p["tickets"] = []
     p["pricing"] = None
@@ -2166,6 +2298,9 @@ def show_help() -> None:
     print_line("AVAILABILITY", "hd")
     print_line("  A{DD}{MMM}{ORG}{DST}   Air availability   e.g. A15AUGDFWORD")
     print_line("  1{DD}{MMM}{ORG}{DST}   Air availability (alternate entry)  e.g. 115AUGDFWORD")
+    print_line("  AF{DD}{MMM}{ORG}{DST}  Flexible-date availability - lowest indicative fare per day")
+    print_line("                         across a +/-3 day window, nonstop only, not bookable directly")
+    print_line("                         e.g. AF15AUGDFWORD")
     print_blank()
     print_line("SCHEDULE", "hd")
     print_line("  S{DD}{MMM}{ORG}{DST}   Flight schedule, 7-day window from the given date -")

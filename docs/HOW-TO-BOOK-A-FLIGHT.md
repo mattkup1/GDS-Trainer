@@ -27,13 +27,20 @@ Add `/{CLASS}` to check a class's fare rules instead of its price:
 ```
 FQDFWORD/Y
 ```
-Shows that class's change fee, refundability, advance-purchase requirement, and checked-baggage allowance — the same rule data shown after you price an itinerary with `WP` (step 9), but queryable up front for any class on any route, no booking required.
+Shows that class's change fee, cancellation fee, refundability, minimum/maximum stay, advance-purchase requirement, and checked-baggage allowance — the same rule data shown after you price an itinerary with `WP` (step 9), but queryable up front for any class on any route, no booking required.
 
 To see what flies a route across a whole week rather than one date — times and equipment only, no booking classes or seat counts, since it's not tied to sellable inventory:
 
 ```
 S15AUGDFWORD
 ```
+
+To compare fares across nearby dates before committing to one — a fare-calendar style view, lowest indicative fare per day across a ±3 day window around the given date, nonstop only:
+
+```
+AF15AUGDFWORD
+```
+This is a shopping tool only — not bookable directly. Once you've picked a date, search it with `A` (step 3) to see and sell actual flights.
 
 ---
 
@@ -45,6 +52,8 @@ Format: `A` + day + month + origin + destination (or `1` in place of `A` — bot
 A15AUGDFWORD
 ```
 This requests flights from **DFW** (Dallas/Ft Worth) to **ORD** (Chicago O'Hare) on **August 15**. You'll get back a numbered list of flights, each with airline, flight number, seats open per class (F/J/C/Y/B/M), departure/arrival times. Most lines share the searched city pair, but a few may show a different one — that's a connecting flight's leg (see the next step).
+
+A flight may show an `OPERATED BY {AIRLINE} ({CODE}{NUMBER})` line underneath it — that's a codeshare: the listed airline sells and tickets the seat, but another airline actually operates the flight, same as a real GDS display.
 
 A long enough flight departing late in the day lands after midnight — its arrival time shows a `+1` suffix (e.g. `1206A+1`) to mark that it's the next calendar day, the same convention real Sabre uses. This shows up anywhere an arrival time is printed: availability, schedule display, the PNR, and the itinerary document.
 
@@ -353,6 +362,7 @@ Three queues populate themselves automatically as you work a PNR, no entry requi
 | Shop fares by city pair (no PNR needed) | `FQ{ORIG}{DEST}` | `FQDFWORD` |
 | Check a class's fare rules by city pair (no PNR needed) | `FQ{ORIG}{DEST}/{CLASS}` | `FQDFWORD/Y` |
 | Flight schedule, 7-day window (no booking classes/seats) | `S{DD}{MON}{ORIG}{DEST}` | `S15AUGDFWORD` |
+| Flexible-date fare calendar, ±3 days (not bookable) | `AF{DD}{MON}{ORIG}{DEST}` | `AF15AUGDFWORD` |
 | Search flights | `A{DD}{MON}{ORIG}{DEST}` | `A15AUGDFWORD` |
 | Sell from list | `0{LINE}{CLASS}{SEATS}` | `04Y1` |
 | Sell a connection (two avail lines) | `0{SEATS}{CLASS}{LINE}{CLASS}{LINE}` | `02Y1M2` |
@@ -437,12 +447,13 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 | Command | Does |
 |---|---|
 | `FQ{ORG}{DST}` | Fare quote shop by city pair — indicative only, no PNR involved |
-| `FQ{ORG}{DST}/{CLASS}` | Fare rules for that class on that route (change fee, refundable, advance purchase) — no PNR involved |
+| `FQ{ORG}{DST}/{CLASS}` | Fare rules for that class on that route (change fee, cancellation fee, refundable, min/max stay, advance purchase) — no PNR involved |
 | `S{DD}{MON}{ORG}{DST}` | Flight schedule across a 7-day window — no booking classes or seats |
+| `AF{DD}{MON}{ORG}{DST}` | Flexible-date fare calendar, ±3 days around the given date — not bookable directly |
 
 **Terminology**
 - **Fare shop** — an indicative, per-class fare check by city pair, independent of any itinerary; distinct from `WP`, which prices an already-sold itinerary
-- **Fare rules** — the change fee, refundability, and advance-purchase requirement tied to a booking class; viewable stand-alone via `FQ.../{CLASS}` or automatically shown after pricing with `WP`
+- **Fare rules** — the change fee, cancellation fee, refundability, minimum/maximum stay, and advance-purchase requirement tied to a booking class; viewable stand-alone via `FQ.../{CLASS}` or automatically shown after pricing with `WP`. The cancellation fee is deducted from the refund amount when `TKTR` is used on a refundable fare.
 - **Baggage allowance** — the number of free checked bags tied to a booking class (0 for the lowest discount class up to 3 for first class), shown alongside fare rules via `FQ.../{CLASS}` or after pricing with `WP`
 - **Schedule display** — a several-day view of what flies a route, independent of sellable inventory; distinct from availability, which shows one date's bookable classes/seats
 
@@ -460,6 +471,7 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 - **Line number** — the number to the left of each flight on the availability display, used to sell it
 - **Class of service** — the single-letter fare class (`F` First, `J`/`C` Business, `Y`/`B`/`M` Economy) shown with a seat count per flight
 - **EQP** — the aircraft equipment code (e.g. `738`, `320`) shown on each flight line
+- **Codeshare** — a flight sold under one airline's code but operated by another; shown as an `OPERATED BY` line under the flight on the availability/schedule display, and carried onto the segment once sold
 
 ### 4. Sell the itinerary
 

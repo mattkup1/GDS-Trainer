@@ -93,6 +93,67 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "codeshare_flight_shown_and_carried_through_to_pnr",
+        [
+            SIGN_IN,
+            # Line 1 (AK2265, DFW-ORD 15AUG) is empirically confirmed to be a codeshare
+            # operated by Southwest (WN1018) - the codeshare roll is seeded off the
+            # flight's own identity (_gen_flight/genFlight's derived csRng), independent
+            # of the shared per-search rng stream, so this is stable regardless of what
+            # else this route/date generates.
+            Step(
+                "A15AUGDFWORD",
+                expect_contains=["AIR AVAILABILITY", "OPERATED BY", "WN1018"],
+            ),
+            SELL_1_SEAT,
+            Step("*R", expect_contains=["OPR BY WN1018"]),
+        ],
+    ),
+    Scenario(
+        "flexible_date_availability_shows_fare_calendar",
+        [
+            Step("AF15AUGDFWORD", expect_contains=["NOT SIGNED IN"]),
+            SIGN_IN,
+            Step(
+                "AF15AUGDFWORD",
+                expect_contains=[
+                    "FLEXIBLE DATE AVAILABILITY", "DFW-ORD",
+                    "DATE", "LOWEST FARE", "CLASS", "NONSTOPS",
+                    "INDICATIVE BASE FARE ONLY",
+                ],
+                expect_not_contains=["SELL WITH"],
+            ),
+            Step("AF15AUGDFWDFW", expect_contains=["FORMAT", "CANNOT BE THE SAME"]),
+            Step("AF32AUGDFWORD", expect_contains=["INVALID DATE"]),
+        ],
+    ),
+    Scenario(
+        "fuller_fare_rules_shown_and_cancellation_fee_deducted_on_refund",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            # class J (refundable per spec/reference-data.json's fareRules) carries a
+            # USD 50 cancellation fee distinct from its USD 75 change fee - TKTR must
+            # deduct it from the refund amount rather than refunding the fare in full.
+            Step("01J1", expect_contains=["SEGMENT SOLD"]),
+            NAME_SMITH,
+            PHONE_VALID,
+            RECEIVED_FROM,
+            Step(
+                "WP",
+                expect_contains=["CANCELLATION FEE", "USD 50.00", "MINIMUM STAY", "MAXIMUM STAY"],
+            ),
+            TICKETING_AT_WILL,
+            FOP_CASH,
+            Step("ER", expect_contains=["END OF TRANSACTION COMPLETE"]),
+            Step("TKTT", expect_contains=["ELECTRONIC TICKET ISSUED"]),
+            Step(
+                "TKTR",
+                expect_contains=["TICKET(S) REFUNDED", "CANCELLATION FEE USD 50.00 DEDUCTED"],
+            ),
+        ],
+    ),
+    Scenario(
         "full_booking_flow_single_pax_through_ticketing",
         [
             *_priced_single_pax_setup(),

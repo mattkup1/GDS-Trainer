@@ -24,6 +24,7 @@ HANDLERS = {
     "SIGN_OUT": lambda raw, *g: c.sign_out(),
     "HELP": lambda raw, *g: c.show_help(),
     "AVAILABILITY": lambda raw, day, mon, orig, dest: c.gen_availability(day, mon, orig, dest),
+    "AVAILABILITY_FLEXIBLE": lambda raw, day, mon, orig, dest: c.gen_flexible_availability(day, mon, orig, dest),
     "SCHEDULE_DISPLAY": lambda raw, day, mon, orig, dest: c.gen_schedule(day, mon, orig, dest),
     "SELL_FROM_AVAIL": lambda raw, line, cls, seats: c.sell_from_avail(int(line), cls, int(seats)),
     "SELL_CONNECTION": lambda raw, seats, cls1, line1, cls2, line2: c.sell_connection(

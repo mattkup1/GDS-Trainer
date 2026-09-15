@@ -233,9 +233,12 @@
     <p class="note">Shows a per-class table of indicative base fare, taxes, and total for that city pair — no PNR involved, nothing is booked. Useful for a quick "what would this cost" before searching availability.</p>
     <p class="note">Add <code>/{CLASS}</code> to check a class's fare rules instead of its price:</p>
     <div class="cmdblock">FQDFWORD/Y</div>
-    <p class="note">Shows that class's change fee, refundability, advance-purchase requirement, and checked-baggage allowance — the same rule data shown after you price an itinerary with <code>WP</code>, but queryable up front for any class on any route, no booking required.</p>
+    <p class="note">Shows that class's change fee, cancellation fee, refundability, minimum/maximum stay, advance-purchase requirement, and checked-baggage allowance — the same rule data shown after you price an itinerary with <code>WP</code>, but queryable up front for any class on any route, no booking required.</p>
     <p class="note">To see what flies a route across a whole week rather than one date — times and equipment only, no booking classes or seat counts, since it's not tied to sellable inventory:</p>
     <div class="cmdblock">S15AUGDFWORD</div>
+    <p class="note">To compare fares across nearby dates before committing to one — a fare-calendar style view, lowest indicative fare per day across a ±3 day window around the given date, nonstop only:</p>
+    <div class="cmdblock">AF15AUGDFWORD</div>
+    <p class="note">This is a shopping tool only — not bookable directly. Once you've picked a date, search it with <code>A</code> (step 3) to see and sell actual flights.</p>
   </div>
 </section>
 
@@ -246,6 +249,7 @@
     <p class="format">Format: <code>A</code> + day + month + origin + destination (or <code>1</code> in place of <code>A</code> — both are real GDS entries)</p>
     <div class="cmdblock">A15AUGDFWORD</div>
     <p class="note">This requests flights from <b>DFW</b> (Dallas/Ft Worth) to <b>ORD</b> (Chicago O'Hare) on <b>August 15</b>. You'll get back a numbered list of flights, each with airline, flight number, seats open per class (F/J/C/Y/B/M), departure/arrival times. Most lines share the searched city pair, but a few may show a different one — that's a connecting flight's leg (see the next step).</p>
+    <p class="note">A flight may show an <code>OPERATED BY {AIRLINE} ({CODE}{NUMBER})</code> line underneath it — that's a codeshare: the listed airline sells and tickets the seat, but another airline actually operates the flight, same as a real GDS display.</p>
     <p class="note">A long enough flight departing late in the day lands after midnight — its arrival time shows a <code>+1</code> suffix (e.g. <code>1206A+1</code>) to mark that it's the next calendar day, the same convention real Sabre uses. This shows up anywhere an arrival time is printed: availability, schedule display, the PNR, and the itinerary document.</p>
     <p class="aside">Any real-world IATA airport code works — the simulator ships with data for ~6,000 airports worldwide.</p>
   </div>
@@ -465,6 +469,7 @@
     <tr><td>Shop fares by city pair (no PNR needed)</td><td class="mono">FQ{ORIG}{DEST}</td><td class="mono">FQDFWORD</td></tr>
     <tr><td>Check a class's fare rules by city pair (no PNR needed)</td><td class="mono">FQ{ORIG}{DEST}/{CLASS}</td><td class="mono">FQDFWORD/Y</td></tr>
     <tr><td>Flight schedule, 7-day window (no booking classes/seats)</td><td class="mono">S{DD}{MON}{ORIG}{DEST}</td><td class="mono">S15AUGDFWORD</td></tr>
+    <tr><td>Flexible-date fare calendar, ±3 days (not bookable)</td><td class="mono">AF{DD}{MON}{ORIG}{DEST}</td><td class="mono">AF15AUGDFWORD</td></tr>
     <tr><td>Search flights</td><td class="mono">A{DD}{MON}{ORIG}{DEST}</td><td class="mono">A15AUGDFWORD</td></tr>
     <tr><td>Sell from list</td><td class="mono">0{LINE}{CLASS}{SEATS}</td><td class="mono">04Y1</td></tr>
     <tr><td>Sell a connection (two avail lines)</td><td class="mono">0{SEATS}{CLASS}{LINE}{CLASS}{LINE}</td><td class="mono">02Y1M2</td></tr>
@@ -557,14 +562,15 @@ TKTT</div>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
       <tbody>
         <tr><td class="mono">FQ{ORG}{DST}</td><td>Fare quote shop by city pair — indicative only, no PNR involved</td></tr>
-        <tr><td class="mono">FQ{ORG}{DST}/{CLASS}</td><td>Fare rules for that class on that route (change fee, refundable, advance purchase) — no PNR involved</td></tr>
+        <tr><td class="mono">FQ{ORG}{DST}/{CLASS}</td><td>Fare rules for that class on that route (change fee, cancellation fee, refundable, min/max stay, advance purchase) — no PNR involved</td></tr>
         <tr><td class="mono">S{DD}{MON}{ORG}{DST}</td><td>Flight schedule across a 7-day window — no booking classes or seats</td></tr>
+        <tr><td class="mono">AF{DD}{MON}{ORG}{DST}</td><td>Flexible-date fare calendar, ±3 days around the given date — not bookable directly</td></tr>
       </tbody>
     </table>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
       <div class="entry"><dt>Fare shop</dt><dd>an indicative, per-class fare check by city pair, independent of any itinerary; distinct from <span class="mono">WP</span>, which prices an already-sold itinerary</dd></div>
-      <div class="entry"><dt>Fare rules</dt><dd>the change fee, refundability, and advance-purchase requirement tied to a booking class; viewable stand-alone via <span class="mono">FQ.../{CLASS}</span> or automatically shown after pricing with <span class="mono">WP</span></dd></div>
+      <div class="entry"><dt>Fare rules</dt><dd>the change fee, cancellation fee, refundability, minimum/maximum stay, and advance-purchase requirement tied to a booking class; viewable stand-alone via <span class="mono">FQ.../{CLASS}</span> or automatically shown after pricing with <span class="mono">WP</span>. The cancellation fee is deducted from the refund amount when <span class="mono">TKTR</span> is used on a refundable fare.</dd></div>
       <div class="entry"><dt>Baggage allowance</dt><dd>the number of free checked bags tied to a booking class (0 for the lowest discount class up to 3 for first class), shown alongside fare rules via <span class="mono">FQ.../{CLASS}</span> or after pricing with <span class="mono">WP</span></dd></div>
       <div class="entry"><dt>Schedule display</dt><dd>a several-day view of what flies a route, independent of sellable inventory; distinct from availability, which shows one date's bookable classes/seats</dd></div>
     </dl>
@@ -589,6 +595,7 @@ TKTT</div>
       <div class="entry"><dt>Line number</dt><dd>the number to the left of each flight on the availability display, used to sell it</dd></div>
       <div class="entry"><dt>Class of service</dt><dd>the single-letter fare class (F First, J/C Business, Y/B/M Economy) shown with a seat count per flight</dd></div>
       <div class="entry"><dt>EQP</dt><dd>the aircraft equipment code (e.g. 738, 320) shown on each flight line</dd></div>
+      <div class="entry"><dt>Codeshare</dt><dd>a flight sold under one airline's code but operated by another; shown as an OPERATED BY line under the flight on the availability/schedule display, and carried onto the segment once sold</dd></div>
     </dl>
   </div>
 </div>

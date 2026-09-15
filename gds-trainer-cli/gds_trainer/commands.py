@@ -2227,6 +2227,10 @@ def show_help() -> None:
         "  SSR codes: WCHR WCHS WCHC VGML BBML CHML KSML MOML DBML BLND DEAF UMNR PETC BSCT SPML XBAG",
         "dim",
     )
+    print_line(
+        "             DEPS (group deposit, 10+ pax) EXST/CBBG/STCR (extra seat purchase)",
+        "dim",
+    )
     print_blank()
     print_line("PASSENGER DOCUMENTS (APIS)", "hd")
     print_line("  3DOCS{TYPE}/{COUNTRY}/{NUMBER}/{NATIONALITY}/{DOB}/{SEX}/{EXPIRY}-{PAX#}[.{INFANT#}]")

@@ -1918,6 +1918,7 @@
     print('  3FQTV{AL}{NUMBER}[/{TIER}]     Frequent flyer number, optional tier   e.g. 3FQTVAA1234567 or 3FQTVAA1234567/GLD');
     print('                                  Tiers: SLV GLD PLT DIA', 'dim');
     print('  SSR codes: WCHR WCHS WCHC VGML BBML CHML KSML MOML DBML BLND DEAF UMNR PETC BSCT SPML XBAG', 'dim');
+    print('             DEPS (group deposit, 10+ pax) EXST/CBBG/STCR (extra seat purchase)', 'dim');
     printBlank();
     print('PASSENGER DOCUMENTS (APIS)', 'hd');
     print('  3DOCS{TYPE}/{COUNTRY}/{NUMBER}/{NATIONALITY}/{DOB}/{SEX}/{EXPIRY}-{PAX#}[.{INFANT#}]');

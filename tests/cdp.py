@@ -24,6 +24,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -56,6 +57,27 @@ def default_chrome_path() -> str:
     return _MAC_CHROME_PATH
 
 
+def _freeze_date_script(frozen_today: date) -> str:
+    """A page-init script overriding the zero-arg `new Date()`/`Date.now()` case to
+    return local noon on `frozen_today`, leaving every explicit-arg construction
+    (`new Date(y, m, d, ...)`, `new Date(otherDate.getTime())`) delegating to the
+    real Date unchanged - see ChromeSession.start()."""
+    return (
+        "(function(){"
+        "const RealDate = Date;"
+        "class FrozenDate extends RealDate {"
+        "  constructor(...args) {"
+        f"    if (args.length === 0) {{ super({frozen_today.year}, {frozen_today.month - 1}, "
+        f"{frozen_today.day}, 12, 0, 0); }}"
+        "    else { super(...args); }"
+        "  }"
+        "  static now() { return new FrozenDate().getTime(); }"
+        "}"
+        "window.Date = FrozenDate;"
+        "})();"
+    )
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
@@ -74,7 +96,16 @@ class ChromeSession:
 
     # ---------- lifecycle ----------
 
-    def start(self, url: str, timeout: float = 15.0) -> None:
+    def start(self, url: str, timeout: float = 15.0, freeze_today: date | None = None) -> None:
+        """Launch headless Chrome and load `url`. If `freeze_today` is given, install
+        a page-load script (via Page.addScriptToEvaluateOnNewDocument, so it runs
+        before script.js's own top-level code) that overrides the global `Date` class
+        so a bare `new Date()` always returns local noon on that date - see
+        conftest.py's FROZEN_TODAY for why the scenario suite needs this. Explicit-arg
+        constructions (`new Date(year, month, day, ...)`, `new Date(existingDate.getTime())`)
+        pass through untouched, so actual date-arithmetic in the app is unaffected -
+        only "what day is it right now" is pinned.
+        """
         resolved = self._chrome_path if Path(self._chrome_path).exists() else shutil.which(self._chrome_path)
         if not resolved:
             raise RuntimeError(
@@ -85,6 +116,10 @@ class ChromeSession:
         self._chrome_path = resolved
         port = _free_port()
         self._profile_dir = tempfile.mkdtemp(prefix="gds-trainer-test-chrome-")
+        # Launch pointed at about:blank, not `url` directly, when freezing time: the
+        # override script must be registered before the real page's own <script> tags
+        # run, which means navigating to it ourselves after the script is installed.
+        initial_target = "about:blank" if freeze_today is not None else url
         self._proc = subprocess.Popen(
             [
                 self._chrome_path,
@@ -95,7 +130,7 @@ class ChromeSession:
                 f"--remote-debugging-port={port}",
                 "--no-first-run",
                 f"--user-data-dir={self._profile_dir}",
-                url,
+                initial_target,
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -103,6 +138,13 @@ class ChromeSession:
         ws_url = self._wait_for_ws_url(port, timeout)
         self._connect(ws_url)
         self.call("Runtime.enable")
+        if freeze_today is not None:
+            self.call("Page.enable")
+            self.call(
+                "Page.addScriptToEvaluateOnNewDocument",
+                {"source": _freeze_date_script(freeze_today)},
+            )
+            self.call("Page.navigate", {"url": url})
         self._wait_ready(timeout)
 
     def close(self) -> None:

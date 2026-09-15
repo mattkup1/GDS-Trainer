@@ -3,6 +3,36 @@
 All notable changes to this project are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Child fare (`(CHD)` name suffix)** — a `CNN`-style passenger type distinct
+  from a lap infant: a fully named, seat-occupying passenger priced at a
+  discount off the adult base fare (`fareFormula.childFareMultiplier`).
+  Tagged per-passenger within a multi-name entry, e.g.
+  `-SMITH/JOHN MR/JOHNNY MSTR(CHD)`; `WP`/`WPNCS` split each segment's fare
+  between adult and child portions accordingly.
+- **Light mode** — a theme toggle alongside the existing glow/scanline
+  settings, persisted the same way via `localStorage`.
+
+### Fixed
+
+- SSR and `3FQTV` entries with an explicit `-{PAX#}` of `0` are now rejected
+  (`INVALID PASSENGER NUMBER`) instead of silently accepted, in both editions.
+- `HELP` output in both editions now lists the `DEPS`/`EXST`/`CBBG`/`STCR` SSR
+  codes (previously present in `spec/reference-data.json` and usable, just
+  missing from the printed reference).
+- The cross-edition test suite now freezes "today" (`tests/conftest.py`'s
+  `FROZEN_TODAY`) for both editions instead of letting it float with the real
+  wall-clock date. `scenarios.py` hardcodes flight numbers, seat availability,
+  and connection line numbers the shared seeded PRNG produces for specific
+  bare `{DD}{MMM}` command dates (there's no year in that syntax — both
+  editions resolve it to the next future occurrence relative to "today"), so
+  once real time crossed one of those dates (e.g. `15AUG`) mid-year, the same
+  command silently resolved to next year and generated different flights,
+  breaking the suite. See `tests/conftest.py` and `tests/cdp.py` for the fix.
+
 ## [1.0.0] — 2026-08-09
 
 First tagged release. GDS Trainer had already grown into a full two-edition

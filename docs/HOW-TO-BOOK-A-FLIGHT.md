@@ -100,6 +100,14 @@ To add a **lap infant** traveling with a passenger, append `(INF{SURNAME}/{GIVEN
 -SMITH/JOHN MR(INFSMITH/BABY/12JAN26)
 ```
 
+To tag one passenger in a multi-name entry as a **child fare** — still a fully named, seat-occupying passenger, just priced at a discount off the adult base fare — append `(CHD)` to that passenger's given-name/title:
+
+```
+-2SMITH/JOHN MR/JOHNNY MSTR(CHD)
+```
+
+Unlike a lap infant, a child fare occupies a seat and counts against the party size sold on the itinerary; pricing (`WP`) automatically splits each segment's fare between adult and child portions.
+
 **Booking a group (10 or more passengers):** if the names aren't finalized yet, add placeholder passengers in one entry instead of spelling out each one:
 
 ```
@@ -352,6 +360,7 @@ Three queues populate themselves automatically as you work a PNR, no entry requi
 | Add name | `-{SURNAME}/{GIVEN} {TITLE}` | `-SMITH/JOHN MR` |
 | Add multiple passengers | `-{N}{SURNAME}/{G1} {T1}/{G2} {T2}` | `-2SMITH/JOHN MR/JANE MRS` |
 | Add lap infant | `-...(INF{SURNAME}/{GIVEN}/{DOB})` | `-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)` |
+| Tag a passenger as a child fare | `-.../{GIVEN} {TITLE}(CHD)` | `-2SMITH/JOHN MR/JOHNNY MSTR(CHD)` |
 | Add a group of placeholder names (10+ = a group) | `-{N}TBA/TBA` | `-12TBA/TBA` |
 | Record a group deposit (required to save a 10+ name PNR) | `3DEPS` | `3DEPS` |
 | Add travel document (APIS) | `3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}[.{INFANT#}]` | `3DOCSP/US/123456789/US/12JAN90/M/25DEC30-1` or `...-1.1` for an infant |
@@ -479,6 +488,7 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 | `-{SURNAME}/{GIVEN} {TITLE}` | Add a name |
 | `-{N}{SURNAME}/{G1} {T1}/{G2} {T2}` | Add multiple passengers sharing a surname in one entry |
 | `-...(INF{SURNAME}/{GIVEN}/{DOB})` | Attach a lap infant to the name just added |
+| `-.../{GIVEN} {TITLE}(CHD)` | Tag one passenger (in a multi-name entry) as a child fare — still a fully named, seat-occupying passenger, just priced at a discount off the adult base fare |
 | `-{N}TBA/TBA` | Add `N` identical group-placeholder passengers in one entry (`N` &gt; 1) |
 | `3DEPS` | Record a group deposit received (required to save a 10+ name PNR) |
 | `3DOCS{TYPE}/{CTY}/{NUM}/{NATL}/{DOB}/{SEX}/{EXP}-{PAX#}[.{INFANT#}]` | Add a travel document (APIS) for a passenger, or for their infant |
@@ -486,6 +496,7 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 **Terminology**
 - **Name field** — the passenger name(s) on the PNR; required before pricing
 - **Lap infant** — an infant traveling on an adult's lap rather than in their own seat; doesn't count against the party size/seats-sold limit
+- **Child fare** — a fully named, seat-occupying passenger (unlike a lap infant), priced at a discount off the adult base fare and tagged with a `(CHD)` suffix
 - **DOB format** — `DDMONYY`, e.g. `12JAN26`
 - **Group** — a PNR with 10 or more passengers; typically built with `TBA/TBA` placeholder names finalized closer to departure, and requires a deposit (`3DEPS`) on file before it can be saved
 - **APIS** (Advance Passenger Information) — passport/nationality/date-of-birth data governments require for international travel, tied to a specific passenger by number — or, for an infant, by `{PAX#}.{INFANT#}` (Sabre-style decimal notation, since an infant has no name-field entry of its own)

@@ -2,38 +2,119 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GDS Trainer</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="shell" data-theme="green" data-glow="med" data-fontsize="md">
-  <div id="housing">
-    <div id="bar">
-      <span class="title"><span class="led"></span> GDS TRAINER</span>
-      <span class="toolbtns">
-        <button id="btnSettings" title="Display settings">&#9881; SETTINGS</button>
-        <button id="btnClear">CLEAR SCREEN</button>
-        <button id="btnReset">RESET SESSION</button>
+<div id="shell" data-theme="green" data-mode="dark" data-fontsize="md">
+
+  <div id="topbar">
+    <div class="topbar-row topbar-row-menu">
+      <span class="brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5"></circle>
+          <path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3"></path>
+          <circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"></circle>
+        </svg>
+        <span class="brand-name">GDS TRAINER</span>
       </span>
+      <nav class="menubar" id="menubar">
+        <div class="menu" data-menu="file">
+          <button type="button" class="menu-trigger">File</button>
+          <div class="menu-dropdown">
+            <button type="button" class="menu-item" data-action="reset">New Session</button>
+            <button type="button" class="menu-item" data-action="download">Download PNR (.txt)</button>
+            <button type="button" class="menu-item" data-action="copy">Copy Record Locator</button>
+            <div class="menu-sep" id="fileDocsSep"></div>
+            <button type="button" class="menu-item" data-insert="EM">Generate Itinerary (EM)</button>
+            <button type="button" class="menu-item" data-insert="EMI">Generate Invoice (EMI)</button>
+            <button type="button" class="menu-item" data-insert="EMT">Generate E-Ticket (EMT)</button>
+            <div class="menu-sep"></div>
+            <button type="button" class="menu-item" data-insert="SI">Sign In</button>
+            <button type="button" class="menu-item" data-insert="SO">Sign Out</button>
+          </div>
+        </div>
+        <div class="menu" data-menu="edit">
+          <button type="button" class="menu-trigger">Edit</button>
+          <div class="menu-dropdown">
+            <button type="button" class="menu-item" data-action="clear">Clear Screen</button>
+            <div class="menu-sep"></div>
+            <button type="button" class="menu-item" data-insert="IG">Ignore PNR (IG)</button>
+            <button type="button" class="menu-item" data-insert="XI">Cancel Itinerary (XI)</button>
+          </div>
+        </div>
+        <div class="menu" data-menu="view">
+          <button type="button" class="menu-trigger">View</button>
+          <div class="menu-dropdown">
+            <button type="button" class="menu-item" data-toggle="dockVisible">Show Helper Dock</button>
+            <button type="button" class="menu-item" data-toggle="fkeysVisible">Show Function Keys</button>
+            <div class="menu-sep"></div>
+            <button type="button" class="menu-item" data-action="reset-layout">Reset Panel Sizes</button>
+            <div class="menu-sep"></div>
+            <button type="button" class="menu-item" data-action="settings">Display Settings&hellip;</button>
+          </div>
+        </div>
+        <div class="menu" data-menu="tools">
+          <button type="button" class="menu-trigger">Tools</button>
+          <div class="menu-dropdown">
+            <button type="button" class="menu-item" data-target="pnr">PNR</button>
+            <button type="button" class="menu-item" data-target="seat">Seat Map</button>
+            <button type="button" class="menu-item" data-target="lookup">Encode / Decode</button>
+            <button type="button" class="menu-item" data-target="formats">Format Finder</button>
+            <div class="menu-sep"></div>
+            <button type="button" class="menu-item" data-action="command-helper">Command Helper</button>
+          </div>
+        </div>
+        <div class="menu" data-menu="help">
+          <button type="button" class="menu-trigger">Help</button>
+          <div class="menu-dropdown">
+            <button type="button" class="menu-item" data-run="HELP">Command Reference</button>
+            <button type="button" class="menu-item" data-run="*R">Display Current PNR</button>
+            <button type="button" class="menu-item" data-run="*H">PNR Activity History</button>
+          </div>
+        </div>
+      </nav>
+      <div class="topbar-status">
+        <span id="topbarLed" class="statusled"></span>
+        <span id="topbarStatusText">NOT SIGNED IN</span>
+        <span class="toolbtns">
+          <button id="btnClear" class="chip-btn" title="Clear the screen">CLEAR</button>
+          <button id="btnReset" class="chip-btn" title="Reset the whole session">RESET</button>
+        </span>
+      </div>
     </div>
+    <div class="topbar-row topbar-row-tabs" id="tabstrip">
+      <button id="tabA" class="worktab active" type="button" data-value="A">A <span id="tabAStatus">&mdash;</span></button>
+      <button class="worktab" type="button" disabled title="Additional work areas are not modeled in this trainer">B</button>
+      <button class="worktab" type="button" disabled title="Additional work areas are not modeled in this trainer">C</button>
+      <button class="worktab" type="button" disabled title="Additional work areas are not modeled in this trainer">D</button>
+      <button class="worktab" type="button" disabled title="Additional work areas are not modeled in this trainer">E</button>
+      <button class="worktab" type="button" disabled title="Additional work areas are not modeled in this trainer">F</button>
+    </div>
+  </div>
+
+  <div id="housing">
     <div id="mainrow">
       <div id="crt">
+        <div id="cmdbar">
+          <span id="prompt" aria-hidden="true">&gt;</span>
+          <input id="cmdline" type="text" placeholder="TYPE COMMAND HERE" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <button id="btnSend" type="button">SEND</button>
+          <span class="cmdtools">
+            <button id="btnFkeysToggle" class="chip-btn" type="button" title="Show/hide programmable function keys">PF KEYS</button>
+            <button id="btnCommandHelper" class="chip-btn" type="button" title="Open the command reference panel">COMMAND HELPER</button>
+          </span>
+        </div>
+        <div id="fkeys" class="hidden"></div>
         <div id="screen">
           <div id="output"></div>
-          <div id="inputrow">
-            <span id="prompt">&gt;</span>
-            <input id="cmdline" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" />
-          </div>
         </div>
         <button id="dockToggleTab" title="Hide panel" aria-label="Hide panel">&#8250;</button>
       </div>
+      <div class="resizer" id="resizerDock" role="separator" aria-orientation="vertical" aria-label="Resize the PNR panel" tabindex="0"></div>
       <div id="dock">
-        <div class="segmented" id="dockTabs">
-          <button id="dockTabPnr" data-value="pnr">PNR</button>
-          <button id="dockTabSeat" data-value="seat">SEAT MAP</button>
-          <button id="dockTabLookup" data-value="lookup">ENCODE/DECODE</button>
-          <button id="dockTabFormats" data-value="formats">FORMAT FINDER</button>
-        </div>
+        <div id="dockHeader"></div>
         <div id="dockPnrTab">
           <div id="dockStatus" class="dim"></div>
           <div id="dockRlocRow">
@@ -47,6 +128,7 @@
         </div>
         <div id="seatMapPanel" class="hidden">
           <div id="seatMapTitle">SEAT MAP</div>
+          <div id="seatMapSegSwitcher" class="hidden"></div>
           <div id="seatMapGrid"></div>
           <div id="seatMapLegend" class="dim">NO SEAT MAP DISPLAYED YET - USE 4{N} TO VIEW A SEGMENT</div>
         </div>
@@ -59,62 +141,68 @@
           <div id="formatsResults"></div>
         </div>
       </div>
+      <div class="resizer" id="resizerRail" role="separator" aria-orientation="vertical" aria-label="Resize the helper apps rail" tabindex="0"></div>
+      <div id="helperRail" aria-label="Helper apps">
+        <div class="helper-rail-head">HELPER APPS</div>
+        <button type="button" class="helper-btn" data-target="pnr" title="Show the PNR panel">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6z"></path><path d="M15 2v3h3"></path><path d="M9 12h6M9 16h6M9 8h3"></path></svg>
+          <span>PNR</span>
+        </button>
+        <button type="button" class="helper-btn" data-target="seat" title="Show the seat map">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18v-6a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v6"></path><path d="M4 18h16M6 18v3M18 18v3M9 9V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v3"></path></svg>
+          <span>Seat Map</span>
+        </button>
+        <button type="button" class="helper-btn" data-target="lookup" title="Encode / decode airports and airlines">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M20 20l-5-5"></path></svg>
+          <span>Encode/Decode</span>
+        </button>
+        <button type="button" class="helper-btn" data-target="formats" title="Find a command format">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"></rect><path d="M7.5 9h9M7.5 13h9M7.5 17h5"></path></svg>
+          <span>Format Finder</span>
+        </button>
+        <div class="helper-rail-divider"></div>
+        <button type="button" class="helper-btn" data-action="copy" title="Copy the record locator">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span>Copy RLOC</span>
+        </button>
+        <button type="button" class="helper-btn" data-action="download" title="Download this PNR as a text file">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"></path><path d="M6.5 11.5 12 17l5.5-5.5"></path><path d="M4 20h16"></path></svg>
+          <span>Download PNR</span>
+        </button>
+      </div>
     </div>
   </div>
   <div id="hint">Type <b>HELP</b> for command reference &middot; This is an educational simulation, not connected to any real airline or GDS network.</div>
-</div>
 
-<div id="settingsPanel" class="panel hidden" role="dialog" aria-label="Display settings">
-  <div class="panel-head">
-    <span>DISPLAY SETTINGS</span>
-    <button id="btnCloseSettings" class="iconbtn" aria-label="Close settings">&#10005;</button>
-  </div>
-  <div class="panel-body">
-    <div class="setting-group">
-      <label>DISPLAY MODE</label>
-      <div class="segmented" data-setting="mode">
-        <button data-value="dark">DARK</button>
-        <button data-value="light">LIGHT</button>
-      </div>
+  <div id="settingsPanel" class="panel hidden" role="dialog" aria-label="Display settings">
+    <div class="panel-head">
+      <span>DISPLAY SETTINGS</span>
+      <button id="btnCloseSettings" class="iconbtn" aria-label="Close settings">&#10005;</button>
     </div>
-    <div class="setting-group">
-      <label>COLOR THEME</label>
-      <div class="swatches" id="themeSwatches">
-        <button class="swatch" data-theme="green" style="--sw:#33ff66">GREEN</button>
-        <button class="swatch" data-theme="amber" style="--sw:#ffb000">AMBER</button>
-        <button class="swatch" data-theme="ice" style="--sw:#5fe1ff">ICE</button>
-        <button class="swatch" data-theme="paper" style="--sw:#e8e8e8">PAPER</button>
+    <div class="panel-body">
+      <div class="setting-group">
+        <label>DISPLAY MODE</label>
+        <div class="segmented" data-setting="mode">
+          <button data-value="dark">DARK</button>
+          <button data-value="light">LIGHT</button>
+        </div>
       </div>
-    </div>
-    <div class="setting-group">
-      <label>SCANLINES</label>
-      <div class="segmented" data-setting="scanlines">
-        <button data-value="on">ON</button>
-        <button data-value="off">OFF</button>
+      <div class="setting-group">
+        <label>ACCENT COLOR</label>
+        <div class="swatches" id="themeSwatches">
+          <button class="swatch" data-theme="green" style="--sw:#33ff66">GREEN</button>
+          <button class="swatch" data-theme="amber" style="--sw:#ffb000">AMBER</button>
+          <button class="swatch" data-theme="ice" style="--sw:#5fe1ff">ICE</button>
+          <button class="swatch" data-theme="paper" style="--sw:#9aa5b8">SLATE</button>
+        </div>
       </div>
-    </div>
-    <div class="setting-group">
-      <label>SCREEN GLOW</label>
-      <div class="segmented" data-setting="glow">
-        <button data-value="off">OFF</button>
-        <button data-value="low">LOW</button>
-        <button data-value="med">MED</button>
-        <button data-value="high">HIGH</button>
-      </div>
-    </div>
-    <div class="setting-group">
-      <label>SCREEN CURVATURE</label>
-      <div class="segmented" data-setting="vignette">
-        <button data-value="on">ON</button>
-        <button data-value="off">OFF</button>
-      </div>
-    </div>
-    <div class="setting-group">
-      <label>TEXT SIZE</label>
-      <div class="segmented" data-setting="fontSize">
-        <button data-value="sm">S</button>
-        <button data-value="md">M</button>
-        <button data-value="lg">L</button>
+      <div class="setting-group">
+        <label>TEXT SIZE</label>
+        <div class="segmented" data-setting="fontSize">
+          <button data-value="sm">S</button>
+          <button data-value="md">M</button>
+          <button data-value="lg">L</button>
+        </div>
       </div>
     </div>
   </div>

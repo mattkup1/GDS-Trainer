@@ -553,6 +553,7 @@ def format_segment_short(seg: dict) -> str:
 # ---------- name / phone / received-from ----------
 
 _INF_RE = re.compile(r"\(INF([A-Z][A-Z\-' ]*)/([A-Z][A-Z\-' ]*)/(\d{1,2}[A-Z]{3}\d{2})\)\s*$")
+_INF_ATTEMPT_RE = re.compile(r"\(INF[^)]*\)\s*$")
 _CHD_RE = re.compile(r"^([A-Z][A-Z\-' ]*?)\s*\(CHD\)$")
 _HEAD_RE = re.compile(r"^(\d{1,2})?([A-Z][A-Z\-' ]*)$")
 _DOB_RE = re.compile(r"^(\d{1,2})([A-Z]{3})(\d{2})$")
@@ -570,6 +571,16 @@ def handle_name(u: str) -> None:
             "dob": inf_match.group(3),
         }
         working_text = working_text[: inf_match.start()].strip()
+    elif _INF_ATTEMPT_RE.search(working_text):
+        # Looks like an attempted infant clause that just didn't match the
+        # strict shape above - most often a 4-digit year. See the matching
+        # comment in web/script.js's handleName for why this needs its own
+        # error rather than falling through to the name-splitting logic.
+        print_err(
+            "FORMAT - INFANT MUST BE (INF{SURNAME}/{GIVEN}/{DDMONYY})   "
+            "e.g. (INFSMITH/BABY/12JAN26) - DOB USES A 2-DIGIT YEAR"
+        )
+        return
     if "/" not in working_text:
         print_err("FORMAT - NAME MUST BE SURNAME/GIVEN NAME")
         return

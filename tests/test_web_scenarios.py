@@ -86,7 +86,7 @@ def test_pnr_dock_panel_reflects_pnr_state(web_session):
 
 
 def test_lookup_panel_decode_click_runs_real_command(web_session):
-    """GUI-only regression guard for the ENCODE/DECODE dock tab. Confirms an
+    """GUI-only regression guard for the ENCODE/DECODE dock panel. Confirms an
     exact code match ranks first (searching "ORD" among thousands of airports
     should surface Chicago O'Hare, not an unrelated city whose name merely
     contains "ord" like Alamogordo), and that clicking a result runs the real
@@ -95,7 +95,7 @@ def test_lookup_panel_decode_click_runs_real_command(web_session):
     notes/GUI Expansion Scope-Out.md.
     """
     web_session.run_commands(["SI"])
-    web_session.evaluate("document.getElementById('dockTabLookup').click()")
+    web_session.evaluate("document.querySelector('.helper-btn[data-target=\"lookup\"]').click()")
     web_session.evaluate(
         "(() => {"
         "const input = document.getElementById('lookupInput');"
@@ -114,14 +114,14 @@ def test_lookup_panel_decode_click_runs_real_command(web_session):
 
 
 def test_format_finder_click_inserts_without_submitting(web_session):
-    """GUI-only regression guard for the FORMAT FINDER dock tab. Per the
+    """GUI-only regression guard for the FORMAT FINDER dock panel. Per the
     guiding constraint in notes/GUI Expansion Scope-Out.md, GUI affordances
     must not become a point-and-click alternative to typing a PNR-mutating
     entry - clicking a result should only insert its example into #cmdline
     for the user to review and submit themselves, never auto-submit it.
     """
     web_session.run_commands(["SI"])
-    web_session.evaluate("document.getElementById('dockTabFormats').click()")
+    web_session.evaluate("document.querySelector('.helper-btn[data-target=\"formats\"]').click()")
     web_session.evaluate(
         "(() => {"
         "const input = document.getElementById('formatsInput');"

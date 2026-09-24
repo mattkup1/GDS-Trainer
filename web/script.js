@@ -1106,9 +1106,35 @@
     renderSeatMapPanel(segIdx + 1, seg, map, mine);
   }
 
+  // Segment switcher: only meaningful with more than one segment on file -
+  // a solo segment has nothing to switch to, so the row stays hidden rather
+  // than showing a single, pointless tab. Tabs run the real 4{N} command
+  // (read-only - a seat map display mutates nothing) via submitCommand(),
+  // same as an open seat cell does, rather than re-rendering the panel
+  // directly - so the terminal's own ASCII map output and the PNR's
+  // activity implications (none here, but consistency matters) stay in
+  // lockstep with whatever the GUI just did.
+  function renderSeatMapSegSwitcher(n){
+    seatMapSegSwitcher.innerHTML = '';
+    if(state.pnr.segments.length <= 1){
+      seatMapSegSwitcher.classList.add('hidden');
+      return;
+    }
+    seatMapSegSwitcher.classList.remove('hidden');
+    state.pnr.segments.forEach((s, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'seatmap-segtab' + (i === n-1 ? ' active' : '');
+      btn.textContent = `SEG${i+1} ${s.orig}-${s.dest}`;
+      btn.addEventListener('click', () => submitCommand(`4${i+1}`));
+      seatMapSegSwitcher.appendChild(btn);
+    });
+  }
+
   function renderSeatMapPanel(n, seg, map, mine){
     seatMapPanel.dataset.segIdx = String(n-1);
     seatMapTitle.textContent = `SEAT MAP - ${seg.airline}${seg.flightNum} ${seg.equip || ''} SEG${n}`;
+    renderSeatMapSegSwitcher(n);
     seatMapGrid.innerHTML = '';
 
     for(const deck of map.decks){
@@ -1207,6 +1233,45 @@
     return partners;
   }
 
+  // ---------- PNR dock panel row metadata (browser-only, pure presentation) ----------
+  // Maps each buildElements() `kind` to a section (grouping header) and an
+  // icon key, so the dock can render a structured, scannable summary instead
+  // of raw padded monospace lines - the same information state.lastDisplay
+  // already carries, just presented like the rest of this redesigned shell
+  // instead of like a terminal dump. buildElements() already pushes kinds in
+  // this exact section order (names/infants/docs, then segments/seats, then
+  // ssr/osi/remarks, then fq, then phone/rf, then fp/tk/tkt), so grouping
+  // just means noticing when the section changes, not sorting anything.
+  const PNR_ROW_META = {
+    name:    { section:'PASSENGERS',           icon:'person' },
+    infant:  { section:'PASSENGERS',           icon:'person' },
+    docs:    { section:'PASSENGERS',           icon:'person' },
+    segment: { section:'ITINERARY',            icon:'plane' },
+    seat:    { section:'ITINERARY',            icon:'seat' },
+    ssr:     { section:'SPECIAL SERVICES',     icon:'info' },
+    osi:     { section:'SPECIAL SERVICES',     icon:'info' },
+    remark:  { section:'SPECIAL SERVICES',     icon:'info' },
+    fq:      { section:'PRICING',              icon:'receipt' },
+    phone:   { section:'CONTACT',              icon:'phone' },
+    rf:      { section:'CONTACT',              icon:'phone' },
+    fp:      { section:'PAYMENT & TICKETING',  icon:'card' },
+    tk:      { section:'PAYMENT & TICKETING',  icon:'ticket' },
+    tkt:     { section:'PAYMENT & TICKETING',  icon:'ticket' },
+  };
+  const PNR_ICONS = {
+    person:  '<circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"></path>',
+    plane:   '<line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>',
+    seat:    '<path d="M5 18v-6a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v6"></path><path d="M4 18h16M6 18v3M18 18v3M9 9V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v3"></path>',
+    info:    '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>',
+    receipt: '<line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>',
+    phone:   '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"></path>',
+    card:    '<rect x="1" y="4" width="22" height="16" rx="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line>',
+    ticket:  '<path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"></path><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2,2.5"></line>',
+  };
+  function pnrRowIcon(key){
+    return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PNR_ICONS[key]}</svg>`;
+  }
+
   function buildElements(){
     const els = [];
     state.pnr.names.forEach((n, i) => {
@@ -1240,10 +1305,47 @@
   // ---------- PNR dock panel (GUI, browser-only) ----------
   // Mirrors buildElements()/state.lastDisplay into the persistent side dock -
   // pure rendering, no state mutation. See notes/GUI Expansion Scope-Out.md.
+  // The Seat Map entry point (helper rail button + Tools menu item) only
+  // makes sense once there's a segment to show a map for - before that, a
+  // click could only ever bounce to the PNR tab with no visible feedback,
+  // which reads as broken rather than as "not available yet". Hiding it
+  // outright is the honest version of that, and it re-shows/hides live as
+  // segments are sold or cancelled since this is called from renderPnrPanel()
+  // (see that function's own comment for why it's the right single place).
+  function syncSeatMapAvailability(){
+    const hasSegments = state.pnr.segments.length > 0;
+    document.querySelectorAll('[data-target="seat"]').forEach(el => {
+      el.classList.toggle('hidden', !hasSegments);
+    });
+  }
+
+  // File > Generate Itinerary/Invoice/E-Ticket (EM/EMI/EMT) only make sense
+  // once the PNR would actually pass the same gate endTransaction() itself
+  // enforces for these modes - reusing firstIncompleteMessage('end_transaction')
+  // directly (rather than re-deriving "is this PNR complete" here) so this
+  // can never drift out of sync with what typing the command actually does.
+  // All three modes share one gate in endTransaction() - there's no
+  // per-mode variant of it to reproduce. The bespoke 10+-passenger group
+  // deposit check isn't a spec/pnr-completeness.json rule (see
+  // endTransaction()'s own comment on why), so it's repeated here too rather
+  // than silently showing these as available when a real EM/EMI/EMT would
+  // still reject them.
+  function syncDocumentMenuAvailability(){
+    const ready = state.signedIn
+      && !firstIncompleteMessage('end_transaction')
+      && !(state.pnr.names.length >= 10 && !state.pnr.ssrs.some(r => r.code === 'DEPS'));
+    document.querySelectorAll('[data-insert="EM"], [data-insert="EMI"], [data-insert="EMT"], #fileDocsSep').forEach(el => {
+      el.classList.toggle('hidden', !ready);
+    });
+  }
+
   function renderPnrPanel(){
     dockStatus.textContent = state.signedIn
       ? `SIGNED IN - SINE ${state.sine}  PCC ${state.pcc}`
       : 'NOT SIGNED IN';
+    updateTopbarStatus();
+    syncSeatMapAvailability();
+    syncDocumentMenuAvailability();
     dockRloc.textContent = `RLOC: ${state.pnr.locator || '(NOT SAVED)'}`;
     btnCopyRloc.classList.toggle('hidden', !state.pnr.locator);
     btnDownloadPnr.classList.toggle('hidden', state.lastDisplay.length === 0);
@@ -1252,10 +1354,22 @@
       dockPnrBody.textContent = 'PNR IS EMPTY';
       return;
     }
+    let lastSection = null;
     for(const e of state.lastDisplay){
+      const meta = PNR_ROW_META[e.kind] || { section:'OTHER', icon:'info' };
+      if(meta.section !== lastSection){
+        dockPnrBody.appendChild(dockSectionHead(meta.section));
+        lastSection = meta.section;
+      }
       const row = document.createElement('div');
-      row.className = 'docklinerow';
-      row.textContent = `${pad(e.num,2)} ${pad(e.label,5)} ${e.text}`;
+      row.className = 'pnr-row';
+      row.innerHTML =
+        `<span class="pnr-row-num">${e.num}</span>` +
+        `<span class="pnr-row-icon">${pnrRowIcon(meta.icon)}</span>` +
+        `<span class="pnr-row-main">` +
+          `<span class="pnr-row-label">${escapeHtml(e.label)}</span>` +
+          `<span class="pnr-row-text">${escapeHtml(e.text)}</span>` +
+        `</span>`;
       dockPnrBody.appendChild(row);
     }
   }
@@ -2107,6 +2221,16 @@
     if(infMatch){
       infantData = { surname: infMatch[1].trim(), given: infMatch[2].trim(), dob: infMatch[3] };
       workingText = workingText.slice(0, infMatch.index).trim();
+    } else if(/\(INF[^)]*\)\s*$/.test(workingText)){
+      // Looks like an attempted infant clause (starts "(INF", ends the entry
+      // in ")") that just didn't match the strict shape above - most often a
+      // 4-digit year, since that's the natural way to type a date. Without
+      // this, the malformed clause falls through to the plain name-splitting
+      // logic below and gets misread as extra passenger names, surfacing a
+      // baffling "PARTY SIZE EXCEEDS SEATS SOLD" error instead of the actual
+      // problem.
+      printErr('FORMAT - INFANT MUST BE (INF{SURNAME}/{GIVEN}/{DDMONYY})   e.g. (INFSMITH/BABY/12JAN26) - DOB USES A 2-DIGIT YEAR');
+      return;
     }
     if(!workingText.includes('/')){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
     const parts = workingText.split('/').map(s => s.trim()).filter(s => s.length);
@@ -2526,10 +2650,9 @@
   // ---------- settings panel ----------
   const shellEl = document.getElementById('shell');
   const settingsPanel = document.getElementById('settingsPanel');
-  const btnSettings = document.getElementById('btnSettings');
   const dockToggleTab = document.getElementById('dockToggleTab');
   const SETTINGS_KEY = 'gdsTrainerSettings';
-  const DEFAULT_SETTINGS = { theme:'green', scanlines:true, glow:'med', vignette:true, fontSize:'md', dockVisible:true, mode:'dark' };
+  const DEFAULT_SETTINGS = { theme:'green', fontSize:'md', dockVisible:true, mode:'dark', fkeysVisible:false, dockWidth:340, railWidth:172 };
 
   function loadSettings(){
     try{
@@ -2546,17 +2669,28 @@
 
   function applySettings(){
     shellEl.dataset.theme = settings.theme;
-    shellEl.dataset.glow = settings.glow;
     shellEl.dataset.fontsize = settings.fontSize;
     shellEl.dataset.mode = settings.mode;
-    document.body.dataset.mode = settings.mode;
-    shellEl.classList.toggle('scanlines-off', !settings.scanlines);
-    shellEl.classList.toggle('vignette-off', !settings.vignette);
     shellEl.classList.toggle('dock-hidden', !settings.dockVisible);
     dockToggleTab.innerHTML = settings.dockVisible ? '&#8250;' : '&#8249;';
     dockToggleTab.title = settings.dockVisible ? 'Hide panel' : 'Show panel';
     dockToggleTab.setAttribute('aria-label', dockToggleTab.title);
+    fkeysEl.classList.toggle('hidden', !settings.fkeysVisible);
+    btnFkeysToggle.classList.toggle('active', settings.fkeysVisible);
+    document.getElementById('dock').style.flexBasis = settings.dockWidth + 'px';
+    document.getElementById('helperRail').style.flexBasis = settings.railWidth + 'px';
     syncPanelUI();
+    syncMenuChecks();
+    updateResponsiveLayout();
+  }
+
+  // Show/Hide-style menu items (checkmarked, reflecting a boolean setting -
+  // e.g. data-toggle="dockVisible") rather than a duplicate control for
+  // something the settings panel or a toolbar button already owns.
+  function syncMenuChecks(){
+    document.querySelectorAll('[data-toggle]').forEach(el => {
+      el.classList.toggle('checked', !!settings[el.dataset.toggle]);
+    });
   }
 
   function syncPanelUI(){
@@ -2566,12 +2700,7 @@
     settingsPanel.querySelectorAll('.segmented').forEach(seg => {
       const key = seg.dataset.setting;
       seg.querySelectorAll('button').forEach(b => {
-        const val = b.dataset.value;
-        let active;
-        if(key === 'scanlines') active = settings.scanlines === (val === 'on');
-        else if(key === 'vignette') active = settings.vignette === (val === 'on');
-        else active = settings[key] === val;
-        b.classList.toggle('active', active);
+        b.classList.toggle('active', settings[key] === b.dataset.value);
       });
     });
   }
@@ -2586,26 +2715,25 @@
     const key = seg.dataset.setting;
     seg.querySelectorAll('button').forEach(b => {
       b.addEventListener('click', () => {
-        const val = b.dataset.value;
-        if(key === 'scanlines') settings.scanlines = (val === 'on');
-        else if(key === 'vignette') settings.vignette = (val === 'on');
-        else settings[key] = val;
+        settings[key] = b.dataset.value;
         applySettings(); saveSettings();
       });
     });
   });
 
+  // Anchored under the View menu trigger - the sole entry point to this
+  // panel now (View > Display Settings...); there's no dedicated settings
+  // button anymore to anchor to instead.
   function positionPanel(){
-    const r = btnSettings.getBoundingClientRect();
+    const trigger = document.querySelector('[data-menu="view"] .menu-trigger');
+    const r = trigger.getBoundingClientRect();
     const panelW = settingsPanel.offsetWidth || 280;
-    let left = r.right - panelW;
-    left = Math.max(12, Math.min(left, window.innerWidth - panelW - 12));
+    let left = Math.max(12, Math.min(r.left, window.innerWidth - panelW - 12));
     settingsPanel.style.left = left + 'px';
     settingsPanel.style.top = (r.bottom + 8) + 'px';
   }
 
-  btnSettings.addEventListener('click', (e) => {
-    e.stopPropagation();
+  function toggleSettingsPanel(){
     const isHidden = settingsPanel.classList.contains('hidden');
     if(isHidden){
       settingsPanel.classList.remove('hidden');
@@ -2613,7 +2741,7 @@
     } else {
       settingsPanel.classList.add('hidden');
     }
-  });
+  }
   document.getElementById('btnCloseSettings').addEventListener('click', () => {
     settingsPanel.classList.add('hidden');
   });
@@ -2622,8 +2750,7 @@
     applySettings(); saveSettings();
   });
   document.addEventListener('click', (e) => {
-    if(!settingsPanel.classList.contains('hidden') &&
-       !settingsPanel.contains(e.target) && e.target !== btnSettings){
+    if(!settingsPanel.classList.contains('hidden') && !settingsPanel.contains(e.target)){
       settingsPanel.classList.add('hidden');
     }
   });
@@ -2658,6 +2785,7 @@
   const seatMapTitle = document.getElementById('seatMapTitle');
   const seatMapGrid = document.getElementById('seatMapGrid');
   const seatMapLegend = document.getElementById('seatMapLegend');
+  const seatMapSegSwitcher = document.getElementById('seatMapSegSwitcher');
   const lookupPanel = document.getElementById('lookupPanel');
   const lookupInput = document.getElementById('lookupInput');
   const lookupResults = document.getElementById('lookupResults');
@@ -2665,20 +2793,24 @@
   const formatsInput = document.getElementById('formatsInput');
   const formatsResults = document.getElementById('formatsResults');
 
-  // Data-driven so adding another dock tab is a one-line addition here rather
-  // than another parallel if/else + classList.toggle pair.
+  // Data-driven so adding another dock panel is a one-line addition here
+  // rather than another parallel if/else + classList.toggle pair. Which
+  // panel is showing is chosen entirely from #helperRail's buttons now (see
+  // below) - #dockHeader just labels whichever one is currently visible.
+  const dockHeader = document.getElementById('dockHeader');
   const DOCK_TABS = {
-    pnr:     { btn: document.getElementById('dockTabPnr'),     panel: dockPnrTab },
-    seat:    { btn: document.getElementById('dockTabSeat'),    panel: seatMapPanel },
-    lookup:  { btn: document.getElementById('dockTabLookup'),  panel: lookupPanel },
-    formats: { btn: document.getElementById('dockTabFormats'), panel: formatsPanel },
+    pnr:     { panel: dockPnrTab,   label: 'PNR' },
+    seat:    { panel: seatMapPanel, label: 'SEAT MAP' },
+    lookup:  { panel: lookupPanel,  label: 'ENCODE / DECODE' },
+    formats: { panel: formatsPanel, label: 'FORMAT FINDER' },
   };
 
-  // Guards the 'seat' tab against showing stale content - a click on the tab
-  // button itself (unlike showSeatMap/refreshSeatMapPanelIfOpen) never re-checks
-  // whether a PNR/segment is actually behind whatever was last rendered there,
-  // so without this a signed-out or freshly-cleared session could still flip
+  // Guards the 'seat' tab against showing stale content - switching to it
+  // (unlike showSeatMap/refreshSeatMapPanelIfOpen) never re-checks whether a
+  // PNR/segment is actually behind whatever was last rendered there, so
+  // without this a signed-out or freshly-cleared session could still flip
   // the panel back open showing a previous PNR's seat map.
+  let currentDockTab = 'pnr';
   function switchDockTab(tab){
     if(tab === 'seat'){
       const segIdx = parseInt(seatMapPanel.dataset.segIdx, 10);
@@ -2686,11 +2818,10 @@
     }
     for(const key in DOCK_TABS){
       DOCK_TABS[key].panel.classList.toggle('hidden', key !== tab);
-      DOCK_TABS[key].btn.classList.toggle('active', key === tab);
     }
-  }
-  for(const key in DOCK_TABS){
-    DOCK_TABS[key].btn.addEventListener('click', () => switchDockTab(key));
+    dockHeader.textContent = DOCK_TABS[tab].label;
+    currentDockTab = tab;
+    syncHelperRail();
   }
   switchDockTab('pnr');
 
@@ -2827,6 +2958,257 @@
   }
   formatsInput.addEventListener('input', () => renderFormatsResults(formatsInput.value));
   renderFormatsResults('');
+
+  // ---------- top bar (brand/menu row + work-area tab strip) ----------
+  // Only work area "A" is real - this trainer models a single session, not
+  // Sabre's multi-work-area sign-in - so B-F are rendered as disabled tabs
+  // (see index.html) rather than faked as clickable. This function is called
+  // from renderPnrPanel(), so it stays in sync with sign-in/out and PNR resets
+  // for free, the same way the dock already does.
+  const topbarLed = document.getElementById('topbarLed');
+  const topbarStatusText = document.getElementById('topbarStatusText');
+  const tabAStatus = document.getElementById('tabAStatus');
+  function updateTopbarStatus(){
+    topbarLed.classList.toggle('on', state.signedIn);
+    topbarStatusText.textContent = state.signedIn
+      ? `SIGNED IN - ${state.sine}`
+      : 'NOT SIGNED IN';
+    tabAStatus.textContent = state.signedIn ? state.pcc : '—';
+  }
+
+  // ---------- command bar: Send button ----------
+  // Enter already submits (see the #cmdline keydown listener above) - this
+  // just gives the visible SEND button the same behavior.
+  document.getElementById('btnSend').addEventListener('click', () => submitCommand(inputEl.value));
+
+  // ---------- programmable function keys (PF keys) ----------
+  // Modeled on real Sabre's PF keys ("used to program and store formats that
+  // are used repeatedly"), but per notes/GUI Expansion Scope-Out.md a click
+  // here only inserts the command and focuses the input - same as the Format
+  // Finder above - it never submits on the agent's behalf.
+  const FKEYS = [
+    { num:'F1',  label:'HELP',        cmd:'HELP' },
+    { num:'F2',  label:'SIGN IN',     cmd:'SI' },
+    { num:'F3',  label:'SIGN OUT',    cmd:'SO' },
+    { num:'F4',  label:'DISPLAY PNR', cmd:'*R' },
+    { num:'F5',  label:'PNR HISTORY', cmd:'*H' },
+    { num:'F6',  label:'PRICE',       cmd:'WP' },
+    { num:'F7',  label:'TICKET',      cmd:'TKTT' },
+    { num:'F8',  label:'END + REDISPLAY', cmd:'ER' },
+    { num:'F9',  label:'END TRANSACT', cmd:'ET' },
+    { num:'F10', label:'IGNORE',      cmd:'IG' },
+  ];
+  const fkeysEl = document.getElementById('fkeys');
+  for(const fk of FKEYS){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'fkey';
+    btn.title = `Insert "${fk.cmd}" into the command line`;
+    btn.innerHTML = `<span class="fkey-num">${fk.num}</span><span>${escapeHtml(fk.label)}</span>`;
+    btn.addEventListener('click', () => {
+      inputEl.value = fk.cmd;
+      inputEl.focus();
+      inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+    });
+    fkeysEl.appendChild(btn);
+  }
+  const btnFkeysToggle = document.getElementById('btnFkeysToggle');
+  btnFkeysToggle.addEventListener('click', () => {
+    settings.fkeysVisible = !settings.fkeysVisible;
+    applySettings(); saveSettings();
+  });
+  document.getElementById('btnCommandHelper').addEventListener('click', () => {
+    if(!settings.dockVisible){ settings.dockVisible = true; applySettings(); saveSettings(); }
+    switchDockTab('formats');
+    formatsInput.focus();
+  });
+
+  // ---------- helper-apps rail ----------
+  // A second, separate side panel from the dock (mirroring real Sabre Red's
+  // "Helper Apps" rail) whose buttons only ever open/focus the existing dock
+  // tabs or trigger the existing copy/download buttons - no new functionality,
+  // just another way to reach it. runDockTarget/runDockAction are shared with
+  // the File/Tools menu items below, which offer the same shortcuts.
+  function runDockTarget(target){
+    if(!settings.dockVisible){ settings.dockVisible = true; applySettings(); saveSettings(); }
+    // Seat Map is only ever reachable here once a segment exists (the
+    // button/menu item hides otherwise - see syncSeatMapAvailability()), but
+    // no segment may have been explicitly viewed via 4{N} yet. Rather than
+    // switchDockTab('seat') bouncing to the PNR tab in that case (its guard
+    // against showing a stale/nonexistent segment), default to the first
+    // segment through the real command - the same "run the real read-only
+    // command" pattern the segment switcher and Encode/Decode's DC clicks
+    // already use, so the terminal's own output and the panel never diverge.
+    if(target === 'seat'){
+      const segIdx = parseInt(seatMapPanel.dataset.segIdx, 10);
+      if(!state.pnr.segments[segIdx]){
+        if(state.pnr.segments.length) submitCommand('41');
+        return;
+      }
+    }
+    switchDockTab(target);
+  }
+  function runDockAction(action){
+    if(action === 'copy') btnCopyRloc.click();
+    else if(action === 'download') btnDownloadPnr.click();
+  }
+  document.querySelectorAll('#helperRail .helper-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if(btn.dataset.target) runDockTarget(btn.dataset.target);
+      else if(btn.dataset.action) runDockAction(btn.dataset.action);
+    });
+  });
+  function syncHelperRail(){
+    document.querySelectorAll('#helperRail .helper-btn[data-target]').forEach(btn => {
+      btn.classList.toggle('active', settings.dockVisible && btn.dataset.target === currentDockTab);
+    });
+  }
+  syncHelperRail();
+
+  // ---------- menu bar (File/Edit/View/Tools/Window/Help) ----------
+  // A real native-app-style menu bar: each top-level item opens a dropdown
+  // of items that either (a) run an existing UI action - same handlers as
+  // the toolbar/helper-rail buttons they duplicate, (b) insert a command and
+  // focus #cmdline without submitting it (data-insert, same convention as
+  // the PF keys / Format Finder above, for anything that mutates the PNR),
+  // (c) run a read-only display command immediately (data-run - safe
+  // because HELP/*R/*H mutate nothing, same reasoning as the Encode/Decode
+  // panel's DC{code} clicks), or (d) flip a boolean display setting
+  // (data-toggle, checkmarked by syncMenuChecks()). Deliberately no
+  // dark/light/text-size items here - those already live in the settings
+  // panel (View > Display Settings...), and repeating the exact same
+  // controls in a second place is exactly the kind of duplicated-settings
+  // clutter a real app's menu bar doesn't have.
+  const menus = document.querySelectorAll('#menubar .menu');
+  function closeAllMenus(except){
+    menus.forEach(m => { if(m !== except) m.classList.remove('open'); });
+  }
+  menus.forEach(menu => {
+    const trigger = menu.querySelector('.menu-trigger');
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = menu.classList.contains('open');
+      closeAllMenus();
+      menu.classList.toggle('open', !wasOpen);
+    });
+    // Once one top-level menu is open, hovering a sibling switches straight
+    // to it too (matching real menu-bar behavior), instead of requiring a
+    // second click to close the first one first.
+    trigger.addEventListener('mouseenter', () => {
+      if(document.querySelector('#menubar .menu.open') && !menu.classList.contains('open')){
+        closeAllMenus();
+        menu.classList.add('open');
+      }
+    });
+    menu.querySelectorAll('.menu-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        // Without this, the click bubbles past this handler to document's
+        // "close the settings panel on an outside click" listener - which
+        // then immediately re-hides the panel this same click just opened,
+        // since e.target there is this menu item, not the panel or a button
+        // exempted from that check. Same reasoning as the trigger's own
+        // stopPropagation above.
+        e.stopPropagation();
+        if(item.dataset.insert !== undefined){
+          inputEl.value = item.dataset.insert;
+          inputEl.focus();
+          inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+        } else if(item.dataset.run !== undefined){
+          submitCommand(item.dataset.run);
+        } else if(item.dataset.target !== undefined){
+          runDockTarget(item.dataset.target);
+        } else if(item.dataset.toggle !== undefined){
+          const key = item.dataset.toggle;
+          settings[key] = !settings[key];
+          applySettings(); saveSettings();
+        } else {
+          const action = item.dataset.action;
+          if(action === 'reset') document.getElementById('btnReset').click();
+          else if(action === 'download') runDockAction('download');
+          else if(action === 'copy') runDockAction('copy');
+          else if(action === 'clear') document.getElementById('btnClear').click();
+          else if(action === 'settings') toggleSettingsPanel();
+          else if(action === 'command-helper') document.getElementById('btnCommandHelper').click();
+          else if(action === 'reset-layout'){
+            settings.dockWidth = DEFAULT_SETTINGS.dockWidth;
+            settings.railWidth = DEFAULT_SETTINGS.railWidth;
+            applySettings(); saveSettings();
+          }
+        }
+        closeAllMenus();
+      });
+    });
+  });
+  document.addEventListener('click', () => closeAllMenus());
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeAllMenus(); });
+
+  // ---------- resizable panels ----------
+  // Drags the flex-basis of the panel just to the right of each handle -
+  // the terminal (#crt, flex:1 with no fixed basis) simply absorbs whatever
+  // width #dock/#helperRail give up, so there's nothing to set on it
+  // directly. Widths persist the same way every other display setting does.
+  // See the big comment above #shell.stacked in web/style.css - whether the
+  // terminal/dock/helper-rail stack vertically depends on #dock/#helperRail's
+  // *current* widths (user-resizable), not just the viewport, so this has to
+  // be computed in JS rather than left to a fixed-breakpoint media query.
+  const mainrowEl = document.getElementById('mainrow');
+  const crtEl = document.getElementById('crt');
+  function updateResponsiveLayout(){
+    const dockW = settings.dockVisible ? settings.dockWidth : 0;
+    const chrome = dockW + settings.railWidth + 14; // both .resizer handles
+    shellEl.classList.toggle('stacked', (mainrowEl.clientWidth - chrome) < 420);
+    shellEl.classList.toggle('crt-narrow', crtEl.clientWidth < 620);
+  }
+  window.addEventListener('resize', updateResponsiveLayout);
+
+  function wireResizer(handle, panel, settingKey, min, max){
+    let dragging = false, startX = 0, startWidth = 0;
+    handle.addEventListener('mousedown', (e) => {
+      // Defensive: only start a drag when the handle itself is the actual
+      // event target, not some descendant (the handle has no interactive
+      // children today, but this stays cheap insurance against ever adding
+      // one back - see the comment above #dockToggleTab in style.css for
+      // why that button in particular deliberately lives outside the
+      // resizer, not inside it).
+      if(e.target !== handle) return;
+      dragging = true;
+      startX = e.clientX;
+      startWidth = panel.getBoundingClientRect().width;
+      handle.classList.add('dragging');
+      document.body.classList.add('resizing-x');
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if(!dragging) return;
+      const next = Math.max(min, Math.min(max, startWidth - (e.clientX - startX)));
+      panel.style.flexBasis = next + 'px';
+      settings[settingKey] = Math.round(next);
+      updateResponsiveLayout();
+    });
+    window.addEventListener('mouseup', () => {
+      if(!dragging) return;
+      dragging = false;
+      handle.classList.remove('dragging');
+      document.body.classList.remove('resizing-x');
+      settings[settingKey] = Math.round(panel.getBoundingClientRect().width);
+      saveSettings();
+    });
+    // Keyboard resize (left/right arrows) for anyone tabbing to the handle
+    // rather than dragging with a mouse.
+    handle.addEventListener('keydown', (e) => {
+      if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const delta = (e.key === 'ArrowLeft' ? 1 : -1) * 20;
+      const current = panel.getBoundingClientRect().width;
+      const next = Math.max(min, Math.min(max, current + delta));
+      panel.style.flexBasis = next + 'px';
+      updateResponsiveLayout();
+      settings[settingKey] = Math.round(next);
+      saveSettings();
+      e.preventDefault();
+    });
+  }
+  wireResizer(document.getElementById('resizerDock'), document.getElementById('dock'), 'dockWidth', 240, 640);
+  wireResizer(document.getElementById('resizerRail'), document.getElementById('helperRail'), 'railWidth', 120, 280);
 
   applySettings();
   boot();

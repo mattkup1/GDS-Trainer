@@ -5,6 +5,93 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Browser edition redesign** — the web edition's outer chrome now models a
+  modern GDS agent client instead of a green-phosphor CRT terminal: a menu
+  bar, work-area tabs (`A`–`F`, only `A` active — this trainer models one
+  session, not real multi-work-area sign-in), a command bar with a `SEND`
+  button, a collapsible programmable-function-key row (`PF KEYS`), and a new
+  `HELPER APPS` sidebar alongside the existing PNR/seat-map/encode-decode/
+  format-finder dock — the dock's own 2x2 tab grid was removed in favor of
+  it, since the two were a straight duplicate of each other; a plain label
+  (not a second set of tabs) now shows which dock panel is visible. The
+  `SCANLINES`/`SCREEN GLOW`/`SCREEN CURVATURE`
+  settings are gone with the CRT look they controlled; `DISPLAY MODE`,
+  `TEXT SIZE`, and the color-theme swatches (now `ACCENT COLOR`, restyled to
+  drive interactive highlights only, not full-screen phosphor color) remain.
+  No real GDS vendor names, branding, or logos are used anywhere in it.
+  The File/Edit/View/Tools/Help menu bar is now fully functional (sign
+  in/out, clear/reset, jump to a dock panel, Show/Hide checkmarked items for
+  the dock and function keys, and read-only reference commands) rather than
+  decorative labels, and the terminal/dock/helper-rail panels can be resized
+  by dragging the dividers between them (persisted like any other display
+  setting, with a `View > Reset Panel Sizes` item to restore the defaults).
+  Dark/light mode and text size stay in exactly one place - the settings
+  panel, reachable only via `View > Display Settings...` now (the separate
+  `SETTINGS` toolbar button was removed) - rather than being duplicated as a
+  second set of menu items.
+- **PNR dock panel redesign** — the dock's PNR tab now renders as grouped,
+  iconed cards (Passengers, Itinerary, Special Services, Pricing, Contact,
+  Payment & Ticketing) instead of a flat list of padded monospace lines, so
+  it reads like a reservation summary instead of a second copy of the
+  terminal dump. The underlying text per element is unchanged - same
+  formatters, same `X{n}` numbering - just presented with a section, an
+  icon, and a card instead of raw columns.
+- **Seat map dock panel polish** — the grid now centers in its own framed
+  card instead of hugging the left edge with a wall of empty space beside
+  it. The `Seat Map` entry point (helper-rail button and `Tools` menu item)
+  is hidden entirely until at least one segment is on file, instead of
+  silently bouncing to the PNR tab if clicked too early; once available, it
+  defaults to the first segment automatically even if `4{N}` was never
+  typed. An itinerary with more than one segment gets a row of tabs above
+  the grid to switch between them (each one running that segment's real
+  `4{N}` command, same as clicking an open seat does).
+- **`File > Generate Itinerary/Invoice/E-Ticket`** — new menu items for
+  `EM`/`EMI`/`EMT`, hidden until the PNR actually satisfies the same
+  completeness gate submitting one of those commands would check. Like
+  every other menu item that mutates the PNR, clicking one inserts the
+  command and focuses the command line rather than running it immediately -
+  these save and clear the work area exactly like `ET` does, so they're
+  never a one-click action.
+
+### Fixed
+
+- On a double-decker aircraft's seat map (747-400/-8, A380), the "UPPER
+  DECK"/"MAIN DECK" labels centered on the panel as a whole instead of on
+  the seat grid beneath them, since the row-number column only exists on
+  actual seat rows and threw the two off from a shared center by about
+  14px.
+- The dock's show/hide chevron sat right next to its resize handle, close
+  enough that ordinary mouse imprecision routinely grabbed the handle's drag
+  behavior instead of registering a click, making the button feel like it
+  "didn't always work." An interim fix nested the button inside the handle
+  to force it to unambiguously win its own pixels, but that traded the
+  original problem for a subtler one: a mousedown landing on the button
+  still shifted focus there before any drag intent was resolved, so trying
+  to drag starting from the button produced a stuck-looking, half-pressed
+  state with neither a clean click nor a clean drag. The button now lives
+  fully outside the handle with real breathing room between them, matching
+  how VS Code's and Chrome DevTools' sidebar toggles do it - a click target
+  and a drag handle never share, or even lightly overlap, the same
+  hit-region at all.
+- The `View > Display Settings...` menu item opened the settings panel and
+  then immediately closed it again on the same click (the click event kept
+  bubbling to the same "close on an outside click" listener the panel
+  already had).
+- A dock/helper-rail width dragged (or restored from a saved) wide enough
+  could squeeze the terminal down to an unreadably narrow column while
+  still reporting a "wide" viewport, since the browser/dock stacked layout
+  only ever kicked in below a fixed 900px window width - the command bar's
+  buttons could clip and terminal text could wrap mid-word well above that.
+  The stacking (and command-bar-wrapping) decision is now computed from the
+  terminal's actual available width instead of a fixed breakpoint.
+- A lap-infant date typed with a 4-digit year (e.g. `(INFDOE/BABY/25DEC2026)`
+  instead of the expected `25DEC26`) silently fell through to the plain
+  name-splitting logic and surfaced a baffling "PARTY SIZE EXCEEDS SEATS
+  SOLD" error instead of a format error. Both editions now recognize a
+  malformed `(INF...)` clause and report the actual problem.
+
 ## [1.1.0] — 2026-09-23
 
 ### Added

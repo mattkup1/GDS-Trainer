@@ -48,7 +48,15 @@ from .data import (
     WAITLIST_CLEAR,
     WEEKDAYS,
 )
-from .dates import format_arrival, minutes_to_clock, parse_date
+from .dates import (
+    format_arrival,
+    minutes_to_clock,
+    parse_clock,
+    parse_date,
+    parse_date_after,
+    parse_day_after,
+    shift_date,
+)
 from .printer import print_blank, print_err, print_line
 from .rng import hash_str, mulberry32
 from .state import STATE, fresh_pnr, log_activity, now_stamp
@@ -129,7 +137,15 @@ def _required_mct(orig: str, via: str, dest: str) -> int:
     return MINIMUM_CONNECT_TIME["domestic"] if domestic else MINIMUM_CONNECT_TIME["international"]
 
 
-def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
+def gen_availability(
+    day_str: str,
+    mon_str: str,
+    orig: str,
+    dest: str,
+    time_num: str | None = None,
+    ampm: str | None = None,
+    airline: str | None = None,
+) -> None:
     if orig == dest:
         print_err("FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME")
         return
@@ -137,6 +153,76 @@ def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
     if dinfo is None:
         print_err("INVALID DATE - CHECK ENTRY AND REENTER")
         return
+    _show_availability(dinfo, orig, dest, time_num, ampm, airline)
+
+
+def return_availability(
+    day_str: str | None,
+    mon_str: str | None,
+    day_only: str | None,
+    sign: str | None,
+    delta_str: str | None,
+    time_num: str | None = None,
+    ampm: str | None = None,
+    airline: str | None = None,
+) -> None:
+    """Real Sabre's 1R: availability for the last search's city pair reversed. Bare `1R`
+    keeps the date; `1R{DD}`/`1R{DD}{MMM}` picks one; `1R+{N}`/`1R-{N}` (real Sabre types
+    the add form with its currency-symbol key) shifts it N days; a trailing `{TIME}{A|P}`
+    and/or `{SEP}{AL}` filter apply exactly as they do on a normal availability entry. Every
+    date resolves relative to the LAST displayed availability's date, not today."""
+    last = STATE.last_avail
+    if not last:
+        print_err("NO AVAILABILITY DISPLAY IN CONTEXT - ENTER AVAIL FIRST")
+        return
+    base = last["dinfo"].date
+    if day_str and mon_str:
+        dinfo = parse_date_after(day_str, mon_str, base)
+    elif day_only:
+        dinfo = parse_day_after(day_only, base)
+    elif sign:
+        dinfo = shift_date(base, -int(delta_str) if sign == "-" else int(delta_str))
+    else:
+        dinfo = shift_date(base, 0)
+    if dinfo is None:
+        print_err("INVALID DATE - CHECK ENTRY AND REENTER")
+        return
+    _show_availability(dinfo, last["dest"], last["orig"], time_num, ampm, airline)
+
+
+def _filter_flights(flights: list[dict], num_nonstops: int, min_dep: int | None, airline: str | None) -> list[dict]:
+    """Apply a departure-time and/or airline filter, then renumber lines from 1 (real Sabre
+    renumbers a filtered display, so sell line numbers always refer to what's on screen).
+    Nonstops stand alone; the connection legs after them are kept or dropped as consecutive
+    pairs, since half a connection is useless - a pair passes the time filter on its first
+    leg's departure and the airline filter only if both legs match."""
+    groups = [[f] for f in flights[:num_nonstops]]
+    tail = flights[num_nonstops:]
+    groups += [tail[i : i + 2] for i in range(0, len(tail), 2)]
+    kept = []
+    for g in groups:
+        if min_dep is not None and g[0]["dep"] < min_dep:
+            continue
+        if airline is not None and any(f["airline"] != airline for f in g):
+            continue
+        kept.extend(g)
+    return [{**f, "line": i + 1} for i, f in enumerate(kept)]
+
+
+def _show_availability(
+    dinfo,
+    orig: str,
+    dest: str,
+    time_num: str | None = None,
+    ampm: str | None = None,
+    airline: str | None = None,
+) -> None:
+    min_dep = None
+    if time_num:
+        min_dep = parse_clock(time_num, ampm or "")
+        if min_dep is None:
+            print_err("INVALID TIME - CHECK ENTRY AND REENTER")
+            return
 
     seed = hash_str(f"{orig}{dest}{dinfo.day}{dinfo.mon}{dinfo.year}")
     rng = mulberry32(seed)
@@ -176,6 +262,13 @@ def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
         next_line += 1
         flights.append({"line": next_line, **leg2})
         next_line += 1
+    # Filters apply AFTER generation, never during it - the rng stream (and so every
+    # unfiltered search's flights) stays byte-for-byte identical, filtered or not.
+    if min_dep is not None or airline:
+        flights = _filter_flights(flights, num_flights, min_dep, airline)
+        if not flights:
+            print_err("NO AVAILABILITY FOR REQUESTED CRITERIA")
+            return
     STATE.last_avail = {"orig": orig, "dest": dest, "dinfo": dinfo, "flights": flights}
 
     print_line(
@@ -183,6 +276,13 @@ def gen_availability(day_str: str, mon_str: str, orig: str, dest: str) -> None:
         "hd",
     )
     print_line(f"  {city_name(orig)}  TO  {city_name(dest)}", "dim")
+    if min_dep is not None or airline:
+        applied = []
+        if min_dep is not None:
+            applied.append(f"DEPARTING AFTER {minutes_to_clock(min_dep)}")
+        if airline:
+            applied.append(f"AIRLINE {airline}")
+        print_line(f"  FILTERED: {', '.join(applied)}", "dim")
     print_blank()
     # Built from the same field widths as the data rows below (not hand-counted spaces)
     # so the header can't drift out of alignment with them - see the seat map header's
@@ -2327,6 +2427,13 @@ def show_help() -> None:
     print_line("AVAILABILITY", "hd")
     print_line("  A{DD}{MMM}{ORG}{DST}   Air availability   e.g. A15AUGDFWORD")
     print_line("  1{DD}{MMM}{ORG}{DST}   Air availability (alternate entry)  e.g. 115AUGDFWORD")
+    print_line("    optional filters, appended in this order:")
+    print_line("      {TIME}{A|P}   only flights departing at/after that time   e.g. A15AUGDFWORD11A")
+    print_line("      ¥{AL}        only that airline (¥ = the currency-symbol key; / also works)   e.g. A15AUGDFWORD¥AA")
+    print_line("  1R                     Return availability: last search reversed, same date")
+    print_line("  1R{DD}[{MMM}]          ... on that date   e.g. 1R20AUG  or  1R20")
+    print_line("  1R+{N}  1R-{N}         ... N days after/before the last search date   e.g. 1R+7")
+    print_line("                         (the same time/airline filters can follow any 1R)")
     print_line("  AF{DD}{MMM}{ORG}{DST}  Flexible-date availability - lowest indicative fare per day")
     print_line("                         across a +/-3 day window, nonstop only, not bookable directly")
     print_line("                         e.g. AF15AUGDFWORD")

@@ -7,6 +7,17 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Return availability (`1R`) and availability filters** — real Sabre's `1R`
+  reverses the city pair of the last availability display so a round trip's
+  second half doesn't need the full entry retyped: `1R` (same date),
+  `1R{DD}`/`1R{DD}{MMM}` (a given date), `1R+{N}`/`1R-{N}` (shifted by N
+  days). Dates resolve relative to the last display's date, not today. Any
+  availability entry, `1R` included, also accepts an optional trailing
+  departure-time filter (`{TIME}{A|P}`, e.g. `11A`) and airline filter
+  (`¥{AL}`, with `/` as an ASCII fallback). Filtered displays are renumbered
+  from line 1; connections are kept or dropped as pairs. Filters run after
+  generation, so unfiltered searches are byte-for-byte unchanged.
+
 - **Contact email (`9E{ADDRESS}`)** — a second PNR contact field alongside
   phone, e.g. `9EJSMITH@EXAMPLE.COM`. Optional (unlike phone, not required to
   end transact), cancellable per-entry like a phone row, and copied - not

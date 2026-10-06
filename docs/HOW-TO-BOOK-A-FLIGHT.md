@@ -59,6 +59,25 @@ A long enough flight departing late in the day lands after midnight — its arri
 
 > Any real-world IATA airport code works — the simulator ships with data for ~6,000 airports worldwide.
 
+**Narrowing the display (optional filters).** Append a departure time and/or an airline to any availability entry, in that order:
+
+```
+A15AUGDFWORD11A        only flights departing at or after 11:00 AM
+A15AUGDFWORD¥AA        only American (¥ is the currency-symbol key; / also works)
+A15AUGDFWORD11A¥AA     both
+```
+A filtered display is renumbered from line 1 — the line numbers on screen are the ones you sell from. A connection only stays in a filtered display if both of its legs pass. If nothing matches, you get `NO AVAILABILITY FOR REQUESTED CRITERIA` and the previous display stays in context.
+
+**Return availability (`1R`) — the second half of a round trip.** A round trip is two separately sold segments, and `1R` is the shortcut for finding the return: it reverses the city pair of the last availability display, so you don't retype it.
+
+```
+1R                     same date, city pair reversed
+1R20AUG                that date  (1R20 = the 20th, this month or the next that still lies ahead)
+1R+5   1R-2            5 days after / 2 days before the last display's date
+1R20AUG11A¥AA          the same time and airline filters as above
+```
+Dates resolve relative to the date you last searched, not today — `1R10JAN` after a 15NOV search means January of next year. The entry needs an availability display already on screen; if there isn't one you'll get `NO AVAILABILITY DISPLAY IN CONTEXT`.
+
 ---
 
 ### 4. Sell a seat from the list
@@ -450,6 +469,8 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 | `FQ{ORG}{DST}/{CLASS}` | Fare rules for that class on that route (change fee, cancellation fee, refundable, min/max stay, advance purchase) — no PNR involved |
 | `S{DD}{MON}{ORG}{DST}` | Flight schedule across a 7-day window — no booking classes or seats |
 | `AF{DD}{MON}{ORG}{DST}` | Flexible-date fare calendar, ±3 days around the given date — not bookable directly |
+| `1R` / `1R{DD}[{MON}]` / `1R+{N}` / `1R-{N}` | Return availability — the last display's city pair reversed, on the same / a given / a shifted date |
+| `A{DD}{MON}{ORG}{DST}{TIME}{A\|P}` / `...¥{AL}` | Availability filtered to departures at/after a time, and/or one airline |
 
 **Terminology**
 - **Fare shop** — an indicative, per-class fare check by city pair, independent of any itinerary; distinct from `WP`, which prices an already-sold itinerary

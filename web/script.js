@@ -116,6 +116,54 @@
     }
     return { date:d, day, mon:monStr, year, weekday: WEEKDAYS[d.getDay()] };
   }
+  function dateInfoFor(d){
+    return { date:d, day:d.getDate(), mon:MONTHS[d.getMonth()], year:d.getFullYear(), weekday: WEEKDAYS[d.getDay()] };
+  }
+  // Resolve a bare {DD}{MMM} to its first occurrence on or after `base` (not after today,
+  // like parseDate) - a return-availability date is relative to the outbound date it
+  // follows, so "1R10JUL" after a 15NOV outbound means 10JUL of next year.
+  function parseDateAfter(dayStr, monStr, base){
+    const mi = MONTHS.indexOf(monStr.toUpperCase());
+    const day = parseInt(dayStr, 10);
+    if(mi < 0 || !day || day < 1 || day > 31) return null;
+    for(const year of [base.getFullYear(), base.getFullYear()+1]){
+      if(day > new Date(year, mi+1, 0).getDate()) continue;
+      const d = new Date(year, mi, day, 12, 0, 0);
+      if(d >= base) return dateInfoFor(d);
+    }
+    return null;
+  }
+  // Bare day-of-month ("1R12"): first such day on or after `base`, staying in base's month
+  // if it still fits and otherwise moving to a later month.
+  function parseDayAfter(dayStr, base){
+    const day = parseInt(dayStr, 10);
+    if(!day || day < 1 || day > 31) return null;
+    let year = base.getFullYear(), month = base.getMonth();
+    for(let i=0; i<13; i++){
+      if(day <= new Date(year, month+1, 0).getDate()){
+        const d = new Date(year, month, day, 12, 0, 0);
+        if(d >= base) return dateInfoFor(d);
+      }
+      month++;
+      if(month > 11){ month = 0; year++; }
+    }
+    return null;
+  }
+  // base +/- days, refusing a date already in the past (nothing to search there).
+  function shiftDate(base, days){
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + days, 12, 0, 0);
+    const now = new Date();
+    if(d < new Date(now.getFullYear(), now.getMonth(), now.getDate())) return null;
+    return dateInfoFor(d);
+  }
+  // "6P"/"630P"/"1215A" -> minutes since midnight, or null if not a real clock time.
+  function parseClock(numStr, ampm){
+    if(!/^\d+$/.test(numStr)) return null;
+    const hh = numStr.length <= 2 ? parseInt(numStr,10) : parseInt(numStr.slice(0,-2),10);
+    const mm = numStr.length <= 2 ? 0 : parseInt(numStr.slice(-2),10);
+    if(hh < 1 || hh > 12 || mm > 59) return null;
+    return ((hh % 12) + (ampm.toUpperCase() === 'P' ? 12 : 0)) * 60 + mm;
+  }
   function minutesToClock(mins){
     mins = ((mins % 1440) + 1440) % 1440;
     let hh = Math.floor(mins/60), mm = mins%60;
@@ -194,15 +242,60 @@
     return { airline, flightNum, dep, arr, duration, equip, classAvail, orig, dest, operatingAirline, operatingFlightNum };
   }
 
-  function genAvailability(dayStr, monStr, orig, dest){
+  function genAvailability(dayStr, monStr, orig, dest, timeNum, ampm, airline){
     if(orig === dest){ printErr('FORMAT - ORIGIN AND DESTINATION CANNOT BE THE SAME'); return; }
     const dinfo = parseDate(dayStr, monStr);
     if(!dinfo){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
+    showAvailability(dinfo, orig, dest, timeNum, ampm, airline);
+  }
+
+  // Real Sabre's 1R: availability for the last search's city pair reversed. Bare `1R` keeps
+  // the date; `1R{DD}`/`1R{DD}{MMM}` picks one; `1R+{N}`/`1R-{N}` (real Sabre types the add
+  // form with its currency-symbol key) shifts it N days; a trailing `{TIME}{A|P}` and/or
+  // `{SEP}{AL}` filter apply exactly as they do on a normal availability entry. Every date
+  // resolves relative to the LAST displayed availability's date, not today.
+  function returnAvailability(dayStr, monStr, dayOnly, sign, deltaStr, timeNum, ampm, airline){
+    const last = state.lastAvail;
+    if(!last){ printErr('NO AVAILABILITY DISPLAY IN CONTEXT - ENTER AVAIL FIRST'); return; }
+    const base = last.dinfo.date;
+    let dinfo;
+    if(dayStr && monStr) dinfo = parseDateAfter(dayStr, monStr, base);
+    else if(dayOnly) dinfo = parseDayAfter(dayOnly, base);
+    else if(sign) dinfo = shiftDate(base, sign === '-' ? -parseInt(deltaStr,10) : parseInt(deltaStr,10));
+    else dinfo = shiftDate(base, 0);
+    if(!dinfo){ printErr('INVALID DATE - CHECK ENTRY AND REENTER'); return; }
+    showAvailability(dinfo, last.dest, last.orig, timeNum, ampm, airline);
+  }
+
+  // Apply a departure-time and/or airline filter, then renumber lines from 1 (real Sabre
+  // renumbers a filtered display, so sell line numbers always refer to what's on screen).
+  // Nonstops stand alone; the connection legs after them are kept or dropped as consecutive
+  // pairs, since half a connection is useless - a pair passes the time filter on its first
+  // leg's departure and the airline filter only if both legs match.
+  function filterFlights(flights, numNonstops, minDep, airline){
+    const groups = flights.slice(0, numNonstops).map(f => [f]);
+    const tail = flights.slice(numNonstops);
+    for(let i=0; i<tail.length; i+=2) groups.push(tail.slice(i, i+2));
+    const kept = [];
+    for(const g of groups){
+      if(minDep !== null && g[0].dep < minDep) continue;
+      if(airline && g.some(f => f.airline !== airline)) continue;
+      kept.push(...g);
+    }
+    return kept.map((f, i) => ({ ...f, line: i+1 }));
+  }
+
+  function showAvailability(dinfo, orig, dest, timeNum, ampm, airline){
+    let minDep = null;
+    if(timeNum){
+      minDep = parseClock(timeNum, ampm || '');
+      if(minDep === null){ printErr('INVALID TIME - CHECK ENTRY AND REENTER'); return; }
+    }
 
     const seed = hashStr(`${orig}${dest}${dinfo.day}${dinfo.mon}${dinfo.year}`);
     const rng = mulberry32(seed);
     const numFlights = 5 + Math.floor(rng()*4);
-    const flights = [];
+    let flights = [];
     let dep = 300 + Math.floor(rng()*90);
     for(let i=0;i<numFlights;i++){
       flights.push({ line:i+1, ...genFlight(rng, dep, orig, dest) });
@@ -236,10 +329,22 @@
       flights.push({ line: nextLine++, ...leg1 });
       flights.push({ line: nextLine++, ...leg2 });
     }
+    // Filters apply AFTER generation, never during it - the rng stream (and so every
+    // unfiltered search's flights) stays byte-for-byte identical, filtered or not.
+    if(minDep !== null || airline){
+      flights = filterFlights(flights, numFlights, minDep, airline);
+      if(!flights.length){ printErr('NO AVAILABILITY FOR REQUESTED CRITERIA'); return; }
+    }
     state.lastAvail = { orig, dest, dinfo, flights };
 
     print(`** AIR AVAILABILITY **  ${orig}-${dest}  ${dinfo.day}${dinfo.mon}${dinfo.year}  ${dinfo.weekday}`, 'hd');
     print(`  ${cityName(orig)}  TO  ${cityName(dest)}`, 'dim');
+    if(minDep !== null || airline){
+      const applied = [];
+      if(minDep !== null) applied.push(`DEPARTING AFTER ${minutesToClock(minDep)}`);
+      if(airline) applied.push(`AIRLINE ${airline}`);
+      print(`  FILTERED: ${applied.join(', ')}`, 'dim');
+    }
     printBlank();
     // Built from the same field widths as the data rows below (not hand-counted spaces)
     // so the header can't drift out of alignment with them - see the seat map header's
@@ -2081,6 +2186,13 @@
     print('AVAILABILITY', 'hd');
     print('  A{DD}{MMM}{ORG}{DST}   Air availability   e.g. A15AUGDFWORD');
     print('  1{DD}{MMM}{ORG}{DST}   Air availability (alternate entry)  e.g. 115AUGDFWORD');
+    print('    optional filters, appended in this order:');
+    print('      {TIME}{A|P}   only flights departing at/after that time   e.g. A15AUGDFWORD11A');
+    print('      ¥{AL}        only that airline (¥ = the currency-symbol key; / also works)   e.g. A15AUGDFWORD¥AA');
+    print('  1R                     Return availability: last search reversed, same date');
+    print('  1R{DD}[{MMM}]          ... on that date   e.g. 1R20AUG  or  1R20');
+    print('  1R+{N}  1R-{N}         ... N days after/before the last search date   e.g. 1R+7');
+    print('                         (the same time/airline filters can follow any 1R)');
     print('  AF{DD}{MMM}{ORG}{DST}  Flexible-date availability - lowest indicative fare per day');
     print('                         across a +/-3 day window, nonstop only, not bookable directly');
     print('                         e.g. AF15AUGDFWORD');
@@ -2539,7 +2651,8 @@
   const HANDLERS = {
     SIGN_OUT: () => signOut(),
     HELP: () => showHelp(),
-    AVAILABILITY: (raw, day, mon, orig, dest) => genAvailability(day, mon, orig, dest),
+    AVAILABILITY: (raw, day, mon, orig, dest, timeNum, ampm, airline) => genAvailability(day, mon, orig, dest, timeNum, ampm, airline),
+    AVAILABILITY_RETURN: (raw, day, mon, dayOnly, sign, delta, timeNum, ampm, airline) => returnAvailability(day, mon, dayOnly, sign, delta, timeNum, ampm, airline),
     AVAILABILITY_FLEXIBLE: (raw, day, mon, orig, dest) => genFlexibleAvailability(day, mon, orig, dest),
     SCHEDULE_DISPLAY: (raw, day, mon, orig, dest) => genSchedule(day, mon, orig, dest),
     SELL_FROM_AVAIL: (raw, line, cls, seats) => sellFromAvail(parseInt(line,10), cls, parseInt(seats,10)),
@@ -2673,12 +2786,20 @@
   const SETTINGS_KEY = 'gdsTrainerSettings';
   const DEFAULT_SETTINGS = { theme:'green', fontSize:'md', dockVisible:true, mode:'dark', fkeysVisible:false, dockWidth:340, railWidth:172 };
 
+  // The drag ranges wireResizer() enforces - a saved width outside them can only be
+  // corrupt (e.g. 0, measured off a display:none panel by an earlier build's drag-while-
+  // hidden bug), and would reopen the dock at an unusable size, so it's reset on load.
+  const PANEL_WIDTH_RANGE = { dockWidth:[240, 640], railWidth:[120, 280] };
   function loadSettings(){
+    let loaded = Object.assign({}, DEFAULT_SETTINGS);
     try{
       const raw = localStorage.getItem(SETTINGS_KEY);
-      if(raw) return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(raw));
+      if(raw) loaded = Object.assign(loaded, JSON.parse(raw));
     }catch(e){}
-    return Object.assign({}, DEFAULT_SETTINGS);
+    for(const [key, [lo, hi]] of Object.entries(PANEL_WIDTH_RANGE)){
+      if(!(loaded[key] >= lo && loaded[key] <= hi)) loaded[key] = DEFAULT_SETTINGS[key];
+    }
+    return loaded;
   }
   function saveSettings(){
     try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }catch(e){}
@@ -3216,6 +3337,11 @@
       // why that button in particular deliberately lives outside the
       // resizer, not inside it).
       if(e.target !== handle) return;
+      // A hidden dock's handle is inert: there's no panel to resize, and measuring the
+      // display:none panel reads a width of 0 (which an earlier build persisted as
+      // dockWidth, so the chevron then reopened the dock at 0px). Only the chevron
+      // (#dockToggleTab) opens a hidden dock - never a drag.
+      if(settingKey === 'dockWidth' && !settings.dockVisible) return;
       dragging = true;
       startX = e.clientX;
       startWidth = panel.getBoundingClientRect().width;
@@ -3243,7 +3369,9 @@
       handle.classList.remove('dragging');
       document.body.classList.remove('resizing-x');
       if(!shellEl.classList.contains('stacked')){
-        settings[settingKey] = Math.round(panel.getBoundingClientRect().width);
+        const w = Math.round(panel.getBoundingClientRect().width);
+        // Never persist a width outside the drag's own range (see loadSettings()).
+        if(w >= min && w <= max) settings[settingKey] = w;
         saveSettings();
       }
     });
@@ -3251,6 +3379,7 @@
     // rather than dragging with a mouse.
     handle.addEventListener('keydown', (e) => {
       if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if(settingKey === 'dockWidth' && !settings.dockVisible) return;
       const delta = (e.key === 'ArrowLeft' ? 1 : -1) * 20;
       const effectiveMax = Math.min(max, stackAvoidingMax(settingKey, min));
       const current = panel.getBoundingClientRect().width;

@@ -184,3 +184,57 @@ def test_pop_up_blocked_shows_terminal_error_not_a_crash(web_session):
     output = web_session.run_commands([*_FULL_BOOKING_COMMANDS, "EMI"])
     assert "POP-UP BLOCKED" in output
     assert "WORK AREA CLEARED" in output
+
+
+def test_hidden_dock_handle_is_inert_and_chevron_opens_it_then_drag_works(web_session):
+    """Regression guard: with the dock hidden, its resize handle must do nothing (only the
+    chevron opens the dock), even after drag attempts - an earlier build measured the
+    display:none dock's width (0), persisted it as dockWidth, and the chevron then opened
+    the dock at 0px. Once open, dragging works normally."""
+    # Wide enough that the layout isn't .stacked (which hides the resizers and skips the
+    # width write that the bug lived in) - the headless default window is narrower.
+    web_session.call(
+        "Emulation.setDeviceMetricsOverride",
+        {"width": 1600, "height": 900, "deviceScaleFactor": 1, "mobile": False},
+    )
+    drag = """(() => {
+      const h = document.getElementById('resizerDock');
+      const fire = (t, type, x) => t.dispatchEvent(new MouseEvent(type, {bubbles:true, clientX:x, button:0}));
+      fire(h, 'mousedown', 900); fire(window, 'mousemove', 800); fire(window, 'mouseup', 800);
+    })()"""
+    state = """(() => {
+      const dock = document.getElementById('dock');
+      return { shown: getComputedStyle(dock).display !== 'none',
+               width: Math.round(dock.getBoundingClientRect().width),
+               saved: JSON.parse(localStorage.getItem('gdsTrainerSettings') || '{}').dockWidth };
+    })()"""
+    toggle = "document.getElementById('dockToggleTab').click()"
+    try:
+        if web_session.evaluate(state)["shown"]:
+            web_session.evaluate(toggle)
+        hidden = web_session.evaluate(state)
+        assert hidden["shown"] is False
+
+        # Dragging a hidden dock's handle does nothing - several attempts, no side effects.
+        for _ in range(3):
+            web_session.evaluate(drag)
+        after_drag = web_session.evaluate(state)
+        assert after_drag["shown"] is False, "a drag must not open a hidden dock"
+        assert after_drag["saved"] == hidden["saved"], "a drag must not persist a width"
+
+        # The chevron still opens it, at a real width, even after the failed drags.
+        web_session.evaluate(toggle)
+        opened = web_session.evaluate(state)
+        assert opened["shown"] is True and opened["width"] >= 240, opened
+
+        # Once open, dragging resizes it (dragging left widens the right-hand dock).
+        web_session.evaluate(drag)
+        resized = web_session.evaluate(state)
+        assert resized["width"] > opened["width"] and resized["saved"] == resized["width"], (opened, resized)
+    finally:
+        web_session.evaluate(
+            "(() => { if (getComputedStyle(document.getElementById('dock')).display === 'none')"
+            " document.getElementById('dockToggleTab').click(); })()"
+        )
+        web_session.evaluate("localStorage.removeItem('gdsTrainerSettings')")
+        web_session.call("Emulation.clearDeviceMetricsOverride")

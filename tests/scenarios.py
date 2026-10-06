@@ -93,6 +93,81 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "return_availability_reverses_city_pair_and_resolves_dates_from_outbound",
+        [
+            SIGN_IN,
+            Step("1R", expect_contains=["NO AVAILABILITY DISPLAY IN CONTEXT"]),
+            AVAIL_DFW_ORD,
+            # Bare 1R: same date, city pair reversed.
+            Step("1R", expect_contains=["AIR AVAILABILITY", "ORD-DFW", "15AUG2026"]),
+            AVAIL_DFW_ORD,
+            Step("1R20AUG", expect_contains=["ORD-DFW", "20AUG2026"]),
+            AVAIL_DFW_ORD,
+            # Day-of-month only: same month if it still lies ahead, else the next month.
+            Step("1R25", expect_contains=["ORD-DFW", "25AUG2026"]),
+            AVAIL_DFW_ORD,
+            Step("1R10", expect_contains=["ORD-DFW", "10SEP2026"]),
+            AVAIL_DFW_ORD,
+            # A {DD}{MMM} earlier in the calendar than the outbound means NEXT year - relative
+            # to the outbound date, not to today.
+            Step("1R10JUL", expect_contains=["ORD-DFW", "10JUL2027"]),
+            AVAIL_DFW_ORD,
+            Step("1R+5", expect_contains=["ORD-DFW", "20AUG2026"]),
+            AVAIL_DFW_ORD,
+            Step("1R-1", expect_contains=["ORD-DFW", "14AUG2026"]),
+            AVAIL_DFW_ORD,
+            # Frozen "today" is 14AUG, so 15AUG - 3 days is already past.
+            Step("1R-3", expect_contains=["INVALID DATE"]),
+            Step("1R99", expect_contains=["INVALID DATE"]),
+        ],
+    ),
+    Scenario(
+        "round_trip_is_two_segments_sold_from_availability_and_return_availability",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            Step("1R20AUG", expect_contains=["ORD-DFW", "20AUG2026"]),
+            # Sells line 1 of the RETURN display - the new display replaced the outbound's.
+            Step("01Y1", expect_contains=["SEGMENT SOLD", "20AUG", "ORDDFW"]),
+            NAME_SMITH,
+            PHONE_VALID,
+            RECEIVED_FROM,
+            Step("WP", expect_contains=["ITINERARY PRICING", "TRIP TYPE: ROUND TRIP"]),
+        ],
+    ),
+    Scenario(
+        "availability_filters_by_airline_and_departure_time",
+        [
+            SIGN_IN,
+            # Line 1 of DFW-ORD 15AUG is AK 2265 (539A) - empirically confirmed, same as the
+            # codeshare/schedule scenarios rely on.
+            Step(
+                "A15AUGDFWORD¥AK",
+                expect_contains=["FILTERED: AIRLINE AK", "AK 2265"],
+                expect_not_contains=["TP 2561"],
+            ),
+            # ASCII "/" fallback for the airline-filter separator.
+            Step("A15AUGDFWORD/AK", expect_contains=["FILTERED: AIRLINE AK", "AK 2265"]),
+            Step(
+                "A15AUGDFWORD11A",
+                expect_contains=["FILTERED: DEPARTING AFTER 1100A"],
+                expect_not_contains=["AK 2265", "TP 2561"],
+            ),
+            Step(
+                "A15AUGDFWORD11A¥LO",
+                expect_contains=["DEPARTING AFTER 1100A", "AIRLINE LO", "LO 2952"],
+            ),
+            Step("A15AUGDFWORD¥ZZ", expect_contains=["NO AVAILABILITY FOR REQUESTED CRITERIA"]),
+            Step("A15AUGDFWORD13P", expect_contains=["INVALID TIME"]),
+            # A filtered display renumbers from 1 - what's on screen is what's sellable.
+            Step("A15AUGDFWORD¥LO", expect_contains=[" 1  LO 2952"]),
+            Step("01Y1", expect_contains=["SEGMENT SOLD", "LO2952"]),
+            # Return availability takes the same filters.
+            Step("1R20AUG¥ZZ", expect_contains=["NO AVAILABILITY FOR REQUESTED CRITERIA"]),
+        ],
+    ),
+    Scenario(
         "codeshare_flight_shown_and_carried_through_to_pnr",
         [
             SIGN_IN,

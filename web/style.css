@@ -204,6 +204,9 @@ body{ background:#0a0f1a; }
   transition: background .15s ease, width .15s ease;
 }
 .resizer:hover::after, .resizer.dragging::after{ background:var(--fg); width:3px; }
+/* With the dock hidden there's nothing for its handle to resize - make it inert
+   (no col-resize cursor, no hover highlight); the chevron is the only way back. */
+#shell.dock-hidden #resizerDock{ pointer-events:none; cursor:default; }
 body.resizing-x{ cursor:col-resize !important; user-select:none; }
 
 /* ---------- terminal panel ---------- */

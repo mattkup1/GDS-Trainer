@@ -252,6 +252,18 @@
     <p class="note">A flight may show an <code>OPERATED BY {AIRLINE} ({CODE}{NUMBER})</code> line underneath it — that's a codeshare: the listed airline sells and tickets the seat, but another airline actually operates the flight, same as a real GDS display.</p>
     <p class="note">A long enough flight departing late in the day lands after midnight — its arrival time shows a <code>+1</code> suffix (e.g. <code>1206A+1</code>) to mark that it's the next calendar day, the same convention real Sabre uses. This shows up anywhere an arrival time is printed: availability, schedule display, the PNR, and the itinerary document.</p>
     <p class="aside">Any real-world IATA airport code works — the simulator ships with data for ~6,000 airports worldwide.</p>
+    <p class="note"><b>Narrowing the display (optional filters).</b> Append a departure time and/or an airline to any availability entry, in that order:</p>
+    <div class="cmdblock">A15AUGDFWORD11A
+A15AUGDFWORD¥AA
+A15AUGDFWORD11A¥AA</div>
+    <p class="note">These show only flights departing at or after 11:00 AM, only American, and both. (<code>¥</code> is the currency-symbol key; <code>/</code> also works.) A filtered display is renumbered from line 1 — the line numbers on screen are the ones you sell from. A connection only stays in a filtered display if both of its legs pass. If nothing matches you get <code>NO AVAILABILITY FOR REQUESTED CRITERIA</code> and the previous display stays in context.</p>
+    <p class="note"><b>Return availability (<code>1R</code>) — the second half of a round trip.</b> A round trip is two separately sold segments, and <code>1R</code> is the shortcut for finding the return: it reverses the city pair of the last availability display, so you don't retype it.</p>
+    <div class="cmdblock">1R
+1R20AUG
+1R+5
+1R-2
+1R20AUG11A¥AA</div>
+    <p class="note">Respectively: same date with the city pair reversed; that date (<code>1R20</code> means the 20th, this month or the next that still lies ahead); 5 days after / 2 days before the last display's date; and the same time and airline filters as above. Dates resolve relative to the date you last searched, not today — <code>1R10JAN</code> after a 15NOV search means January of next year. The entry needs an availability display already on screen; otherwise you get <code>NO AVAILABILITY DISPLAY IN CONTEXT</code>.</p>
   </div>
 </section>
 
@@ -470,6 +482,8 @@
     <tr><td>Check a class's fare rules by city pair (no PNR needed)</td><td class="mono">FQ{ORIG}{DEST}/{CLASS}</td><td class="mono">FQDFWORD/Y</td></tr>
     <tr><td>Flight schedule, 7-day window (no booking classes/seats)</td><td class="mono">S{DD}{MON}{ORIG}{DEST}</td><td class="mono">S15AUGDFWORD</td></tr>
     <tr><td>Flexible-date fare calendar, ±3 days (not bookable)</td><td class="mono">AF{DD}{MON}{ORIG}{DEST}</td><td class="mono">AF15AUGDFWORD</td></tr>
+    <tr><td>Return availability (last search reversed)</td><td class="mono">1R[{DD}[{MON}]|+{N}|-{N}]</td><td class="mono">1R20AUG</td></tr>
+    <tr><td>Availability filtered by time / airline</td><td class="mono">A...{ORIG}{DEST}{TIME}{A|P}¥{AL}</td><td class="mono">A15AUGDFWORD11A¥AA</td></tr>
     <tr><td>Search flights</td><td class="mono">A{DD}{MON}{ORIG}{DEST}</td><td class="mono">A15AUGDFWORD</td></tr>
     <tr><td>Sell from list</td><td class="mono">0{LINE}{CLASS}{SEATS}</td><td class="mono">04Y1</td></tr>
     <tr><td>Sell a connection (two avail lines)</td><td class="mono">0{SEATS}{CLASS}{LINE}{CLASS}{LINE}</td><td class="mono">02Y1M2</td></tr>
@@ -565,6 +579,8 @@ TKTT</div>
         <tr><td class="mono">FQ{ORG}{DST}/{CLASS}</td><td>Fare rules for that class on that route (change fee, cancellation fee, refundable, min/max stay, advance purchase) — no PNR involved</td></tr>
         <tr><td class="mono">S{DD}{MON}{ORG}{DST}</td><td>Flight schedule across a 7-day window — no booking classes or seats</td></tr>
         <tr><td class="mono">AF{DD}{MON}{ORG}{DST}</td><td>Flexible-date fare calendar, ±3 days around the given date — not bookable directly</td></tr>
+        <tr><td class="mono">1R[{DD}[{MON}]|+{N}|-{N}]</td><td>Return availability — the last display's city pair reversed, on the same / a given / a shifted date</td></tr>
+        <tr><td class="mono">A...{TIME}{A|P}¥{AL}</td><td>Availability filtered to departures at/after a time and/or one airline</td></tr>
       </tbody>
     </table>
     <div class="stage-term-head">Terminology</div>

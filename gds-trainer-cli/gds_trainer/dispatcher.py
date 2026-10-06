@@ -23,7 +23,12 @@ _COMPILED_GRAMMAR = [(entry["handler"], re.compile(entry["pattern"])) for entry 
 HANDLERS = {
     "SIGN_OUT": lambda raw, *g: c.sign_out(),
     "HELP": lambda raw, *g: c.show_help(),
-    "AVAILABILITY": lambda raw, day, mon, orig, dest: c.gen_availability(day, mon, orig, dest),
+    "AVAILABILITY": lambda raw, day, mon, orig, dest, time_num, ampm, airline: c.gen_availability(
+        day, mon, orig, dest, time_num, ampm, airline
+    ),
+    "AVAILABILITY_RETURN": lambda raw, day, mon, day_only, sign, delta, time_num, ampm, airline: c.return_availability(
+        day, mon, day_only, sign, delta, time_num, ampm, airline
+    ),
     "AVAILABILITY_FLEXIBLE": lambda raw, day, mon, orig, dest: c.gen_flexible_availability(day, mon, orig, dest),
     "SCHEDULE_DISPLAY": lambda raw, day, mon, orig, dest: c.gen_schedule(day, mon, orig, dest),
     "SELL_FROM_AVAIL": lambda raw, line, cls, seats: c.sell_from_avail(int(line), cls, int(seats)),

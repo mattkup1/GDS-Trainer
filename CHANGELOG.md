@@ -5,6 +5,14 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Contact email (`9E{ADDRESS}`)** — a second PNR contact field alongside
+  phone, e.g. `9EJSMITH@EXAMPLE.COM`. Optional (unlike phone, not required to
+  end transact), cancellable per-entry like a phone row, and copied - not
+  moved - to both sides of a PNR divide. Shown in the dock's PNR panel under
+  the same Contact section as phone, with its own icon.
+
 ### Changed
 
 - **Browser edition redesign** — the web edition's outer chrome now models a
@@ -75,6 +83,19 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   how VS Code's and Chrome DevTools' sidebar toggles do it - a click target
   and a drag handle never share, or even lightly overlap, the same
   hit-region at all.
+- Dragging the dock/helper-rail resizer wider could, mid-drag, cross the
+  same width threshold that flips the layout into its narrow-viewport
+  stacked mode - even though the *window* itself hadn't changed size, only
+  the panel the user was actively resizing. Once that happened, the CSS
+  driving stacked mode forces the dock's width via `!important`, so the drag
+  appeared to "stop working, only move a tiny bit," and its `mouseup`
+  handler would then read back and save that CSS-forced full-width value as
+  the persisted dock width - corrupting it so the broken, stuck-stacked
+  layout survived a reload, and the show/hide chevron looked like it
+  "stopped revealing the panel" afterward (it was toggling visibility fine,
+  just onto a wrecked layout). A resize drag is now clamped so it can never
+  itself trigger that flip; a window that's genuinely too narrow still
+  stacks normally, same as before.
 - The `View > Display Settings...` menu item opened the settings panel and
   then immediately closed it again on the same click (the click event kept
   bubbling to the same "close on an outside click" listener the panel

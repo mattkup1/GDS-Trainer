@@ -34,6 +34,7 @@ HANDLERS = {
         al, flt, cls, day, mon, orig, dest, status, int(seats)
     ),
     "NAME_FIELD": lambda raw, *g: c.handle_name(raw),
+    "EMAIL": lambda raw, *g: c.handle_email(raw),
     "PHONE": lambda raw, *g: c.handle_phone(raw),
     "RECEIVED_FROM": lambda raw, *g: c.handle_received_from(raw),
     "GENERAL_REMARK": lambda raw, *g: c.handle_general_remark(raw),

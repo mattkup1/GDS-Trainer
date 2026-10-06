@@ -153,7 +153,7 @@
   };
 
   function freshPNR(){
-    return { locator:null, names:[], segments:[], phones:[], receivedFrom:null, ticketing:null, pricing:null,
+    return { locator:null, names:[], segments:[], phones:[], emails:[], receivedFrom:null, ticketing:null, pricing:null,
               infants:[], ssrs:[], osis:[], seats:[], formOfPayment:null, activityLog:[], tickets:[],
               docs:[], remarks:[], priorTickets:[], priorPricing:null, children:[] };
   }
@@ -1253,6 +1253,7 @@
     remark:  { section:'SPECIAL SERVICES',     icon:'info' },
     fq:      { section:'PRICING',              icon:'receipt' },
     phone:   { section:'CONTACT',              icon:'phone' },
+    email:   { section:'CONTACT',              icon:'email' },
     rf:      { section:'CONTACT',              icon:'phone' },
     fp:      { section:'PAYMENT & TICKETING',  icon:'card' },
     tk:      { section:'PAYMENT & TICKETING',  icon:'ticket' },
@@ -1265,6 +1266,7 @@
     info:    '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>',
     receipt: '<line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>',
     phone:   '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"></path>',
+    email:   '<rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m2 6 10 7 10-7"></path>',
     card:    '<rect x="1" y="4" width="22" height="16" rx="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line>',
     ticket:  '<path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"></path><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2,2.5"></line>',
   };
@@ -1294,6 +1296,7 @@
     state.pnr.remarks.forEach((r, i) => els.push({ kind:'remark', idx:i, label:'RM', text: r }));
     if(state.pnr.pricing) els.push({ kind:'fq', idx:0, label:'FQ', text: formatPricingShort(state.pnr.pricing) });
     state.pnr.phones.forEach((p, i) => els.push({ kind:'phone', idx:i, label:'CTC', text:p }));
+    state.pnr.emails.forEach((em, i) => els.push({ kind:'email', idx:i, label:'CTC', text:em }));
     if(state.pnr.receivedFrom) els.push({ kind:'rf', idx:0, label:'RF', text: state.pnr.receivedFrom });
     if(state.pnr.formOfPayment) els.push({ kind:'fp', idx:0, label:'FP', text: state.pnr.formOfPayment.display });
     if(state.pnr.ticketing) els.push({ kind:'tk', idx:0, label:'TK', text: state.pnr.ticketing });
@@ -1505,6 +1508,7 @@
     else if(e.kind === 'osi') state.pnr.osis.splice(e.idx, 1);
     else if(e.kind === 'fq') clearPricingAndTickets(state.pnr);
     else if(e.kind === 'phone') state.pnr.phones.splice(e.idx, 1);
+    else if(e.kind === 'email') state.pnr.emails.splice(e.idx, 1);
     else if(e.kind === 'rf') state.pnr.receivedFrom = null;
     else if(e.kind === 'fp') state.pnr.formOfPayment = null;
     else if(e.kind === 'tk') state.pnr.ticketing = null;
@@ -1862,6 +1866,7 @@
     newPnr.segments.forEach(seg => { seg.seats = movedNames.length; });
     p.segments.forEach(seg => { seg.seats = p.names.length; });
     newPnr.phones = JSON.parse(JSON.stringify(p.phones));
+    newPnr.emails = JSON.parse(JSON.stringify(p.emails));
     newPnr.receivedFrom = p.receivedFrom;
     newPnr.remarks = JSON.parse(JSON.stringify(p.remarks));
     newPnr.osis = JSON.parse(JSON.stringify(p.osis));
@@ -2106,6 +2111,7 @@
     print('                                       e.g. -SMITH/JOHNNY MSTR(CHD)');
     print('  9{NUMBER}-{LOC}                     Phone field   e.g. 9214555-1234-A');
     print('  9/{CTY}{NUMBER}-{LOC}               Phone field, out-of-area   e.g. 9/BOS617-555-1234-A');
+    print('  9E{ADDRESS}                         Email field   e.g. 9EJSMITH@EXAMPLE.COM');
     print('  6{TEXT}                             Received from   e.g. 6JSMITH');
     print('  5{TEXT}                             General remark (agency-internal, not sent to the carrier)   e.g. 5VIP - HANDLE WITH CARE');
     print('  WP[/{CORPCODE}]                     Price itinerary (required before ticketing)   e.g. WP or WP/ACME01');
@@ -2319,6 +2325,18 @@
     refreshAndPrintPNR();
   }
 
+  function handleEmail(u){
+    const text = u.slice(2).trim();
+    const em = text.match(/^([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})$/);
+    if(!em){
+      printErr('FORMAT - EMAIL MUST BE 9E{ADDRESS}  e.g. 9EJSMITH@EXAMPLE.COM'); return;
+    }
+    state.pnr.emails.push(em[1]);
+    print(`EMAIL ADDED - ${em[1]}`);
+    logActivity(`EMAIL ADDED - ${em[1]}`);
+    refreshAndPrintPNR();
+  }
+
   function handleReceivedFrom(u){
     const text = u.slice(1).trim();
     if(!text){ printErr('FORMAT - RECEIVED FROM TEXT REQUIRED'); return; }
@@ -2528,6 +2546,7 @@
     SELL_CONNECTION: (raw, seats, cls1, line1, cls2, line2) => sellConnection(parseInt(seats,10), cls1, parseInt(line1,10), cls2, parseInt(line2,10)),
     LONG_SELL: (raw, al, flt, cls, day, mon, orig, dest, status, seats) => directSell(al, flt, cls, day, mon, orig, dest, status, parseInt(seats,10)),
     NAME_FIELD: (raw) => handleName(raw),
+    EMAIL: (raw) => handleEmail(raw),
     PHONE: (raw) => handlePhone(raw),
     RECEIVED_FROM: (raw) => handleReceivedFrom(raw),
     GENERAL_REMARK: (raw) => handleGeneralRemark(raw),
@@ -3161,6 +3180,32 @@
   }
   window.addEventListener('resize', updateResponsiveLayout);
 
+  // The ceiling a resize drag is allowed to reach *right now* without being
+  // the thing that flips #shell into .stacked mid-drag - mirrors
+  // updateResponsiveLayout()'s own "mainrow width minus both panels minus
+  // both handles must leave the terminal >= 420px" check, computed against
+  // whichever panel *isn't* the one being dragged. Dragging a panel wider is
+  // a live, continuous action; letting it cross that threshold means the
+  // layout can suddenly snap to a full-width, vertically-stacked #dock mid-
+  // drag - and since .stacked forces #dock's width via `!important` (see
+  // style.css), the drag's own flexBasis write stops having any visible
+  // effect (looks like the drag "stopped working, only moved a tiny bit"),
+  // while its mouseup handler below would otherwise still read back and
+  // persist #dock's now-unrelated *stacked* width (the full mainrow width,
+  // nowhere near the intended 240-640 range) as the saved dockWidth/
+  // railWidth - corrupting the setting so the broken, stuck-stacked layout
+  // survives a reload or a dock show/hide toggle. Clamping the drag's own
+  // ceiling below that line means a resize simply runs out of room a few
+  // pixels early instead of ever triggering the flip; a *genuinely* narrow
+  // window (where even the minimum panel width can't avoid it) still stacks
+  // normally, exactly as updateResponsiveLayout() already handles elsewhere.
+  function stackAvoidingMax(settingKey, min){
+    const otherWidth = settingKey === 'dockWidth'
+      ? settings.railWidth
+      : (settings.dockVisible ? settings.dockWidth : 0);
+    return Math.max(min, mainrowEl.clientWidth - otherWidth - 14 - 420);
+  }
+
   function wireResizer(handle, panel, settingKey, min, max){
     let dragging = false, startX = 0, startWidth = 0;
     handle.addEventListener('mousedown', (e) => {
@@ -3180,7 +3225,14 @@
     });
     window.addEventListener('mousemove', (e) => {
       if(!dragging) return;
-      const next = Math.max(min, Math.min(max, startWidth - (e.clientX - startX)));
+      // Bail out if something else (an actual window/OS resize firing mid-
+      // drag, not the drag itself) already put #shell into .stacked - the
+      // handle is display:none there, so there's nothing left to drag, and
+      // panel.getBoundingClientRect().width would only return the CSS-
+      // forced stacked width, not a real flex-basis to persist.
+      if(shellEl.classList.contains('stacked')) return;
+      const effectiveMax = Math.min(max, stackAvoidingMax(settingKey, min));
+      const next = Math.max(min, Math.min(effectiveMax, startWidth - (e.clientX - startX)));
       panel.style.flexBasis = next + 'px';
       settings[settingKey] = Math.round(next);
       updateResponsiveLayout();
@@ -3190,16 +3242,19 @@
       dragging = false;
       handle.classList.remove('dragging');
       document.body.classList.remove('resizing-x');
-      settings[settingKey] = Math.round(panel.getBoundingClientRect().width);
-      saveSettings();
+      if(!shellEl.classList.contains('stacked')){
+        settings[settingKey] = Math.round(panel.getBoundingClientRect().width);
+        saveSettings();
+      }
     });
     // Keyboard resize (left/right arrows) for anyone tabbing to the handle
     // rather than dragging with a mouse.
     handle.addEventListener('keydown', (e) => {
       if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       const delta = (e.key === 'ArrowLeft' ? 1 : -1) * 20;
+      const effectiveMax = Math.min(max, stackAvoidingMax(settingKey, min));
       const current = panel.getBoundingClientRect().width;
-      const next = Math.max(min, Math.min(max, current + delta));
+      const next = Math.max(min, Math.min(effectiveMax, current + delta));
       panel.style.flexBasis = next + 'px';
       updateResponsiveLayout();
       settings[settingKey] = Math.round(next);

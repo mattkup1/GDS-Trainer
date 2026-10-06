@@ -558,6 +558,7 @@ _CHD_RE = re.compile(r"^([A-Z][A-Z\-' ]*?)\s*\(CHD\)$")
 _HEAD_RE = re.compile(r"^(\d{1,2})?([A-Z][A-Z\-' ]*)$")
 _DOB_RE = re.compile(r"^(\d{1,2})([A-Z]{3})(\d{2})$")
 _PHONE_RE = re.compile(r"^(?:/([A-Z]{3}))?(\d[\d\-]{4,14})-([A-Z]{1,3})$")
+_EMAIL_RE = re.compile(r"^([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})$")
 
 
 def handle_name(u: str) -> None:
@@ -688,6 +689,18 @@ def handle_phone(u: str) -> None:
     STATE.pnr["phones"].append(formatted)
     print_line(f"PHONE ADDED - 9{formatted}")
     log_activity(STATE, f"PHONE ADDED - 9{formatted}")
+    refresh_and_print_pnr()
+
+
+def handle_email(u: str) -> None:
+    text = u[2:].strip()
+    em = _EMAIL_RE.match(text)
+    if not em:
+        print_err("FORMAT - EMAIL MUST BE 9E{ADDRESS}  e.g. 9EJSMITH@EXAMPLE.COM")
+        return
+    STATE.pnr["emails"].append(em.group(1))
+    print_line(f"EMAIL ADDED - {em.group(1)}")
+    log_activity(STATE, f"EMAIL ADDED - {em.group(1)}")
     refresh_and_print_pnr()
 
 
@@ -1561,6 +1574,8 @@ def build_elements() -> list[dict]:
         els.append({"kind": "fq", "idx": 0, "label": "FQ", "text": format_pricing_short(p["pricing"])})
     for i, ph in enumerate(p["phones"]):
         els.append({"kind": "phone", "idx": i, "label": "CTC", "text": ph})
+    for i, em in enumerate(p["emails"]):
+        els.append({"kind": "email", "idx": i, "label": "CTC", "text": em})
     if p["received_from"]:
         els.append({"kind": "rf", "idx": 0, "label": "RF", "text": p["received_from"]})
     if p["form_of_payment"]:
@@ -1663,6 +1678,8 @@ def remove_element(e: dict) -> None:
         _clear_pricing_and_tickets(p)
     elif kind == "phone":
         del p["phones"][idx]
+    elif kind == "email":
+        del p["emails"][idx]
     elif kind == "rf":
         p["received_from"] = None
     elif kind == "fp":
@@ -2060,6 +2077,7 @@ def divide_pnr(nums_str: str) -> None:
     for seg in p["segments"]:
         seg["seats"] = len(p["names"])
     new_pnr["phones"] = copy.deepcopy(p["phones"])
+    new_pnr["emails"] = copy.deepcopy(p["emails"])
     new_pnr["received_from"] = p["received_from"]
     new_pnr["remarks"] = copy.deepcopy(p["remarks"])
     new_pnr["osis"] = copy.deepcopy(p["osis"])
@@ -2339,6 +2357,7 @@ def show_help() -> None:
     print_line("                                       e.g. -SMITH/JOHNNY MSTR(CHD)")
     print_line("  9{NUMBER}-{LOC}                     Phone field   e.g. 9214555-1234-A")
     print_line("  9/{CTY}{NUMBER}-{LOC}               Phone field, out-of-area   e.g. 9/BOS617-555-1234-A")
+    print_line("  9E{ADDRESS}                         Email field   e.g. 9EJSMITH@EXAMPLE.COM")
     print_line("  6{TEXT}                             Received from   e.g. 6JSMITH")
     print_line("  5{TEXT}                             General remark (agency-internal, not sent to the carrier)   e.g. 5VIP - HANDLE WITH CARE")
     print_line("  WP[/{CORPCODE}]                     Price itinerary (required before ticketing)   e.g. WP or WP/ACME01")

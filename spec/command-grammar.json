@@ -9,6 +9,7 @@
   {"name": "sell_connection", "pattern": "^0(\\d{1,2})([A-Z])(\\d{1,2})([A-Z])(\\d{1,2})$", "handler": "SELL_CONNECTION", "category": "SELL", "desc": "Sell a connection: seats, then class+line for each of the two flights", "example": "02Y1M2"},
   {"name": "long_sell", "pattern": "^0([A-Z]{2})(\\d{1,4})([A-Z])(\\d{1,2})([A-Z]{3})([A-Z]{3})([A-Z]{3})([A-Z]{2})(\\d{1,2})$", "handler": "LONG_SELL", "category": "SELL", "desc": "Direct/long sell without an availability display", "example": "0AA100Y15AUGDFWORDNN1"},
   {"name": "name_field", "pattern": "^-", "handler": "NAME_FIELD", "category": "PNR BUILD", "desc": "Add passenger name(s), optionally with a lap infant or a (CHD) child-fare tag", "example": "-SMITH/JOHN MR"},
+  {"name": "email", "pattern": "^9E", "handler": "EMAIL", "category": "PNR BUILD", "desc": "Add a contact email address", "example": "9EJSMITH@EXAMPLE.COM"},
   {"name": "phone", "pattern": "^9", "handler": "PHONE", "category": "PNR BUILD", "desc": "Add a contact phone number", "example": "9214555-1234-A"},
   {"name": "general_remark", "pattern": "^5(?!$)", "handler": "GENERAL_REMARK", "category": "PNR BUILD", "desc": "Add a general remark (agency-internal, not sent to the carrier)", "example": "5VIP - HANDLE WITH CARE"},
   {"name": "received_from", "pattern": "^6(?!$)", "handler": "RECEIVED_FROM", "category": "PNR BUILD", "desc": "Add the received-from field", "example": "6JSMITH"},

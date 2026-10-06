@@ -422,6 +422,19 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "email_format_rejected_then_accepted",
+        [
+            SIGN_IN,
+            # "9E" alone still matches the generic phone pattern's leading "9" if the
+            # email grammar entry weren't ordered ahead of it - this also exercises that
+            # ordering, same "more specific entry must precede the general one" precedent
+            # as 3OSI before the general 3{CODE} SSR pattern.
+            Step("9EBADEMAIL", expect_contains=["FORMAT", "EMAIL"], expect_not_contains=["EMAIL ADDED"]),
+            Step("9EJSMITH@EXAMPLE.COM", expect_contains=["EMAIL ADDED", "JSMITH@EXAMPLE.COM"]),
+            Step("*R", expect_contains=["JSMITH@EXAMPLE.COM"]),
+        ],
+    ),
+    Scenario(
         "seat_reassignment_of_same_seat_always_rejected",
         [
             SIGN_IN,

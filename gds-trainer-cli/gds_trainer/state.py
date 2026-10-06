@@ -19,6 +19,7 @@ def fresh_pnr() -> dict[str, Any]:
         "names": [],
         "segments": [],
         "phones": [],
+        "emails": [],
         "received_from": None,
         "ticketing": None,
         "pricing": None,

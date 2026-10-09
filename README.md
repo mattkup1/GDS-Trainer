@@ -56,6 +56,9 @@ reference.
   ticketing.
 - [`docs/GDS-TRAINER-BOOKING-GUIDE.pdf`](docs/GDS-TRAINER-BOOKING-GUIDE.pdf) —
   the same walkthrough as a printable guide.
+- [`docs/SPECIAL-KEYS-GUIDE.md`](docs/SPECIAL-KEYS-GUIDE.md) — the four
+  special control characters (`*`/`¥`/`‡`/`¤`), what each does, and their
+  ASCII fallbacks. Also [printable](docs/SPECIAL-KEYS-GUIDE.pdf).
 - [`docs/TRAINING-SCENARIOS.pdf`](docs/TRAINING-SCENARIOS.pdf) — practice
   scenarios to work through once you know the basics.
 - [`quiz/index.html`](quiz/index.html) — a standalone command-recall quiz in

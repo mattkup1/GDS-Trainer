@@ -1745,6 +1745,76 @@ def refresh_and_print_pnr() -> None:
             s["waitlistClearAcked"] = True
 
 
+# Shared by every *-prefixed partial display below. Still reassigns STATE.last_display to a
+# fresh build_elements() call, same as refresh_and_print_pnr always does, and prints each
+# matching element's real, absolute e["num"] - so X{n} cancellation against a filtered view
+# keeps working off the same numbering a full *R would have shown, never a filter-local
+# renumbering starting back at 1.
+def _print_pnr_filtered(predicate, label: str, empty_msg: str) -> None:
+    STATE.last_display = build_elements()
+    print_blank()
+    print_line(f"RLOC: {STATE.pnr['locator'] or '(NOT SAVED - END TRANSACT TO STORE)'}  -  {label}", "hd")
+    matches = [e for e in STATE.last_display if predicate(e)]
+    if not matches:
+        print_line(f"  {empty_msg}", "dim")
+        return
+    for e in matches:
+        print_line(f" {pad(e['num'], 2)}  {pad(e['label'], 5)} {e['text']}")
+
+
+def print_itinerary_only() -> None:
+    _print_pnr_filtered(lambda e: e["kind"] == "segment", "ITINERARY ONLY", "NO ITINERARY SEGMENTS ON FILE")
+
+
+def print_names_only() -> None:
+    _print_pnr_filtered(lambda e: e["kind"] == "name", "NAMES ONLY", "NO NAMES ON FILE")
+
+
+def print_contact_only() -> None:
+    _print_pnr_filtered(
+        lambda e: e["kind"] in ("phone", "email"), "CONTACT ONLY", "NO CONTACT FIELDS ON FILE"
+    )
+
+
+def print_ticketing_only() -> None:
+    _print_pnr_filtered(
+        lambda e: e["kind"] in ("tk", "tkt"),
+        "TICKETING ONLY",
+        "NO TICKETING ARRANGEMENT OR TICKETS ON FILE",
+    )
+
+
+def print_email_only() -> None:
+    _print_pnr_filtered(lambda e: e["kind"] == "email", "EMAIL ONLY", "NO EMAIL ADDRESS ON FILE")
+
+
+# FQTV entries are stored as just another SSR (STATE.pnr["ssrs"], code="FQTV") - there's no
+# separate kind for them in build_elements, so this filters by the underlying ssrs entry's
+# own code rather than by e["kind"].
+def print_fqtv_only() -> None:
+    ssrs = STATE.pnr["ssrs"]
+    _print_pnr_filtered(
+        lambda e: e["kind"] == "ssr" and e["idx"] < len(ssrs) and ssrs[e["idx"]].get("code") == "FQTV",
+        "FREQUENT FLYER ONLY",
+        "NO FREQUENT FLYER NUMBERS ON FILE",
+    )
+
+
+def print_price_quote_only() -> None:
+    _print_pnr_filtered(lambda e: e["kind"] == "fq", "PRICE QUOTE ONLY", "NO PRICE QUOTE ON FILE - PRICE WITH WP")
+
+
+# Baggage allowance is a computed value off the stored price quote, not a PNR element - not
+# a _print_pnr_filtered() filter, same "pure lookup" precedent as FQ/DC/DAN.
+def show_baggage_allowance() -> None:
+    pricing = STATE.pnr["pricing"]
+    if not pricing:
+        print_err("UNABLE TO DISPLAY BAGGAGE - PRICE THE ITINERARY FIRST (WP)")
+        return
+    print_line("** BAGGAGE ALLOWANCE **", "hd")
+    print_line(f"  FARE BASIS {pricing['fare_basis']}: {_format_baggage_pieces(pricing['baggage_allowance'])}")
+
+
 def remove_element(e: dict) -> None:
     p = STATE.pnr
     kind, idx = e["kind"], e["idx"]
@@ -1826,6 +1896,117 @@ def cancel_elements(nums: list[int]) -> None:
     nums_str = ",".join(str(c) for c in cancelled)
     print_line(f"ELEMENT{suffix} {nums_str} CANCELLED")
     log_activity(STATE, f"ELEMENT{suffix} {nums_str} CANCELLED")
+    refresh_and_print_pnr()
+
+
+# Change key (¤, ASCII fallback ~): edits one occurrence of a field type in place, addressed
+# the way real Sabre actually does it - by that field's own prefix character plus a line
+# number *scoped to that field type* (e.g. "phone line 2" = the 2nd phone on file), never a
+# global PNR element number. Each field gets its own function/grammar entry, matching how
+# every other field in this app already dispatches off its own prefix character - there's no
+# single generic "change an element" concept in real Sabre, so there isn't one here either.
+# Scoped to the five fields real Sabre itself documents this way (name, phone, email, general
+# remark, received-from) - a segment/seat/SSR/etc. still goes through cancel (X{n}) then
+# re-add, since those carry cascading effects (pricing, pax-index attribution) an in-place
+# text swap can't safely redo. Deliberately does not implement real Sabre's companion "empty
+# new value deletes this line" convention - this app already has one universal deletion
+# mechanism (X{n}) and a second, differently-addressed one for just these five fields would
+# confuse more than it'd teach.
+_CHANGE_NAME_HEAD_RE = re.compile(r"^[A-Z][A-Z\-' ]*$")
+
+
+def change_name(n: int, new_text: str) -> None:
+    idx = n - 1
+    names = STATE.pnr["names"]
+    if idx < 0 or idx >= len(names):
+        print_err(f"INVALID NAME LINE NUMBER - ONLY {len(names)} NAME(S) ON FILE")
+        return
+    text = new_text.strip()
+    if "/" not in text:
+        print_err("FORMAT - NAME MUST BE SURNAME/GIVEN NAME")
+        return
+    parts = [s.strip() for s in text.split("/") if s.strip()]
+    if len(parts) != 2 or not _CHANGE_NAME_HEAD_RE.match(parts[0]):
+        print_err("FORMAT - NAME MUST BE SURNAME/GIVEN NAME")
+        return
+    old_name = names[idx]
+    new_name = f"{parts[0]}/{parts[1]}"
+    names[idx] = new_name
+    # An infant links to its adult by exact name-string match (see handle_name) - renaming
+    # the adult has to carry that link forward, or the infant would silently orphan.
+    for inf in STATE.pnr["infants"]:
+        if inf["adult"] == old_name:
+            inf["adult"] = new_name
+    print_line(f"NAME CHANGED - LINE {n} - {new_name}")
+    log_activity(STATE, f"NAME CHANGED - LINE {n} - {new_name}")
+    refresh_and_print_pnr()
+
+
+def change_phone(n: int, new_text: str) -> None:
+    idx = n - 1
+    phones = STATE.pnr["phones"]
+    if idx < 0 or idx >= len(phones):
+        print_err(f"INVALID PHONE LINE NUMBER - ONLY {len(phones)} PHONE(S) ON FILE")
+        return
+    text = new_text.strip()
+    pm = _PHONE_RE.match(text)
+    if not pm or pm.group(3).upper() not in PHONE_LOC_CODES:
+        print_err(
+            "FORMAT - PHONE MUST BE NUMBER-LOC or /CTYNUMBER-LOC  e.g. 214555-1234-A or /DFW555-1234-A"
+        )
+        return
+    city = pm.group(1)
+    formatted = f"{'/' + city.upper() if city else ''}{pm.group(2)}-{pm.group(3).upper()}"
+    phones[idx] = formatted
+    print_line(f"PHONE CHANGED - LINE {n} - 9{formatted}")
+    log_activity(STATE, f"PHONE CHANGED - LINE {n} - 9{formatted}")
+    refresh_and_print_pnr()
+
+
+def change_email(n: int, new_text: str) -> None:
+    idx = n - 1
+    emails = STATE.pnr["emails"]
+    if idx < 0 or idx >= len(emails):
+        print_err(f"INVALID EMAIL LINE NUMBER - ONLY {len(emails)} EMAIL(S) ON FILE")
+        return
+    text = new_text.strip()
+    em = _EMAIL_RE.match(text)
+    if not em:
+        print_err("FORMAT - EMAIL MUST BE A VALID ADDRESS  e.g. JSMITH@EXAMPLE.COM")
+        return
+    emails[idx] = em.group(1)
+    print_line(f"EMAIL CHANGED - LINE {n} - {em.group(1)}")
+    log_activity(STATE, f"EMAIL CHANGED - LINE {n} - {em.group(1)}")
+    refresh_and_print_pnr()
+
+
+def change_remark(n: int, new_text: str) -> None:
+    idx = n - 1
+    remarks = STATE.pnr["remarks"]
+    if idx < 0 or idx >= len(remarks):
+        print_err(f"INVALID REMARK LINE NUMBER - ONLY {len(remarks)} REMARK(S) ON FILE")
+        return
+    text = new_text.strip()
+    if not text:
+        print_err("FORMAT - REMARK TEXT REQUIRED")
+        return
+    remarks[idx] = text
+    print_line(f"GENERAL REMARK CHANGED - LINE {n} - {text}")
+    log_activity(STATE, f"GENERAL REMARK CHANGED - LINE {n} - {text}")
+    refresh_and_print_pnr()
+
+
+def change_received_from(new_text: str) -> None:
+    text = new_text.strip()
+    if not text:
+        print_err("FORMAT - RECEIVED FROM TEXT REQUIRED")
+        return
+    if not STATE.pnr["received_from"]:
+        print_err("NO RECEIVED FROM ON FILE - ADD ONE WITH 6{TEXT}")
+        return
+    STATE.pnr["received_from"] = text
+    print_line(f"RECEIVED FROM CHANGED - {text}")
+    log_activity(STATE, f"RECEIVED FROM CHANGED - {text}")
     refresh_and_print_pnr()
 
 
@@ -2420,6 +2601,22 @@ def show_history() -> None:
 def show_help() -> None:
     print_line("GDS TRAINER ENTRY REFERENCE", "hd")
     print_blank()
+    print_line("SPECIAL KEYS", "hd")
+    print_line("  *   Display key - retrieves/displays PNR data   e.g. *R, *H, *I")
+    print_line("  ¥   Item delimiter - separates an optional filter/qualifier from the rest of")
+    print_line("      an entry (availability time/airline filters, the 1R +N shift)   / also works")
+    print_line("  ‡   Chain key - runs several commands from one typed line, in order, each as")
+    print_line("      if entered separately   e.g. SI‡A15AUGDFWORD   (no fallback character - see")
+    print_line("      HELP's own note on why NOT to use it in place of ¥ above)")
+    print_line("  ¤   Change key - edits one line of a field in place, by that field's own prefix")
+    print_line("      plus a line number scoped to that field   e.g. 92¤214555-9999-A   ~ also works")
+    print_line("  Type the real character via your OS's own input method - Alt+0165/0164/0135 on")
+    print_line("  Windows, Character Viewer (Ctrl+Cmd+Space) on Mac. The browser edition also has")
+    print_line("  Ctrl+[/]/\\ shortcuts for this - not offered here, since a terminal can't tell")
+    print_line("  Ctrl+[ apart from Escape.")
+    print_line("  See each section below for exactly where these apply - full worked examples in")
+    print_line("  docs/SPECIAL-KEYS-GUIDE.md.")
+    print_blank()
     print_line("SIGN ON/OFF", "hd")
     print_line("  SI[sine/pcc]        Sign in           e.g. SI  or  SI1234AA/DFW1")
     print_line("  SO                  Sign out")
@@ -2522,17 +2719,30 @@ def show_help() -> None:
     print_line("  *R  or  *              Display current PNR")
     print_line("  *H                     Display PNR activity history (chronological log)")
     print_line("  *{LOCATOR}             Retrieve PNR by record locator")
+    print_line("  *I / *N / *P / *T      Display only: itinerary / names / contact (phone+email) /")
+    print_line("                         ticketing (arrangement+tickets)")
+    print_line("  *PE / *FF / *PQ / *B   Display only: email / frequent flyer / price quote / baggage")
     print_line("  SP{N}  or  SP{N},{M}   Divide passenger(s) into a new PNR   e.g. SP2 or SP2,3")
     print_line("                         Itinerary/contact/ticketing fields are copied to the new")
     print_line("                         PNR; both PNRs then need a fresh fare quote (WP).")
     print_line("  X{N}                   Cancel numbered element N")
     print_line("  X{N}-{M}, X{N},{M}     Cancel a range or list of elements")
     print_line("  XI                     Cancel entire itinerary (all segments)")
+    print_line("  Change key (¤, or ~ as an ASCII fallback) edits one line of a field in place -")
+    print_line("  addressed by that field's own prefix plus a line number scoped to that field")
+    print_line("  (e.g. \"phone line 2\"), not a PNR-wide element number:")
+    print_line("    -{N}¤{SURNAME}/{GIVEN} {TITLE}   Change name line N      e.g. -1¤SMITH/JANE MRS")
+    print_line("    9{N}¤{NUMBER}-{LOC}              Change phone line N     e.g. 92¤214555-9999-A")
+    print_line("    9E{N}¤{ADDRESS}                  Change email line N     e.g. 9E1¤JSMITH@EXAMPLE.COM")
+    print_line("    5{N}¤{TEXT}                      Change remark line N    e.g. 51¤VIP - HANDLE WITH CARE")
+    print_line("    6¤{TEXT}                          Change received from    e.g. 6¤JSMITH")
+    print_line("  Other field types (segments, seats, SSR, etc.) still need X{N} then re-add.")
     print_line("  IG                     Ignore PNR (discard unsaved work)")
     print_line("  ER                     End transaction, redisplay")
     print_line("  ET                     End transaction, clear work area")
     print_blank()
     print_line("Everything above is entered on the command line and submitted with Enter.", "dim")
+    print_line("Chain several commands in one line with ‡   e.g. SI‡A15AUGDFWORD", "dim")
 
 
 # ---------- sign in/out ----------

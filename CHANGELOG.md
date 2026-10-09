@@ -24,6 +24,41 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   moved - to both sides of a PNR divide. Shown in the dock's PNR panel under
   the same Contact section as phone, with its own icon.
 
+- **Change key (`¤`, ASCII fallback `~`)** — edits one line of a field in
+  place (name, phone, email, general remark, or received-from only) instead
+  of requiring cancel (`X{n}`) then re-add for a simple correction, e.g.
+  `92¤214555-9999-A` changes phone line 2. Addressed by that field's own
+  prefix plus a line number scoped to that field type (matching real
+  Sabre), not a PNR-wide element number.
+- **Command chaining (`‡`)** — run several commands in one typed line, e.g.
+  `SI‡A15AUGDFWORD`; each piece dispatches as if typed and entered
+  separately, including its own signed-in check.
+- **Partial PNR displays (`*I`/`*N`/`*P`/`*T`/`*PE`/`*FF`/`*PQ`/`*B`)** —
+  show just the itinerary, names, contact fields, ticketing, email,
+  frequent-flyer numbers, price quote, or baggage allowance instead of the
+  full `*R` dump. `X{n}` cancellation against a filtered view still resolves
+  against the same absolute element numbers a full `*R` would show.
+- **Special Keys Guide (`docs/SPECIAL-KEYS-GUIDE.md`/`.html`/`.pdf`)** — a
+  dedicated reference for the four control characters (`*`/`¥`/`‡`/`¤`),
+  what each does, and their ASCII fallbacks. `HELP` in both editions now
+  opens with a condensed "SPECIAL KEYS" section pointing to it.
+- **Type the real special characters directly (browser edition)** — `Ctrl+[`
+  inserts `¥`, `Ctrl+]` inserts `¤`, `Ctrl+\` inserts `‡`, at the cursor in
+  the command line, the same way a real GDS terminal emulator's own keymap
+  would. Browser-only: a raw terminal can't distinguish `Ctrl+[` from
+  `Escape` (both send the identical byte), so the CLI edition instead
+  documents the OS-level input methods that already work there (Windows
+  `Alt+0165`/`0164`/`0135`, macOS `Option+Y` for `¥` and Character Viewer
+  for the other two).
+
+### Fixed
+
+- `¥` and `‡` could both be used as the airline-filter/`1R`-shift-sign
+  delimiter, but command chaining (added above) splits on `‡` before any
+  other parsing — so `A15AUGDFWORD‡AA` was silently read as two chained
+  commands instead of one filtered search, losing the filter. `‡` is no
+  longer accepted there; use `¥` or `/` for a filter, `‡` only for chaining.
+
 ### Changed
 
 - **Browser edition redesign** — the web edition's outer chrome now models a

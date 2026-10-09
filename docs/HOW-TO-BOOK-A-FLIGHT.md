@@ -330,6 +330,17 @@ To see the full chronological history of everything that's been added, changed, 
 *H
 ```
 
+To see just one part of the PNR instead of the whole thing, use a partial display: `*I` (itinerary only), `*N` (names only), `*P` (contact fields — phone and email), `*T` (ticketing arrangement and tickets), `*PE` (email only), `*FF` (frequent flyer numbers only), `*PQ` (price quote only), or `*B` (baggage allowance, once priced). Element numbers in a partial display are the same absolute numbers `*R` would show, so `X{N}` cancellation still works against them directly.
+
+To fix a mistake in a name, phone, email, or general remark entry without cancelling and re-adding it, change it in place with the change key (`¤`, or `~` as an ASCII fallback) — addressed by that field's own prefix plus a line number scoped to that field (e.g. "phone line 2"), not a PNR-wide element number:
+
+```
+92¤214555-9999-A
+```
+This changes **phone line 2** — the 2nd phone entry, regardless of what element number `*R` happens to show it as. The same pattern works for names (`-1¤SMITH/JANE MRS`), email (`9E1¤NEW@EXAMPLE.COM`), and general remarks (`51¤NEW TEXT`); received-from has no line number since there's only ever one (`6¤NEW TEXT`). Other field types (segments, seats, SSR, etc.) still need cancel (`X{N}`) then re-add, since they have effects elsewhere in the PNR that a simple in-place edit can't safely redo.
+
+> **Typing `¥`/`‡`/`¤` directly:** in the browser edition, press `Ctrl+[`, `Ctrl+]`, or `Ctrl+\` with the cursor in the command line to insert the real character — no need to remember an OS-level input method. See [`docs/SPECIAL-KEYS-GUIDE.md`](SPECIAL-KEYS-GUIDE.md) for the full reference, including CLI/OS-level typing methods.
+
 ---
 
 ### 18. Divide the PNR into two bookings (optional)
@@ -414,6 +425,9 @@ Three queues populate themselves automatically as you work a PNR, no entry requi
 | Redisplay PNR | `*R` or `*` | `*R` |
 | Show PNR activity history | `*H` | `*H` |
 | Retrieve saved PNR | `*{LOCATOR}` | `*ABC123` |
+| Partial PNR display | `*I`/`*N`/`*P`/`*T`/`*PE`/`*FF`/`*PQ`/`*B` | `*I` |
+| Change a line in place, by field (name/phone/email/remark/received-from only) | `{FIELDPREFIX}{N}¤{NEWVALUE}` | `92¤214555-9999-A` |
+| Chain several commands in one line | `{CMD1}‡{CMD2}` | `SI‡A15AUGDFWORD` |
 | Divide passenger(s) into a new PNR | `SP{N}` or `SP{N},{M}` | `SP2` |
 | Place PNR on a queue | `QE{N}` | `QE25` |
 | Show queue counts | `QC` or `QC{N}` | `QC` or `QC25` |
@@ -654,9 +668,19 @@ Every command and every piece of jargon from this guide, grouped by where it fit
 | `*R` or `*` | Redisplay the current PNR |
 | `*H` | Show the PNR's chronological activity history |
 | `*{LOCATOR}` | Retrieve a saved PNR by its record locator |
+| `*I` / `*N` / `*P` / `*T` | Display only: itinerary / names / contact (phone+email) / ticketing |
+| `*PE` / `*FF` / `*PQ` / `*B` | Display only: email / frequent flyer / price quote / baggage allowance |
+| `-{N}¤{SURNAME}/{GIVEN} {TITLE}` | Change name line `N` in place |
+| `9{N}¤{NUMBER}-{LOC}` | Change phone line `N` in place |
+| `9E{N}¤{ADDRESS}` | Change email line `N` in place |
+| `5{N}¤{TEXT}` | Change general remark line `N` in place |
+| `6¤{TEXT}` | Change the received-from field in place (no line number - only one exists) |
 
 **Terminology**
 - **Activity log / PNR history** — the timestamped, sine-stamped record of every action taken on a PNR, viewed with `*H`, separate from the record-locator lookup done with `*{LOCATOR}`
+- **Partial display** — a `*`-prefixed view showing only one category of PNR element instead of the whole thing; element numbers are the same absolute numbers a full `*R` would show, so `X{N}` still cancels correctly against them
+- **Change key** — `¤` (or `~` as an ASCII fallback) edits one line of a field in place, addressed by that field's own prefix plus a line number scoped to that field type (e.g. "phone line 2"), never a PNR-wide element number. Limited to fields with no effect elsewhere in the PNR (name, phone, email, general remark, received-from); every other field type is edited by cancelling (`X{N}`) and re-adding
+- **Command chaining** — `‡` separates several commands typed on one line, each running in order as if entered separately (e.g. `SI‡A15AUGDFWORD`)
 
 ### 15. Divide a PNR
 

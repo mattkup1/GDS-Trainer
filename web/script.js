@@ -1596,6 +1596,55 @@
     }
   }
 
+  // Shared by every *-prefixed partial display below. Still reassigns state.lastDisplay to
+  // a fresh buildElements() call, same as refreshAndPrintPNR always does, and prints each
+  // matching element's real, absolute e.num - so X{n} cancellation against a filtered view
+  // keeps working off the same numbering a full *R would have shown, never a filter-local
+  // renumbering starting back at 1.
+  function printPnrFiltered(predicate, label, emptyMsg){
+    state.lastDisplay = buildElements();
+    renderPnrPanel();
+    refreshSeatMapPanelIfOpen();
+    printBlank();
+    print(`RLOC: ${state.pnr.locator || '(NOT SAVED - END TRANSACT TO STORE)'}  -  ${label}`, 'hd');
+    const matches = state.lastDisplay.filter(predicate);
+    if(matches.length === 0){ print(`  ${emptyMsg}`, 'dim'); return; }
+    for(const e of matches){ print(` ${pad(e.num,2)}  ${pad(e.label,5)} ${e.text}`); }
+  }
+
+  function printItineraryOnly(){
+    printPnrFiltered(e => e.kind === 'segment', 'ITINERARY ONLY', 'NO ITINERARY SEGMENTS ON FILE');
+  }
+  function printNamesOnly(){
+    printPnrFiltered(e => e.kind === 'name', 'NAMES ONLY', 'NO NAMES ON FILE');
+  }
+  function printContactOnly(){
+    printPnrFiltered(e => e.kind === 'phone' || e.kind === 'email', 'CONTACT ONLY', 'NO CONTACT FIELDS ON FILE');
+  }
+  function printTicketingOnly(){
+    printPnrFiltered(e => e.kind === 'tk' || e.kind === 'tkt', 'TICKETING ONLY', 'NO TICKETING ARRANGEMENT OR TICKETS ON FILE');
+  }
+  function printEmailOnly(){
+    printPnrFiltered(e => e.kind === 'email', 'EMAIL ONLY', 'NO EMAIL ADDRESS ON FILE');
+  }
+  // FQTV entries are stored as just another SSR (state.pnr.ssrs, code:'FQTV') - there's no
+  // separate kind for them in buildElements, so this filters by the underlying ssrs entry's
+  // own code rather than by e.kind.
+  function printFqtvOnly(){
+    printPnrFiltered(e => e.kind === 'ssr' && state.pnr.ssrs[e.idx] && state.pnr.ssrs[e.idx].code === 'FQTV', 'FREQUENT FLYER ONLY', 'NO FREQUENT FLYER NUMBERS ON FILE');
+  }
+  function printPriceQuoteOnly(){
+    printPnrFiltered(e => e.kind === 'fq', 'PRICE QUOTE ONLY', 'NO PRICE QUOTE ON FILE - PRICE WITH WP');
+  }
+
+  // Baggage allowance is a computed value off the stored price quote, not a PNR element -
+  // not a printPnrFiltered() filter, same "pure lookup" precedent as FQ/DC/DAN.
+  function showBaggageAllowance(){
+    if(!state.pnr.pricing){ printErr('UNABLE TO DISPLAY BAGGAGE - PRICE THE ITINERARY FIRST (WP)'); return; }
+    print('** BAGGAGE ALLOWANCE **', 'hd');
+    print(`  FARE BASIS ${state.pnr.pricing.fareBasis}: ${formatBaggagePieces(state.pnr.pricing.baggageAllowance)}`);
+  }
+
   function removeElement(e){
     if(e.kind === 'name') state.pnr.names.splice(e.idx, 1);
     else if(e.kind === 'infant') state.pnr.infants.splice(e.idx, 1);
@@ -1649,6 +1698,100 @@
     cancelled.sort((a,b) => a-b);
     print(`ELEMENT${cancelled.length > 1 ? 'S' : ''} ${cancelled.join(',')} CANCELLED`);
     logActivity(`ELEMENT${cancelled.length > 1 ? 'S' : ''} ${cancelled.join(',')} CANCELLED`);
+    refreshAndPrintPNR();
+  }
+
+  // Change key (¤, ASCII fallback ~): edits one occurrence of a field type in place,
+  // addressed the way real Sabre actually does it - by that field's own prefix character
+  // plus a line number *scoped to that field type* (e.g. "phone line 2" = the 2nd phone on
+  // file), never a global PNR element number. Each field gets its own grammar entry/handler,
+  // matching how every other field in this app already dispatches off its own prefix
+  // character - there's no single generic "change an element" concept in real Sabre, so
+  // there isn't one here either. Scoped to the five fields real Sabre itself documents this
+  // way (name, phone, email, general remark, received-from) - a segment/seat/SSR/etc. still
+  // goes through cancel (X{n}) then re-add, since those carry cascading effects (pricing,
+  // pax-index attribution) an in-place text swap can't safely redo. Deliberately does not
+  // implement real Sabre's companion "empty new value deletes this line" convention - this
+  // app already has one universal deletion mechanism (X{n}) and a second, differently-
+  // addressed one for just these five fields would confuse more than it'd teach.
+  function changeName(n, newText){
+    const idx = n - 1;
+    if(idx < 0 || idx >= state.pnr.names.length){
+      printErr(`INVALID NAME LINE NUMBER - ONLY ${state.pnr.names.length} NAME(S) ON FILE`);
+      return;
+    }
+    const text = newText.trim();
+    if(!text.includes('/')){ printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return; }
+    const parts = text.split('/').map(s => s.trim()).filter(s => s.length);
+    if(parts.length !== 2 || !/^[A-Z][A-Z\-' ]*$/.test(parts[0])){
+      printErr('FORMAT - NAME MUST BE SURNAME/GIVEN NAME'); return;
+    }
+    const oldName = state.pnr.names[idx];
+    const newName = `${parts[0]}/${parts[1]}`;
+    state.pnr.names[idx] = newName;
+    // An infant links to its adult by exact name-string match (see handleName) - renaming
+    // the adult has to carry that link forward, or the infant would silently orphan.
+    for(const inf of state.pnr.infants){ if(inf.adult === oldName) inf.adult = newName; }
+    print(`NAME CHANGED - LINE ${n} - ${newName}`);
+    logActivity(`NAME CHANGED - LINE ${n} - ${newName}`);
+    refreshAndPrintPNR();
+  }
+
+  function changePhone(n, newText){
+    const idx = n - 1;
+    if(idx < 0 || idx >= state.pnr.phones.length){
+      printErr(`INVALID PHONE LINE NUMBER - ONLY ${state.pnr.phones.length} PHONE(S) ON FILE`);
+      return;
+    }
+    const text = newText.trim();
+    const pm = text.match(/^(?:\/([A-Z]{3}))?(\d[\d\-]{4,14})-([A-Z]{1,3})$/);
+    if(!pm || !PHONE_LOC_CODES.includes(pm[3].toUpperCase())){
+      printErr('FORMAT - PHONE MUST BE NUMBER-LOC or /CTYNUMBER-LOC  e.g. 214555-1234-A or /DFW555-1234-A');
+      return;
+    }
+    const formatted = `${pm[1] ? '/'+pm[1].toUpperCase() : ''}${pm[2]}-${pm[3].toUpperCase()}`;
+    state.pnr.phones[idx] = formatted;
+    print(`PHONE CHANGED - LINE ${n} - 9${formatted}`);
+    logActivity(`PHONE CHANGED - LINE ${n} - 9${formatted}`);
+    refreshAndPrintPNR();
+  }
+
+  function changeEmail(n, newText){
+    const idx = n - 1;
+    if(idx < 0 || idx >= state.pnr.emails.length){
+      printErr(`INVALID EMAIL LINE NUMBER - ONLY ${state.pnr.emails.length} EMAIL(S) ON FILE`);
+      return;
+    }
+    const text = newText.trim();
+    const em = text.match(/^([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})$/);
+    if(!em){ printErr('FORMAT - EMAIL MUST BE A VALID ADDRESS  e.g. JSMITH@EXAMPLE.COM'); return; }
+    state.pnr.emails[idx] = em[1];
+    print(`EMAIL CHANGED - LINE ${n} - ${em[1]}`);
+    logActivity(`EMAIL CHANGED - LINE ${n} - ${em[1]}`);
+    refreshAndPrintPNR();
+  }
+
+  function changeRemark(n, newText){
+    const idx = n - 1;
+    if(idx < 0 || idx >= state.pnr.remarks.length){
+      printErr(`INVALID REMARK LINE NUMBER - ONLY ${state.pnr.remarks.length} REMARK(S) ON FILE`);
+      return;
+    }
+    const text = newText.trim();
+    if(!text){ printErr('FORMAT - REMARK TEXT REQUIRED'); return; }
+    state.pnr.remarks[idx] = text;
+    print(`GENERAL REMARK CHANGED - LINE ${n} - ${text}`);
+    logActivity(`GENERAL REMARK CHANGED - LINE ${n} - ${text}`);
+    refreshAndPrintPNR();
+  }
+
+  function changeReceivedFrom(newText){
+    const text = newText.trim();
+    if(!text){ printErr('FORMAT - RECEIVED FROM TEXT REQUIRED'); return; }
+    if(!state.pnr.receivedFrom){ printErr('NO RECEIVED FROM ON FILE - ADD ONE WITH 6{TEXT}'); return; }
+    state.pnr.receivedFrom = text;
+    print(`RECEIVED FROM CHANGED - ${text}`);
+    logActivity(`RECEIVED FROM CHANGED - ${text}`);
     refreshAndPrintPNR();
   }
 
@@ -2179,6 +2322,20 @@
   function showHelp(){
     print('GDS TRAINER ENTRY REFERENCE', 'hd');
     printBlank();
+    print('SPECIAL KEYS', 'hd');
+    print('  *   Display key - retrieves/displays PNR data   e.g. *R, *H, *I');
+    print('  ¥   Item delimiter - separates an optional filter/qualifier from the rest of');
+    print('      an entry (availability time/airline filters, the 1R +N shift)   / also works');
+    print('  ‡   Chain key - runs several commands from one typed line, in order, each as');
+    print('      if entered separately   e.g. SI‡A15AUGDFWORD   (no fallback character - see');
+    print('      HELP\'s own note on why NOT to use it in place of ¥ above)');
+    print('  ¤   Change key - edits one line of a field in place, by that field\'s own prefix');
+    print('      plus a line number scoped to that field   e.g. 92¤214555-9999-A   ~ also works');
+    print('  Type the real character directly with Ctrl+[ (¥), Ctrl+] (¤), or Ctrl+\\ (‡) -');
+    print('  inserts it at the cursor, same as any real GDS terminal\'s own keymap.');
+    print('  See each section below for exactly where these apply - full worked examples in');
+    print('  docs/SPECIAL-KEYS-GUIDE.md.');
+    printBlank();
     print('SIGN ON/OFF', 'hd');
     print('  SI[sine/pcc]        Sign in           e.g. SI  or  SI1234AA/DFW1');
     print('  SO                  Sign out');
@@ -2275,17 +2432,30 @@
     print('  *R  or  *              Display current PNR');
     print('  *H                     Display PNR activity history (chronological log)');
     print('  *{LOCATOR}             Retrieve PNR by record locator');
+    print('  *I / *N / *P / *T      Display only: itinerary / names / contact (phone+email) /');
+    print('                         ticketing (arrangement+tickets)');
+    print('  *PE / *FF / *PQ / *B   Display only: email / frequent flyer / price quote / baggage');
     print('  SP{N}  or  SP{N},{M}   Divide passenger(s) into a new PNR   e.g. SP2 or SP2,3');
     print('                         Itinerary/contact/ticketing fields are copied to the new');
     print('                         PNR; both PNRs then need a fresh fare quote (WP).');
     print('  X{N}                   Cancel numbered element N');
     print('  X{N}-{M}, X{N},{M}     Cancel a range or list of elements');
     print('  XI                     Cancel entire itinerary (all segments)');
+    print('  Change key (¤, or ~ as an ASCII fallback) edits one line of a field in place -');
+    print('  addressed by that field\'s own prefix plus a line number scoped to that field');
+    print('  (e.g. "phone line 2"), not a PNR-wide element number:');
+    print('    -{N}¤{SURNAME}/{GIVEN} {TITLE}   Change name line N      e.g. -1¤SMITH/JANE MRS');
+    print('    9{N}¤{NUMBER}-{LOC}              Change phone line N     e.g. 92¤214555-9999-A');
+    print('    9E{N}¤{ADDRESS}                  Change email line N     e.g. 9E1¤JSMITH@EXAMPLE.COM');
+    print('    5{N}¤{TEXT}                      Change remark line N    e.g. 51¤VIP - HANDLE WITH CARE');
+    print('    6¤{TEXT}                          Change received from    e.g. 6¤JSMITH');
+    print('  Other field types (segments, seats, SSR, etc.) still need X{N} then re-add.');
     print('  IG                     Ignore PNR (discard unsaved work)');
     print('  ER                     End transaction, redisplay');
     print('  ET                     End transaction, clear work area');
     printBlank();
     print('Everything above is entered on the command line and submitted with Enter.', 'dim');
+    print('Chain several commands in one line with ‡   e.g. SI‡A15AUGDFWORD', 'dim');
   }
 
   // ---------- sign in/out ----------
@@ -2686,6 +2856,19 @@
     PNR_REDISPLAY: () => refreshAndPrintPNR(),
     PNR_HISTORY: () => showHistory(),
     PNR_RETRIEVE: (raw, loc) => retrieveByLocator(loc),
+    PNR_FILTER_ITINERARY: () => printItineraryOnly(),
+    PNR_FILTER_NAMES: () => printNamesOnly(),
+    PNR_FILTER_CONTACT: () => printContactOnly(),
+    PNR_FILTER_TICKETING: () => printTicketingOnly(),
+    PNR_FILTER_EMAIL: () => printEmailOnly(),
+    PNR_FILTER_FQTV: () => printFqtvOnly(),
+    PNR_FILTER_PRICE_QUOTE: () => printPriceQuoteOnly(),
+    PNR_BAGGAGE_DISPLAY: () => showBaggageAllowance(),
+    CHANGE_NAME: (raw, n, newText) => changeName(parseInt(n,10), newText),
+    CHANGE_PHONE: (raw, n, newText) => changePhone(parseInt(n,10), newText),
+    CHANGE_EMAIL: (raw, n, newText) => changeEmail(parseInt(n,10), newText),
+    CHANGE_REMARK: (raw, n, newText) => changeRemark(parseInt(n,10), newText),
+    CHANGE_RECEIVED_FROM: (raw, newText) => changeReceivedFrom(newText),
     DIVIDE_PNR: (raw, nums) => dividePnr(nums),
     QUEUE_ENQUEUE: (raw, n) => queueEnqueue(n),
     QUEUE_NEXT: (raw, n) => queueNext(n),
@@ -2707,9 +2890,25 @@
   // over, so the two editions can't silently drift out of sync on syntax or ordering.
   const COMPILED_GRAMMAR = COMMAND_GRAMMAR.map(entry => ({ ...entry, re: new RegExp(entry.pattern) }));
 
+  // A single typed line may chain several commands with ‡ (e.g. SI‡A15AUGDFWORD), run in
+  // order as if each had been typed and entered separately - including each one re-checking
+  // the signed-in gate below. Split here, before any other parsing, rather than at the echo
+  // layer in submitCommand(), so a chained line still produces exactly one '> COMMAND' echo
+  // (what tests/cdp.py's split_transcript keys off) and each piece gets its own full
+  // dispatch. Deliberately no ASCII fallback character (no ';') - unlike ¥'s '/' fallback, a
+  // chaining delimiter risks colliding with legitimate free text (a remark/OSI/received-from
+  // value containing it would be silently mis-split); ‡ alone avoids that the same way it
+  // already does as the existing availability-filter alternate character.
   function processCommand(raw){
     const cmd = raw.trim();
     if(cmd.length === 0) return;
+    if(cmd.includes('‡')){
+      for(const part of cmd.split('‡')){
+        const trimmed = part.trim();
+        if(trimmed) processCommand(trimmed);
+      }
+      return;
+    }
     const U = cmd.toUpperCase();
 
     if(!state.signedIn){
@@ -2746,7 +2945,31 @@
     screenEl.scrollTop = screenEl.scrollHeight;
   }
 
+  // Inserts a character at the current cursor position (replacing any selection), the
+  // same way a real keypress would, then leaves the cursor right after it - rather than
+  // just appending to the end, which would fight anyone editing mid-line.
+  function insertAtCursor(ch){
+    const start = inputEl.selectionStart ?? inputEl.value.length;
+    const end = inputEl.selectionEnd ?? inputEl.value.length;
+    inputEl.value = inputEl.value.slice(0, start) + ch + inputEl.value.slice(end);
+    const pos = start + ch.length;
+    inputEl.setSelectionRange(pos, pos);
+  }
+
+  // Real GDS terminal emulators bind a key combo to insert each special character
+  // directly, rather than requiring the OS's own Unicode input method (Alt-codes,
+  // Character Viewer, etc. - those still work too, this is just a faster in-app path).
+  // Browser-only: a raw terminal can't reliably distinguish Ctrl+[ from Escape (both send
+  // the same byte), so the CLI edition can't safely offer the same bindings - see
+  // SPECIAL-KEYS-GUIDE.md.
+  const SPECIAL_KEY_SHORTCUTS = { '[': '¥', ']': '¤', '\\': '‡' };
+
   inputEl.addEventListener('keydown', (e) => {
+    if(e.ctrlKey && !e.altKey && !e.metaKey && SPECIAL_KEY_SHORTCUTS[e.key]){
+      insertAtCursor(SPECIAL_KEY_SHORTCUTS[e.key]);
+      e.preventDefault();
+      return;
+    }
     if(e.key === 'Enter'){
       submitCommand(inputEl.value);
     } else if(e.key === 'ArrowUp'){
@@ -2764,6 +2987,9 @@
         state.cmdHistoryIdx = state.cmdHistory.length;
         inputEl.value = '';
       }
+      e.preventDefault();
+    } else if(e.key === 'Escape' || (e.key === 'Backspace' && e.ctrlKey)){
+      inputEl.value = '';
       e.preventDefault();
     }
   });

@@ -68,6 +68,19 @@ HANDLERS = {
     "PNR_REDISPLAY": lambda raw, *g: c.refresh_and_print_pnr(),
     "PNR_HISTORY": lambda raw, *g: c.show_history(),
     "PNR_RETRIEVE": lambda raw, loc: c.retrieve_by_locator(loc),
+    "PNR_FILTER_ITINERARY": lambda raw, *g: c.print_itinerary_only(),
+    "PNR_FILTER_NAMES": lambda raw, *g: c.print_names_only(),
+    "PNR_FILTER_CONTACT": lambda raw, *g: c.print_contact_only(),
+    "PNR_FILTER_TICKETING": lambda raw, *g: c.print_ticketing_only(),
+    "PNR_FILTER_EMAIL": lambda raw, *g: c.print_email_only(),
+    "PNR_FILTER_FQTV": lambda raw, *g: c.print_fqtv_only(),
+    "PNR_FILTER_PRICE_QUOTE": lambda raw, *g: c.print_price_quote_only(),
+    "PNR_BAGGAGE_DISPLAY": lambda raw, *g: c.show_baggage_allowance(),
+    "CHANGE_NAME": lambda raw, n, new_text: c.change_name(int(n), new_text),
+    "CHANGE_PHONE": lambda raw, n, new_text: c.change_phone(int(n), new_text),
+    "CHANGE_EMAIL": lambda raw, n, new_text: c.change_email(int(n), new_text),
+    "CHANGE_REMARK": lambda raw, n, new_text: c.change_remark(int(n), new_text),
+    "CHANGE_RECEIVED_FROM": lambda raw, new_text: c.change_received_from(new_text),
     "DIVIDE_PNR": lambda raw, nums: c.divide_pnr(nums),
     "QUEUE_ENQUEUE": lambda raw, n: c.queue_enqueue(n),
     "QUEUE_NEXT": lambda raw, n: c.queue_next(n),
@@ -83,9 +96,20 @@ HANDLERS = {
 }
 
 
+# A single typed line may chain several commands with ‡ (e.g. SI‡A15AUGDFWORD), run in
+# order as if each had been typed and entered separately - including each one re-checking
+# the signed-in gate below. Split here, before any other parsing, mirroring web/script.js's
+# processCommand() - see its comment for why there's deliberately no ASCII fallback
+# character (collision risk with free text containing ';').
 def process_command(raw: str) -> None:
     cmd = raw.strip()
     if not cmd:
+        return
+    if "‡" in cmd:
+        for part in cmd.split("‡"):
+            trimmed = part.strip()
+            if trimmed:
+                process_command(trimmed)
         return
     u = cmd.upper()
 

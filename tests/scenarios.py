@@ -1038,4 +1038,101 @@ SCENARIOS: list[Scenario] = [
             ),
         ],
     ),
+    Scenario(
+        "change_key_updates_phone_in_place_by_field_scoped_line_number",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            NAME_SMITH,
+            PHONE_VALID,
+            RECEIVED_FROM,
+            # Real Sabre's change key (¤) addresses a line scoped to that field type - "phone
+            # line 1" - not a PNR-wide element number. Only one phone is on file, so "92¤..."
+            # (phone LINE 1) is the target, regardless of whatever PNR element number *R
+            # happens to show it as.
+            Step(
+                "91¤214555-9999-A",
+                expect_contains=["PHONE CHANGED", "LINE 1", "9214555-9999-A"],
+            ),
+            Step(
+                "*P",
+                expect_contains=["CONTACT ONLY", "214555-9999-A"],
+                expect_not_contains=["214555-1234-A"],
+            ),
+            # ~ is the ASCII fallback for ¤.
+            Step(
+                "91~214555-8888-A",
+                expect_contains=["PHONE CHANGED", "LINE 1", "9214555-8888-A"],
+            ),
+            Step("92¤999-9999-A", expect_contains=["INVALID PHONE LINE NUMBER", "ONLY 1 PHONE"]),
+        ],
+    ),
+    Scenario(
+        "change_key_updates_name_in_place_and_carries_infant_link",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            Step(
+                "-SMITH/JOHN MR(INFSMITH/BABY/12JAN26)",
+                expect_contains=["NAME ADDED", "INFANT ADDED"],
+            ),
+            Step(
+                "-1¤SMITH/JANE MRS",
+                expect_contains=["NAME CHANGED", "LINE 1", "SMITH/JANE MRS"],
+            ),
+            # The infant's `adult` link is matched by exact name string - renaming the
+            # adult must carry the link forward instead of silently orphaning it.
+            Step(
+                "*R",
+                expect_contains=["SMITH/JANE MRS", "TRAVELS WITH SMITH/JANE MRS"],
+            ),
+            Step("-1¤BADNAME", expect_contains=["FORMAT", "SURNAME/GIVEN NAME"]),
+            Step("-99¤SMITH/JOHN MR", expect_contains=["INVALID NAME LINE NUMBER", "ONLY 1 NAME"]),
+        ],
+    ),
+    Scenario(
+        "command_chaining_runs_several_commands_in_one_line",
+        [
+            Step(
+                "SI‡A15AUGDFWORD",
+                expect_contains=["SIGN IN COMPLETE", "AIR AVAILABILITY", "DFW-ORD"],
+            ),
+        ],
+    ),
+    Scenario(
+        "pnr_partial_display_filters",
+        [
+            SIGN_IN,
+            AVAIL_DFW_ORD,
+            SELL_1_SEAT,
+            NAME_SMITH,
+            PHONE_VALID,
+            Step(
+                "*I",
+                expect_contains=["ITINERARY ONLY", "SEG1"],
+                expect_not_contains=["NM1", "CTC"],
+            ),
+            Step(
+                "*N",
+                expect_contains=["NAMES ONLY", "NM1", "SMITH/JOHN MR"],
+                expect_not_contains=["SEG1"],
+            ),
+            Step(
+                "*P",
+                expect_contains=["CONTACT ONLY", "CTC", "214555-1234-A"],
+                expect_not_contains=["NM1"],
+            ),
+            Step("*T", expect_contains=["TICKETING ONLY", "NO TICKETING ARRANGEMENT OR TICKETS ON FILE"]),
+            Step("*FF", expect_contains=["FREQUENT FLYER ONLY", "NO FREQUENT FLYER NUMBERS ON FILE"]),
+            Step("3FQTVAA1234567", expect_contains=["SSR ADDED", "FQTV"]),
+            Step("*FF", expect_contains=["FREQUENT FLYER ONLY", "FQTV", "AA1234567"]),
+            Step("*PQ", expect_contains=["PRICE QUOTE ONLY", "NO PRICE QUOTE ON FILE"]),
+            Step("*B", expect_contains=["UNABLE TO DISPLAY BAGGAGE"]),
+            Step("WP", expect_contains=["ITINERARY PRICING"]),
+            Step("*PQ", expect_contains=["PRICE QUOTE ONLY", "FQ"]),
+            Step("*B", expect_contains=["BAGGAGE ALLOWANCE", "FARE BASIS"]),
+        ],
+    ),
 ]

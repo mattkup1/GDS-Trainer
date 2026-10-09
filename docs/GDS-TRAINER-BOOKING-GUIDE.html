@@ -442,6 +442,11 @@ A15AUGDFWORD11A¥AA</div>
     <p class="note">(using the actual locator you were given)</p>
     <p class="note">To see the full chronological history of everything that's been added, changed, or cancelled on the PNR:</p>
     <div class="cmdblock">*H</div>
+    <p class="note">To see just one part of the PNR instead of the whole thing, use a partial display: <code>*I</code> (itinerary only), <code>*N</code> (names only), <code>*P</code> (contact fields &mdash; phone and email), <code>*T</code> (ticketing arrangement and tickets), <code>*PE</code> (email only), <code>*FF</code> (frequent flyer numbers only), <code>*PQ</code> (price quote only), or <code>*B</code> (baggage allowance, once priced). Element numbers in a partial display are the same absolute numbers <code>*R</code> would show, so <code>X{N}</code> cancellation still works against them directly.</p>
+    <p class="note">To fix a mistake in a name, phone, email, or general remark entry without cancelling and re-adding it, change it in place with the change key (<code>&curren;</code>, or <code>~</code> as an ASCII fallback) &mdash; addressed by that field's own prefix plus a line number scoped to that field (e.g. "phone line 2"), not a PNR-wide element number:</p>
+    <div class="cmdblock">92&curren;214555-9999-A</div>
+    <p class="note">This changes <b>phone line 2</b> &mdash; the 2nd phone entry, regardless of what element number <code>*R</code> happens to show it as. The same pattern works for names (<code>-1&curren;SMITH/JANE MRS</code>), email (<code>9E1&curren;NEW@EXAMPLE.COM</code>), and general remarks (<code>51&curren;NEW TEXT</code>); received-from has no line number since there's only ever one (<code>6&curren;NEW TEXT</code>). Other field types (segments, seats, SSR, etc.) still need cancel (<code>X{N}</code>) then re-add, since they have effects elsewhere in the PNR that a simple in-place edit can't safely redo.</p>
+    <p class="aside"><b>Typing <code>&yen;</code>/<code>&#8225;</code>/<code>&curren;</code> directly:</b> in the browser edition, press <code>Ctrl+[</code>, <code>Ctrl+]</code>, or <code>Ctrl+\</code> with the cursor in the command line to insert the real character &mdash; no need to remember an OS-level input method. See <a href="SPECIAL-KEYS-GUIDE.html">the Special Keys Guide</a> for the full reference, including CLI/OS-level typing methods.</p>
   </div>
 </section>
 
@@ -516,6 +521,9 @@ A15AUGDFWORD11A¥AA</div>
     <tr><td>Redisplay PNR</td><td class="mono">*R or *</td><td class="mono">*R</td></tr>
     <tr><td>Show PNR activity history</td><td class="mono">*H</td><td class="mono">*H</td></tr>
     <tr><td>Retrieve saved PNR</td><td class="mono">*{LOCATOR}</td><td class="mono">*ABC123</td></tr>
+    <tr><td>Partial PNR display</td><td class="mono">*I/*N/*P/*T/*PE/*FF/*PQ/*B</td><td class="mono">*I</td></tr>
+    <tr><td>Change a line in place, by field (name/phone/email/remark/received-from only)</td><td class="mono">{FIELDPREFIX}{N}&curren;{NEWVALUE}</td><td class="mono">92&curren;214555-9999-A</td></tr>
+    <tr><td>Chain several commands in one line</td><td class="mono">{CMD1}&#8225;{CMD2}</td><td class="mono">SI&#8225;A15AUGDFWORD</td></tr>
     <tr><td>Divide passenger(s) into a new PNR</td><td class="mono">SP{N} or SP{N},{M}</td><td class="mono">SP2</td></tr>
     <tr><td>Place PNR on a queue</td><td class="mono">QE{N}</td><td class="mono">QE25</td></tr>
     <tr><td>Show queue counts</td><td class="mono">QC or QC{N}</td><td class="mono">QC or QC25</td></tr>
@@ -848,11 +856,21 @@ TKTT</div>
         <tr><td class="mono">*R or *</td><td>Redisplay the current PNR</td></tr>
         <tr><td class="mono">*H</td><td>Show the PNR's chronological activity history</td></tr>
         <tr><td class="mono">*{LOCATOR}</td><td>Retrieve a saved PNR by its record locator</td></tr>
+        <tr><td class="mono">*I / *N / *P / *T</td><td>Display only: itinerary / names / contact (phone+email) / ticketing</td></tr>
+        <tr><td class="mono">*PE / *FF / *PQ / *B</td><td>Display only: email / frequent flyer / price quote / baggage allowance</td></tr>
+        <tr><td class="mono">-{N}&curren;{SURNAME}/{GIVEN} {TITLE}</td><td>Change name line N in place</td></tr>
+        <tr><td class="mono">9{N}&curren;{NUMBER}-{LOC}</td><td>Change phone line N in place</td></tr>
+        <tr><td class="mono">9E{N}&curren;{ADDRESS}</td><td>Change email line N in place</td></tr>
+        <tr><td class="mono">5{N}&curren;{TEXT}</td><td>Change general remark line N in place</td></tr>
+        <tr><td class="mono">6&curren;{TEXT}</td><td>Change the received-from field in place (no line number - only one exists)</td></tr>
       </tbody>
     </table>
     <div class="stage-term-head">Terminology</div>
     <dl class="terms">
       <div class="entry"><dt>Activity log / PNR history</dt><dd>the timestamped, sine-stamped record of every action taken on a PNR, viewed with *H, separate from the record-locator lookup done with *{LOCATOR}</dd></div>
+      <div class="entry"><dt>Partial display</dt><dd>a *-prefixed view showing only one category of PNR element instead of the whole thing; element numbers are the same absolute numbers a full *R would show, so X{N} still cancels correctly against them</dd></div>
+      <div class="entry"><dt>Change key</dt><dd>&curren; (or ~ as an ASCII fallback) edits one line of a field in place, addressed by that field's own prefix plus a line number scoped to that field type (e.g. "phone line 2"), never a PNR-wide element number. Limited to fields with no effect elsewhere in the PNR (name, phone, email, general remark, received-from); every other field type is edited by cancelling (X{N}) and re-adding</dd></div>
+      <div class="entry"><dt>Command chaining</dt><dd>&#8225; separates several commands typed on one line, each running in order as if entered separately (e.g. SI&#8225;A15AUGDFWORD)</dd></div>
     </dl>
   </div>
 </div>

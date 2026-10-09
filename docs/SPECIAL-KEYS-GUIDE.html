@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GDS Trainer — Special Keys Guide</title>
+<style>
+  @page { size: letter; margin: 0.85in 0.8in; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: #ffffff;
+    color: #1a2420;
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+  }
+  .mono {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+  }
+
+  /* ---- cover header ---- */
+  header.cover {
+    border-bottom: 3px solid #1e6e58;
+    padding-bottom: 16px;
+    margin-bottom: 26px;
+  }
+  .wordmark {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    font-size: 11pt;
+    letter-spacing: 0.08em;
+    color: #1e6e58;
+    font-weight: 700;
+  }
+  h1.doctitle {
+    font-size: 22pt;
+    margin: 8px 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: #4b5a54;
+    font-size: 10.5pt;
+    margin: 0;
+  }
+  .intro {
+    margin: 16px 0 28px;
+    max-width: 6.4in;
+  }
+  .intro code { background: #f0f3f0; border: 1px solid #d7e0da; border-radius: 3px; padding: 0.05em 0.4em; }
+
+  /* ---- steps ---- */
+  section.step {
+    break-inside: avoid;
+    margin: 0 0 20px;
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    column-gap: 14px;
+  }
+  .step-num {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    font-weight: 700;
+    font-size: 13pt;
+    color: #1e6e58;
+    border: 1.5px solid #1e6e58;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .step h2 {
+    font-size: 12.5pt;
+    margin: 3px 0 6px;
+  }
+  .step .format {
+    color: #4b5a54;
+    font-size: 9.7pt;
+    margin: 0 0 8px;
+  }
+  .step .format code { color: #1a2420; }
+  .cmdblock {
+    background: #10241d;
+    color: #b7f0d6;
+    border-radius: 5px;
+    padding: 8px 12px;
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    font-size: 9.7pt;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    margin: 0 0 8px;
+  }
+  .step p.note { margin: 6px 0 0; }
+  .step p.aside {
+    margin: 6px 0 0;
+    padding-left: 10px;
+    border-left: 2px solid #cfd9d3;
+    color: #4b5a54;
+    font-size: 9.7pt;
+  }
+  code { font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace; }
+
+  /* ---- quick reference ---- */
+  h2.section-head {
+    font-size: 14pt;
+    border-top: 2px solid #1e6e58;
+    padding-top: 10px;
+    margin-top: 34px;
+    break-before: page;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin-top: 10px;
+  }
+  thead th {
+    text-align: left;
+    text-transform: uppercase;
+    font-size: 7.6pt;
+    letter-spacing: 0.05em;
+    color: #4b5a54;
+    border-bottom: 1.5px solid #1a2420;
+    padding: 5px 8px;
+  }
+  tbody td {
+    padding: 5px 8px;
+    border-bottom: 1px solid #e2e8e4;
+    vertical-align: top;
+  }
+  tbody tr:nth-child(even) { background: #f7f9f7; }
+
+  .walkthrough {
+    margin-top: 20px;
+    break-inside: avoid;
+  }
+  .walkthrough .cmdblock { font-size: 9.3pt; }
+
+  footer.doc {
+    margin-top: 30px;
+    padding-top: 10px;
+    border-top: 1px solid #d7e0da;
+    color: #4b5a54;
+    font-size: 8pt;
+    font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="wordmark">G&middot;D&middot;S&middot; T&middot;R&middot;A&middot;I&middot;N&middot;E&middot;R</div>
+  <h1 class="doctitle">Special Keys Guide</h1>
+  <p class="subtitle">Four control characters, and exactly what each one does</p>
+</header>
+
+<p class="intro">GDS Trainer uses four non-alphanumeric characters as control keys, the same way a real GDS terminal does &mdash; each one changes how the rest of an entry is read, rather than being part of the data itself. This guide covers exactly what each one does here, with every character's own ASCII-friendly fallback (most US keyboards don't have a dedicated key for <code>&yen;</code>/<code>&#8225;</code>/<code>&curren;</code>, so every one of them can be typed as a plain keyboard character instead). Works the same in both editions &mdash; type <code>HELP</code> at any time for a condensed version of this same reference.</p>
+
+<h2 class="section-head" style="margin-top:0; break-before:auto;">Quick reference</h2>
+<table>
+  <thead><tr><th>Key</th><th>Name</th><th>Fallback</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">*</td><td>Display key</td><td class="mono">&mdash;</td><td>Retrieves or displays PNR data</td></tr>
+    <tr><td class="mono">&yen;</td><td>Item delimiter</td><td class="mono">/</td><td>Separates an optional filter/qualifier from the rest of an availability entry</td></tr>
+    <tr><td class="mono">&#8225;</td><td>Chain key</td><td class="mono">(none)</td><td>Runs several commands from one typed line</td></tr>
+    <tr><td class="mono">&curren;</td><td>Change key</td><td class="mono">~</td><td>Edits one line of a field in place</td></tr>
+  </tbody>
+</table>
+<p class="note" style="margin-top:10px; color:#4b5a54; font-size:9.3pt;"><code>&yen;</code>, <code>&#8225;</code>, and <code>&curren;</code> only ever mean something at a specific position in an entry &mdash; none of them are ever valid as ordinary data (a name, a remark, a phone number), so there's no ambiguity with free text.</p>
+
+<h2 class="section-head" style="margin-top:28px; break-before:auto;">Typing the real characters</h2>
+<p class="note">Every one of <code>&yen;</code>/<code>&#8225;</code>/<code>&curren;</code> has an ASCII fallback specifically so you never <i>have</i> to type the real character &mdash; but if you want to, same as a real GDS terminal's own keymap would let you, here's how.</p>
+<p class="note"><b>Browser edition &mdash; in-app shortcuts.</b> Press the combo with the cursor in the command line; it inserts the real character right there, same as typing any other key:</p>
+<table>
+  <thead><tr><th>Press</th><th>Inserts</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">Ctrl + [</td><td class="mono">&yen;</td></tr>
+    <tr><td class="mono">Ctrl + ]</td><td class="mono">&curren;</td></tr>
+    <tr><td class="mono">Ctrl + \</td><td class="mono">&#8225;</td></tr>
+  </tbody>
+</table>
+<p class="note" style="margin-top:12px;"><b>CLI edition and general OS-level input.</b> These work in <i>any</i> text field on your system, not just this app &mdash; the terminal just passes along whatever your OS sends it:</p>
+<ul style="margin:6px 0 0; padding-left:20px; font-size:9.7pt;">
+  <li><b>Windows</b> &mdash; hold <code>Alt</code> and type the code on the numeric keypad: <code>0165</code> for <code>&yen;</code>, <code>0164</code> for <code>&curren;</code>, <code>0135</code> for <code>&#8225;</code>.</li>
+  <li><b>Mac</b> &mdash; <code>Option+Y</code> types <code>&yen;</code> directly; for <code>&curren;</code> and <code>&#8225;</code>, press <code>Control+Command+Space</code> to open Character Viewer and search by name ("currency sign," "double dagger").</li>
+  <li><b>Any platform</b> &mdash; copy the character straight out of this guide, or out of <code>HELP</code>'s own output in either edition, and paste it in.</li>
+</ul>
+<p class="aside" style="margin-top:8px;">The CLI edition doesn't get the same <code>Ctrl+[</code>/<code>Ctrl+]</code>/<code>Ctrl+\</code> shortcuts as the browser &mdash; a raw terminal can't distinguish <code>Ctrl+[</code> from pressing <code>Escape</code> itself (both send the identical byte), so binding it there would be unreliable rather than just inconvenient.</p>
+
+<section class="step">
+  <div class="step-num">*</div>
+  <div>
+    <h2>Display key</h2>
+    <p class="note">Retrieves or displays something &mdash; never mutates the PNR by itself.</p>
+    <div class="cmdblock">*R          Redisplay the current PNR
+*H          Display the PNR's chronological activity history
+*ABC123     Retrieve a saved PNR by its record locator</div>
+    <p class="note">Partial displays show just one category of PNR element instead of the whole thing &mdash; same absolute element numbers a full <code>*R</code> would show, so <code>X{N}</code> cancellation still works against them directly:</p>
+    <div class="cmdblock">*I    Itinerary (segments) only
+*N    Names only
+*P    Contact fields only (phone + email)
+*T    Ticketing only (arrangement + issued tickets)
+*PE   Email only
+*FF   Frequent flyer numbers only
+*PQ   Price quote only
+*B    Baggage allowance only (once the itinerary's been priced)</div>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">&yen;</div>
+  <div>
+    <h2>Item delimiter</h2>
+    <p class="note">Separates an optional filter/qualifier from the entry it modifies. Used in exactly two places, both on availability searches.</p>
+    <p class="note"><b>Airline filter</b> &mdash; only show flights on one carrier, appended after any availability entry (and after an optional departure-time filter, if both are used):</p>
+    <div class="cmdblock">A15AUGDFWORD&yen;AA       Only American Airlines flights
+A15AUGDFWORD11A&yen;AA    Departing at/after 11AM, American Airlines only</div>
+    <p class="note"><b><code>1R</code> date shift sign</b> &mdash; <code>&yen;</code> can stand in for the <code>+</code> sign (never <code>-</code>) when shifting the return-availability date forward:</p>
+    <div class="cmdblock">1R&yen;7     Same as 1R+7 - the return search, 7 days after the outbound date</div>
+    <p class="note"><code>/</code> is the ASCII fallback for <code>&yen;</code> in both positions &mdash; <code>A15AUGDFWORD/AA</code> works exactly the same as <code>A15AUGDFWORD&yen;AA</code>.</p>
+    <p class="aside"><b><code>&#8225;</code> is deliberately not usable here.</b> Command chaining (next section) splits a typed line on <code>&#8225;</code> before anything else is parsed, so <code>A15AUGDFWORD&#8225;AA</code> is read as two separate commands &mdash; <code>A15AUGDFWORD</code> (an unfiltered search) and <code>AA</code> (not a valid command on its own) &mdash; silently losing the filter instead of applying it. Always use <code>&yen;</code> or <code>/</code> for a filter, never <code>&#8225;</code>.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">&#8225;</div>
+  <div>
+    <h2>Chain key</h2>
+    <p class="note">Runs several commands from one typed line, each dispatching in order exactly as if it had been typed and entered on its own &mdash; including its own signed-in check:</p>
+    <div class="cmdblock">SI&#8225;A15AUGDFWORD              Sign in, then search availability, in one line
+A15AUGDFWORD&#8225;01Y1&#8225;-SMITH/JOHN MR   Search, sell, and add a name in one line</div>
+    <p class="note">There's deliberately <b>no ASCII fallback character</b> for <code>&#8225;</code> (unlike <code>&yen;</code>'s <code>/</code>) &mdash; a chaining delimiter needs to be a character that will never show up inside ordinary free text. An ASCII character like <code>;</code> risks silently mis-splitting a remark, an OSI note, or a received-from value that happens to contain it mid-sentence; <code>&#8225;</code> avoids that because it isn't on a standard keyboard, so no one types it into a sentence by accident.</p>
+  </div>
+</section>
+
+<section class="step">
+  <div class="step-num">&curren;</div>
+  <div>
+    <h2>Change key</h2>
+    <p class="note">Edits one line of a field in place, instead of cancelling (<code>X{N}</code>) and re-adding it. Addressed by that field's <b>own prefix character</b> plus a line number <b>scoped to that specific field type</b> &mdash; e.g. <code>92&curren;...</code> means "phone line 2," the 2nd phone on file, not a PNR-wide element number (<code>X{N}</code>'s numbering is a different, global scheme that spans every kind of element on the PNR; the change key's numbering only counts within one field type).</p>
+    <div class="cmdblock">-1&curren;SMITH/JANE MRS        Change name line 1
+92&curren;214555-9999-A         Change phone line 2
+9E1&curren;NEW@EXAMPLE.COM      Change email line 1
+51&curren;UPDATED REMARK TEXT   Change general remark line 1
+6&curren;NEW RECEIVED FROM      Change received-from (no line number - only one exists)</div>
+    <p class="note"><code>~</code> is the ASCII fallback for <code>&curren;</code> &mdash; <code>92~214555-9999-A</code> works exactly the same as <code>92&curren;214555-9999-A</code>.</p>
+    <p class="aside">Limited to the five fields above &mdash; name, phone, email, general remark, received-from &mdash; since those are the only fields with no effect elsewhere in the PNR. Every other field type (a segment, a seat, an SSR, etc.) is still edited by cancelling (<code>X{N}</code>) and re-adding, since those carry effects (pricing, passenger-index attribution) an in-place text swap can't safely redo.</p>
+  </div>
+</section>
+
+<footer class="doc">
+  <span>GDS Trainer &middot; Special Keys Guide</span>
+  <span>Source: SPECIAL-KEYS-GUIDE.html</span>
+</footer>
+
+</body>
+</html>

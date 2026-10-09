@@ -5,6 +5,8 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-10-09
+
 ### Added
 
 - **Return availability (`1R`) and availability filters** — real Sabre's `1R`
@@ -236,5 +238,6 @@ and a first version number — rather than a specific feature milestone.
 - **Documentation** — a step-by-step booking walkthrough, a printable
   booking guide, and printable training scenarios in `docs/`.
 
+[1.2.0]: https://github.com/mattkup1/GDS-Trainer/releases/tag/v1.2.0
 [1.1.0]: https://github.com/mattkup1/GDS-Trainer/releases/tag/v1.1.0
 [1.0.0]: https://github.com/mattkup1/GDS-Trainer/releases/tag/v1.0.0
